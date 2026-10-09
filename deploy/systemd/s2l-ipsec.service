@@ -1,0 +1,15 @@
+[Unit]
+Description=s2l L2TP/IPsec (strongSwan)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/python3 /opt/s2l/manage_ipsec.py firewall
+ExecStart=/usr/lib/ipsec/starter --nofork --conf /opt/s2l/ipsec.conf
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=15
+
+[Install]
+WantedBy=multi-user.target

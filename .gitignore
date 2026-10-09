@@ -1,0 +1,13 @@
+/data/
+*.exe
+*.test
+/bin/
+/tmp/
+.idea/
+*.tmp
+web/node_modules/
+__pycache__/
+*.py[cod]
+/config.json
+.vscode/
+.DS_Store
