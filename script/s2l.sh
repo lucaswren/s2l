@@ -131,7 +131,7 @@ change_setting() {
       fi
       ;;
     listen_port)
-      echo "请先在安全组/防火墙放行新网页端口。"
+      echo "请先放行新 TCP 端口；HTTPS 部署将修改 Nginx 端口，TCP 80 仍用于证书续期。"
       read -r -p "新网页端口（1-65535）: " value
       ;;
   esac

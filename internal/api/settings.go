@@ -87,8 +87,65 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		ports = []int{}
 	}
 	_, helperErr := os.Stat("/opt/s2l/manage_ssh.py")
+	webURL, webPort, webEnabled := s.webPortSettings()
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"admin_user": user, "account_enabled": enabled && s.configPath != "", "ssh_ports": ports, "ssh_password_enabled": enabled && s.configPath != "" && sshPasswordAvailable(), "ipsec": readIPsecStatus(), "ssh_enabled": enabled && s.configPath != "" && runtime.GOOS == "linux" && err == nil && helperErr == nil})
+	writeJSON(w, 200, map[string]any{"public_url": webURL, "web_port": webPort, "web_port_enabled": enabled && webEnabled, "admin_user": user, "account_enabled": enabled && s.configPath != "", "ssh_ports": ports, "ssh_password_enabled": enabled && s.configPath != "" && sshPasswordAvailable(), "ipsec": readIPsecStatus(), "ssh_enabled": enabled && s.configPath != "" && runtime.GOOS == "linux" && err == nil && helperErr == nil})
+}
+
+func (s *Server) webPortSettings() (string, int, bool) {
+	data, err := os.ReadFile(s.configPath)
+	if err != nil {
+		return "", 0, false
+	}
+	var fields struct {
+		PublicURL string `json:"public_url"`
+	}
+	if json.Unmarshal(data, &fields) != nil {
+		return "", 0, false
+	}
+	u, err := url.Parse(fields.PublicURL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
+		return "", 0, false
+	}
+	port := 443
+	if u.Port() != "" {
+		port, err = strconv.Atoi(u.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return "", 0, false
+		}
+	}
+	_, helperErr := os.Stat("/opt/s2l/manage_config.py")
+	site, siteErr := os.ReadFile("/etc/nginx/conf.d/s2l.conf")
+	available := runtime.GOOS == "linux" && filepath.Clean(s.configPath) == "/opt/s2l/config.json" && helperErr == nil && siteErr == nil && strings.HasPrefix(string(site), "# Managed by s2l HTTPS\n")
+	return fields.PublicURL, port, available
+}
+
+func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
+	if !s.settingsWrite(w, r) {
+		return
+	}
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	var body struct {
+		Port int `json:"port"`
+	}
+	if decodeJSON(r, &body) != nil || body.Port < 1 || body.Port > 65535 || body.Port == 80 {
+		writeError(w, 400, "HTTPS 端口需为 1–65535，不能为 80")
+		return
+	}
+	if _, _, enabled := s.webPortSettings(); !enabled {
+		writeError(w, 409, "仅支持 s2l 管理的 Nginx HTTPS 服务，请升级安装文件")
+		return
+	}
+	cmd := exec.Command("python3", "/opt/s2l/manage_config.py", "listen_port")
+	cmd.Stdin = strings.NewReader(strconv.Itoa(body.Port))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		writeError(w, 500, fmt.Sprintf("HTTPS 端口修改失败：%s", strings.TrimSpace(string(out))))
+		return
+	}
+	address, port, _ := s.webPortSettings()
+	writeJSON(w, 200, map[string]any{"public_url": address, "port": port, "message": "HTTPS 端口已更新，请使用新地址登录"})
 }
 
 func (s *Server) checkCurrent(password string) bool {

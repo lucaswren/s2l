@@ -65,6 +65,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  saveWebPort: (body) =>
+    request("/api/settings/web-port", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   saveSSH: (body) =>
     request("/api/settings/ssh", {
       method: "POST",

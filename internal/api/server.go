@@ -45,6 +45,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/account", s.handleAccount)
 	mux.HandleFunc("/api/settings/ssh", s.handleSSH)
+	mux.HandleFunc("/api/settings/web-port", s.handleWebPort)
 	mux.HandleFunc("/api/settings/ssh-password", s.handleSSHPassword)
 	mux.HandleFunc("/api/settings/ipsec", s.handleIPsec)
 

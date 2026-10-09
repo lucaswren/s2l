@@ -8,13 +8,16 @@ from pathlib import Path
 import re
 import secrets
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
 import time
+from urllib.parse import urlsplit, urlunsplit
 
 
 CONFIG_FILE = Path("/opt/s2l/config.json")
+NGINX_SITE = Path("/etc/nginx/conf.d/s2l.conf")
 
 
 def validate_port(value):
@@ -63,9 +66,18 @@ def update_config(config, field, value):
             raise ValueError("密码需为 12-128 位字母、数字或 _ . @ + -")
         config[field] = value
     elif field == "listen_port":
-        if str(config.get("public_url", "")).startswith("https://"):
-            raise ValueError("HTTPS 管理地址使用 443 端口；此处不修改反向代理的后端端口")
         port = validate_port(value)
+        if str(config.get("public_url", "")).startswith("https://"):
+            if port == 80:
+                raise ValueError("TCP 80 用于证书验证，不能作为 HTTPS 端口")
+            address = urlsplit(config["public_url"])
+            if not address.hostname or address.username or address.password:
+                raise ValueError("HTTPS 管理地址格式错误")
+            host = address.hostname
+            if ":" in host:
+                host = f"[{host}]"
+            config["public_url"] = urlunsplit(("https", f"{host}:{port}", "", "", ""))
+            return config
         listen = config.get("listen", "127.0.0.1:8080")
         host, separator, _ = listen.rpartition(":")
         if not separator:
@@ -79,11 +91,11 @@ def update_config(config, field, value):
     return config
 
 
-def write_atomic(path, data):
+def write_atomic(path, data, mode=0o600):
     fd, temporary = tempfile.mkstemp(prefix=".s2l-config-", dir=path.parent)
     try:
         with os.fdopen(fd, "wb") as output:
-            os.fchmod(output.fileno(), 0o600)
+            os.fchmod(output.fileno(), mode)
             output.write(data)
             output.flush()
             os.fsync(output.fileno())
@@ -99,6 +111,56 @@ def restart_service():
     subprocess.run(["systemctl", "is-active", "--quiet", "s2l"], check=True)
 
 
+def change_https_port(original, value):
+    current = json.loads(original)
+    config = update_config(dict(current), "listen_port", value)
+    port = validate_port(value)
+    address = urlsplit(current["public_url"])
+    old_port = address.port or 443
+    if port == old_port:
+        if config != current:
+            write_atomic(CONFIG_FILE, (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode())
+        return config["public_url"]
+    if port == int(current["listen"].rsplit(":", 1)[1]):
+        raise ValueError("HTTPS 端口不能与本机后端端口相同")
+    check_available_port(port)
+    if NGINX_SITE.is_symlink():
+        raise ValueError("不支持符号链接形式的 Nginx 配置")
+    site_original = NGINX_SITE.read_bytes()
+    site = site_original.decode()
+    if not site.startswith("# Managed by s2l HTTPS\n"):
+        raise ValueError("仅支持 s2l 管理的 Nginx HTTPS 配置")
+    site, listeners = re.subn(r"(?m)^(\s*listen\s+)" + str(old_port) + r"(\s+ssl\s*;)", rf"\g<1>{port}\g<2>", site)
+    site, redirects = re.subn(r"(?m)^(\s*location / \{ return 308 )https://[^\s;$]+\$request_uri; \}", lambda m: m[1] + config["public_url"] + "$request_uri; }", site)
+    if listeners != 1 or redirects != 1:
+        raise ValueError("Nginx 配置与管理地址不一致，未修改")
+    try:
+        write_atomic(NGINX_SITE, site.encode(), 0o644)
+        subprocess.run(["nginx", "-t"], check=True, capture_output=True)
+        write_atomic(CONFIG_FILE, (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode())
+        subprocess.run(["systemctl", "reload", "nginx"], check=True, capture_output=True)
+        # Validate the local TLS listener; browser certificate trust is unchanged.
+        context = ssl._create_unverified_context()
+        for attempt in range(20):
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=2) as connection:
+                    with context.wrap_socket(connection, server_hostname=address.hostname):
+                        return config["public_url"]
+            except OSError:
+                if attempt == 19:
+                    raise RuntimeError("新 HTTPS 端口未正常监听")
+                time.sleep(0.25)
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+        write_atomic(CONFIG_FILE, original)
+        write_atomic(NGINX_SITE, site_original, 0o644)
+        try:
+            subprocess.run(["nginx", "-t"], check=True, capture_output=True)
+            subprocess.run(["systemctl", "reload", "nginx"], check=True, capture_output=True)
+        except (OSError, subprocess.CalledProcessError):
+            raise RuntimeError("已恢复原配置，但 Nginx 重载失败，请检查服务日志") from error
+        raise RuntimeError("HTTPS 端口修改失败，已恢复原配置") from error
+
+
 def main():
     if len(sys.argv) != 2:
         raise ValueError("缺少配置项")
@@ -106,7 +168,11 @@ def main():
         print(random_port())
         return
     original = CONFIG_FILE.read_bytes()
-    config = update_config(json.loads(original), sys.argv[1], sys.stdin.read())
+    value = sys.stdin.read()
+    if sys.argv[1] == "listen_port" and str(json.loads(original).get("public_url", "")).startswith("https://"):
+        print(change_https_port(original, value))
+        return
+    config = update_config(json.loads(original), sys.argv[1], value)
     if sys.argv[1] == "listen_port":
         if config == json.loads(original):
             print("网页端口未改变")

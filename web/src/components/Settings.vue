@@ -23,6 +23,8 @@ const ipsecRef = ref();
 const ipsec = reactive({ enabled: false, psk: "", current_password: "" });
 const accountRef = ref();
 const sshRef = ref();
+const webPortRef = ref();
+const webPort = reactive({ port: Number(location.port) || 443 });
 const sshPasswordRef = ref();
 const sshPassword = reactive({
   password: "",
@@ -75,6 +77,7 @@ async function load() {
     settings.value = await api.settings();
     account.username = settings.value.admin_user;
     ssh.port = settings.value.ssh_ports[0] || 22;
+    webPort.port = settings.value.web_port || 443;
     ipsec.enabled = !!settings.value.ipsec?.enabled;
     error.value = "";
   } catch (e) {
@@ -106,6 +109,40 @@ async function saveAccount() {
       return;
     }
     await load();
+  } catch (e) {
+    emit("toast", { type: "err", message: e.message });
+  } finally {
+    busy.value = "";
+  }
+}
+async function saveWebPort() {
+  if (!(await webPortRef.value.validate().catch(() => false))) return;
+  if (webPort.port === 80) {
+    emit("toast", {
+      type: "err",
+      message: "TCP 80 用于证书验证，不能作为 HTTPS 端口",
+    });
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `将 HTTPS 端口改为 ${webPort.port}。请先放行服务器防火墙和云安全组中的 TCP ${webPort.port}。修改后使用新地址重新登录，TCP 80 继续用于证书续期。`,
+      "修改 HTTPS 端口",
+      {
+        type: "warning",
+        confirmButtonText: "修改端口",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+  busy.value = "web-port";
+  try {
+    const res = await api.saveWebPort({ ...webPort });
+    settings.value.public_url = res.public_url;
+    settings.value.web_port = res.port;
+    emit("toast", { type: "ok", message: res.message + "：" + res.public_url });
   } catch (e) {
     emit("toast", { type: "err", message: e.message });
   } finally {
@@ -216,7 +253,7 @@ onMounted(load);
   <div class="section-head">
     <div>
       <h2>系统设置</h2>
-      <p class="muted">管理 L2TP 接入方式、管理凭据与 SSH 端口</p>
+      <p class="muted">管理 L2TP 接入方式、管理凭据与 HTTPS / SSH 端口</p>
     </div>
     <el-button :loading="loading" :disabled="!!busy" @click="load"
       >刷新设置</el-button
@@ -230,6 +267,52 @@ onMounted(load);
     :closable="false"
     class="section-gap"
   />
+  <el-card shadow="never" class="section-gap settings-card">
+    <template #header>HTTPS 管理端口</template>
+    <el-alert
+      :title="
+        settings.web_port_enabled
+          ? '先放行新 TCP 端口；修改后使用新地址登录。TCP 80 用于证书续期，请保持可达。'
+          : '此环境未提供 s2l 管理的 Nginx HTTPS 服务，请升级安装文件。'
+      "
+      type="info"
+      show-icon
+      :closable="false"
+      class="section-gap"
+    />
+    <p v-if="settings.public_url" class="muted">
+      管理地址：<el-link
+        :href="settings.public_url"
+        type="primary"
+        class="mono"
+        >{{ settings.public_url }}</el-link
+      >
+    </p>
+    <el-form
+      ref="webPortRef"
+      :model="webPort"
+      label-position="top"
+      :disabled="!!busy || loading || !settings.web_port_enabled"
+      @submit.prevent="saveWebPort"
+    >
+      <div class="form-grid">
+        <el-form-item label="HTTPS 端口" prop="port" :rules="required">
+          <el-input-number
+            v-model="webPort.port"
+            :min="1"
+            :max="65535"
+            :precision="0"
+          />
+        </el-form-item>
+      </div>
+      <el-button
+        type="primary"
+        :loading="busy === 'web-port'"
+        native-type="submit"
+        >修改 HTTPS 端口</el-button
+      >
+    </el-form>
+  </el-card>
   <el-card shadow="never" class="section-gap settings-card">
     <template #header
       ><div class="card-heading">

@@ -2,7 +2,7 @@
 # Configure a trusted public-IP certificate and nginx reverse proxy.
 set -euo pipefail
 [[ "$(id -u)" -eq 0 ]] || { echo "请使用 sudo 执行" >&2; exit 1; }
-[[ $# -eq 1 ]] || { echo "用法：sudo bash script/setup_https.sh 公网IPv4" >&2; exit 2; }
+[[ $# -ge 1 && $# -le 2 ]] || { echo "用法：sudo bash script/setup_https.sh 公网IPv4 [HTTPS端口]" >&2; exit 2; }
 IP="$(python3 - "$1" <<'PY'
 import ipaddress, sys
 address = ipaddress.IPv4Address(sys.argv[1])
@@ -16,6 +16,28 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONFIG=/opt/s2l/config.json
 SITE=/etc/nginx/conf.d/s2l.conf
 [[ -f "$CONFIG" ]] || { echo "请先安装 s2l" >&2; exit 1; }
+HTTPS_PORT="$(python3 - "$CONFIG" "${2:-${HTTPS_PORT:-}}" "${SCRIPT_DIR}" <<'PY'
+import json, sys
+from urllib.parse import urlsplit
+sys.path.insert(0, sys.argv[3])
+from manage_config import validate_port, random_port, check_available_port
+config=json.load(open(sys.argv[1]))
+address=urlsplit(config.get('public_url',''))
+existing=(address.port or 443) if address.scheme == 'https' else None
+backend=int(config['listen'].rsplit(':',1)[1])
+value=sys.argv[2]
+port=validate_port(value) if value else existing
+if port is None:
+    port=random_port()
+    while port == backend:
+        port=random_port()
+if port == 80 or port == backend:
+    raise SystemExit('HTTPS 端口不能为 80 或与本机后端端口相同')
+if port != existing:
+    check_available_port(port)
+print(port)
+PY
+)"
 if [[ -e "$SITE" ]] && ! grep -q '^# Managed by s2l HTTPS' "$SITE"; then
   echo "检测到非 s2l 管理的同名 nginx 配置，已停止" >&2; exit 1
 fi
@@ -103,12 +125,12 @@ else
   echo "浏览器会提示证书不受信任；请核对以下 SHA-256 指纹后手动信任或导入证书。" >&2
   openssl x509 -in "$CERT" -noout -fingerprint -sha256
 fi
-PORT="$(python3 - "$CONFIG" <<'PY'
+PORT="$(python3 - "$CONFIG" "$HTTPS_PORT" <<'PY'
 import json, sys
 config=json.load(open(sys.argv[1]))
 port=int(config['listen'].rsplit(':',1)[1])
-if port in (80,443) or not 1 <= port <= 65535:
-    raise SystemExit('后端端口不能为 80 或 443；请先修改网页端口')
+if port in (80,int(sys.argv[2])) or not 1 <= port <= 65535:
+    raise SystemExit('后端端口不能为 80 或与 HTTPS 端口相同')
 print(port)
 PY
 )"
@@ -118,10 +140,10 @@ server {
     listen 80;
     server_name ${IP};
     location ^~ /.well-known/acme-challenge/ { root /var/www/s2l-acme; }
-    location / { return 308 https://${IP}\$request_uri; }
+    location / { return 308 https://${IP}:${HTTPS_PORT}\$request_uri; }
 }
 server {
-    listen 443 ssl;
+    listen ${HTTPS_PORT} ssl;
     server_name ${IP};
     ssl_certificate ${CERT};
     ssl_certificate_key ${KEY};
@@ -151,12 +173,12 @@ nginx -t
 cp "$CONFIG" "$BACKUP/config.json"
 chmod 600 "$BACKUP/config.json"
 MODIFIED_CONFIG=1
-python3 - "$CONFIG" "$IP" "$PORT" "$CERT_TYPE" <<'PY'
+python3 - "$CONFIG" "$IP" "$PORT" "$CERT_TYPE" "$HTTPS_PORT" <<'PY'
 import json, os, sys, tempfile
-path, address, port, certificate_type=sys.argv[1:]
+path, address, port, certificate_type, https_port=sys.argv[1:]
 config=json.load(open(path))
 config['listen']='127.0.0.1:'+port
-config['public_url']='https://'+address
+config['public_url']='https://'+address+':'+https_port
 config['https_certificate']=certificate_type
 fd, temporary=tempfile.mkstemp(dir=os.path.dirname(path),prefix='.s2l-https-')
 try:
@@ -189,8 +211,8 @@ else
   systemctl disable --now s2l-cert-renew.timer
 fi
 trap - ERR
-echo "HTTPS 已启用：https://${IP}"
-echo "s2l 后端仅监听本机；TCP 80 用于证书验证和跳转，TCP 443 用于管理。"
+echo "HTTPS 已启用：https://${IP}:${HTTPS_PORT}"
+echo "s2l 后端仅监听本机；TCP 80 用于证书验证和跳转，TCP ${HTTPS_PORT} 用于 HTTPS 管理，请在安全组和防火墙放行。"
 if [[ "$CERT_TYPE" == letsencrypt && "$CERTBOT_READY" == 1 ]]; then
   echo "自动续期：s2l-cert-renew.timer；配置备份：$BACKUP"
 else

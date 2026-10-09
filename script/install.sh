@@ -9,6 +9,7 @@ APP_NAME="s2l"
 INSTALL_DIR="/opt/s2l"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 LISTEN_PORT="${LISTEN_PORT:-}"
+HTTPS_PORT="${HTTPS_PORT:-}"
 SINGBOX_VERSION="${SINGBOX_VERSION:-1.11.15}"
 
 RED='\033[0;31m'
@@ -22,7 +23,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 [[ "$(id -u)" -eq 0 ]] || error "请使用 root 执行：sudo bash script/install.sh"
 [[ ! -e "${INSTALL_DIR}/config.json" ]] || error "s2l 已安装；为保护现有账号和配置，请使用代码更新流程，勿重复执行安装脚本"
-info "新安装默认启用 HTTPS；请先放行公网 TCP 80、443，80 用于证书申请与续期"
+info "新安装默认启用 HTTPS；TCP 80 用于证书申请与续期；HTTPS 使用自定义端口，未指定则随机生成"
 
 # 定位项目根目录（脚本在 script/ 下）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -80,12 +81,22 @@ fi
 PUBLIC_IP="$(python3 "${SCRIPT_DIR}/detect_public_ip.py")" || error "公网 IP 检测失败，请指定 PUBLIC_IP"
 info "HTTPS 公网地址: ${PUBLIC_IP}"
 
+if [[ -z "${HTTPS_PORT}" ]]; then
+  HTTPS_PORT="$(python3 "${SCRIPT_DIR}/manage_config.py" random_port)"
+fi
+[[ "${HTTPS_PORT}" =~ ^[0-9]{1,5}$ ]] && (( 10#${HTTPS_PORT} >= 1 && 10#${HTTPS_PORT} <= 65535 && 10#${HTTPS_PORT} != 80 )) || error "HTTPS_PORT 需为 1-65535 的整数，不能为 80"
+HTTPS_PORT="$((10#${HTTPS_PORT}))"
+info "HTTPS 端口: ${HTTPS_PORT}；请放行公网 TCP 80、${HTTPS_PORT}"
+
 if [[ -z "${LISTEN_PORT}" ]]; then
   LISTEN_PORT="$(python3 "${SCRIPT_DIR}/manage_config.py" random_port)"
+  while [[ "${LISTEN_PORT}" == "${HTTPS_PORT}" ]]; do
+    LISTEN_PORT="$(python3 "${SCRIPT_DIR}/manage_config.py" random_port)"
+  done
 fi
 [[ "${LISTEN_PORT}" =~ ^[0-9]{1,5}$ ]] && (( 10#${LISTEN_PORT} >= 1 && 10#${LISTEN_PORT} <= 65535 )) || error "LISTEN_PORT 需为 1-65535 的整数"
 LISTEN_PORT="$((10#${LISTEN_PORT}))"
-[[ "${LISTEN_PORT}" != "80" && "${LISTEN_PORT}" != "443" ]] || error "本机后端端口不能为 80 或 443，这两个端口用于 HTTPS"
+[[ "${LISTEN_PORT}" != "80" && "${LISTEN_PORT}" != "${HTTPS_PORT}" ]] || error "本机后端端口不能为 80 或与 HTTPS 端口相同"
 info "本机后端端口: ${LISTEN_PORT}"
 
 ADMIN_USER="${ADMIN_USER:-admin}"
@@ -237,12 +248,12 @@ if systemctl is-active --quiet "${APP_NAME}"; then
   info "申请公网 IP 证书并启用 HTTPS..."
   # Execute as a separate command so setup_https.sh retains its ERR rollback trap.
   # Never report installation success while the management endpoint lacks TLS.
-  trap 'error "HTTPS 尚未完成；请放行 TCP 80、443 后执行 bash ${SCRIPT_DIR}/setup_https.sh ${PUBLIC_IP}；管理配置已保留于 ${INSTALL_DIR}/config.json"' ERR
-  bash "${SCRIPT_DIR}/setup_https.sh" "${PUBLIC_IP}"
+  trap 'error "HTTPS 尚未完成；请放行 TCP 80、${HTTPS_PORT} 后执行 bash ${SCRIPT_DIR}/setup_https.sh ${PUBLIC_IP} ${HTTPS_PORT}；管理配置已保留于 ${INSTALL_DIR}/config.json"' ERR
+  bash "${SCRIPT_DIR}/setup_https.sh" "${PUBLIC_IP}" "${HTTPS_PORT}"
   trap - ERR
   echo
   info "安装成功！"
-  echo "  Web UI : https://${PUBLIC_IP}"
+  echo "  Web UI : https://${PUBLIC_IP}:${HTTPS_PORT}"
   echo "  管理账号: ${ADMIN_USER}"
   echo "  管理密码: ${ADMIN_PASS}"
   echo "  配置   : ${INSTALL_DIR}/config.json"
