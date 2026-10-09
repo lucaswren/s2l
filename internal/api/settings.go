@@ -129,8 +129,8 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Port int `json:"port"`
 	}
-	if decodeJSON(r, &body) != nil || body.Port < 1 || body.Port > 65535 || body.Port == 80 {
-		writeError(w, 400, "HTTPS 端口需为 1–65535，不能为 80")
+	if decodeJSON(r, &body) != nil || body.Port < 1 || body.Port > 65535 {
+		writeError(w, 400, "HTTPS 端口需为 1–65535")
 		return
 	}
 	if _, _, enabled := s.webPortSettings(); !enabled {

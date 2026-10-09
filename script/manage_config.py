@@ -68,8 +68,6 @@ def update_config(config, field, value):
     elif field == "listen_port":
         port = validate_port(value)
         if str(config.get("public_url", "")).startswith("https://"):
-            if port == 80:
-                raise ValueError("TCP 80 用于证书验证，不能作为 HTTPS 端口")
             address = urlsplit(config["public_url"])
             if not address.hostname or address.username or address.password:
                 raise ValueError("HTTPS 管理地址格式错误")
@@ -132,7 +130,7 @@ def change_https_port(original, value):
         raise ValueError("仅支持 s2l 管理的 Nginx HTTPS 配置")
     site, listeners = re.subn(r"(?m)^(\s*listen\s+)" + str(old_port) + r"(\s+ssl\s*;)", rf"\g<1>{port}\g<2>", site)
     site, redirects = re.subn(r"(?m)^(\s*location / \{ return 308 )https://[^\s;$]+\$request_uri; \}", lambda m: m[1] + config["public_url"] + "$request_uri; }", site)
-    if listeners != 1 or redirects != 1:
+    if listeners != 1 or redirects > 1:
         raise ValueError("Nginx 配置与管理地址不一致，未修改")
     try:
         write_atomic(NGINX_SITE, site.encode(), 0o644)

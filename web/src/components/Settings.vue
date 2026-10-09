@@ -117,16 +117,9 @@ async function saveAccount() {
 }
 async function saveWebPort() {
   if (!(await webPortRef.value.validate().catch(() => false))) return;
-  if (webPort.port === 80) {
-    emit("toast", {
-      type: "err",
-      message: "TCP 80 用于证书验证，不能作为 HTTPS 端口",
-    });
-    return;
-  }
   try {
     await ElMessageBox.confirm(
-      `将 HTTPS 端口改为 ${webPort.port}。请先放行服务器防火墙和云安全组中的 TCP ${webPort.port}。修改后使用新地址重新登录，TCP 80 继续用于证书续期。`,
+      `将 HTTPS 端口改为 ${webPort.port}。请先放行服务器防火墙和云安全组中的 TCP ${webPort.port}。修改后使用新地址重新登录。`,
       "修改 HTTPS 端口",
       {
         type: "warning",
@@ -272,7 +265,7 @@ onMounted(load);
     <el-alert
       :title="
         settings.web_port_enabled
-          ? '先放行新 TCP 端口；修改后使用新地址登录。TCP 80 用于证书续期，请保持可达。'
+          ? '先放行新 TCP 端口；修改后使用新地址登录。'
           : '此环境未提供 s2l 管理的 Nginx HTTPS 服务，请升级安装文件。'
       "
       type="info"

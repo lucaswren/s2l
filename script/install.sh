@@ -23,7 +23,7 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 [[ "$(id -u)" -eq 0 ]] || error "请使用 root 执行：sudo bash script/install.sh"
 [[ ! -e "${INSTALL_DIR}/config.json" ]] || error "s2l 已安装；为保护现有账号和配置，请使用代码更新流程，勿重复执行安装脚本"
-info "新安装默认启用 HTTPS；TCP 80 用于证书申请与续期；HTTPS 使用自定义端口，未指定则随机生成"
+info "新安装使用自签证书启用 HTTPS；管理端口未指定则随机生成，无需放行 TCP 80"
 
 # 定位项目根目录（脚本在 script/ 下）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -84,9 +84,9 @@ info "HTTPS 公网地址: ${PUBLIC_IP}"
 if [[ -z "${HTTPS_PORT}" ]]; then
   HTTPS_PORT="$(python3 "${SCRIPT_DIR}/manage_config.py" random_port)"
 fi
-[[ "${HTTPS_PORT}" =~ ^[0-9]{1,5}$ ]] && (( 10#${HTTPS_PORT} >= 1 && 10#${HTTPS_PORT} <= 65535 && 10#${HTTPS_PORT} != 80 )) || error "HTTPS_PORT 需为 1-65535 的整数，不能为 80"
+[[ "${HTTPS_PORT}" =~ ^[0-9]{1,5}$ ]] && (( 10#${HTTPS_PORT} >= 1 && 10#${HTTPS_PORT} <= 65535 )) || error "HTTPS_PORT 需为 1-65535 的整数"
 HTTPS_PORT="$((10#${HTTPS_PORT}))"
-info "HTTPS 端口: ${HTTPS_PORT}；请放行公网 TCP 80、${HTTPS_PORT}"
+info "HTTPS 端口: ${HTTPS_PORT}；请放行公网 TCP ${HTTPS_PORT}"
 
 [[ "${HTTPS_PORT}" != "${LISTEN_PORT}" ]] || error "HTTPS_PORT 不能为 8080，该端口用于本机后端"
 info "本机后端端口: ${LISTEN_PORT}"
@@ -237,10 +237,10 @@ systemctl restart "${APP_NAME}"
 info "7/7 检查服务状态..."
 sleep 1
 if systemctl is-active --quiet "${APP_NAME}"; then
-  info "申请公网 IP 证书并启用 HTTPS..."
+  info "生成自签证书并启用 HTTPS..."
   # Execute as a separate command so setup_https.sh retains its ERR rollback trap.
   # Never report installation success while the management endpoint lacks TLS.
-  trap 'error "HTTPS 尚未完成；请放行 TCP 80、${HTTPS_PORT} 后执行 bash ${SCRIPT_DIR}/setup_https.sh ${PUBLIC_IP} ${HTTPS_PORT}；管理配置已保留于 ${INSTALL_DIR}/config.json"' ERR
+  trap 'error "HTTPS 尚未完成；请放行 TCP ${HTTPS_PORT} 后执行 bash ${SCRIPT_DIR}/setup_https.sh ${PUBLIC_IP} ${HTTPS_PORT}；管理配置已保留于 ${INSTALL_DIR}/config.json"' ERR
   bash "${SCRIPT_DIR}/setup_https.sh" "${PUBLIC_IP}" "${HTTPS_PORT}"
   trap - ERR
   echo

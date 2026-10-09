@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Configure a trusted public-IP certificate and nginx reverse proxy.
+# Configure a self-signed public-IP certificate and nginx reverse proxy.
 set -euo pipefail
 [[ "$(id -u)" -eq 0 ]] || { echo "请使用 sudo 执行" >&2; exit 1; }
 [[ $# -ge 1 && $# -le 2 ]] || { echo "用法：sudo bash script/setup_https.sh 公网IPv4 [HTTPS端口]" >&2; exit 2; }
@@ -12,7 +12,6 @@ print(address)
 PY
 )"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONFIG=/opt/s2l/config.json
 SITE=/etc/nginx/conf.d/s2l.conf
 [[ -f "$CONFIG" ]] || { echo "请先安装 s2l" >&2; exit 1; }
@@ -31,8 +30,8 @@ if port is None:
     port=random_port()
     while port == backend:
         port=random_port()
-if port == 80 or port == backend:
-    raise SystemExit('HTTPS 端口不能为 80 或与本机后端端口相同')
+if port == backend:
+    raise SystemExit('HTTPS 端口不能与本机后端端口相同')
 if port != existing:
     check_available_port(port)
 print(port)
@@ -41,23 +40,24 @@ PY
 if [[ -e "$SITE" ]] && ! grep -q '^# Managed by s2l HTTPS' "$SITE"; then
   echo "检测到非 s2l 管理的同名 nginx 配置，已停止" >&2; exit 1
 fi
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y --no-install-recommends nginx openssl ca-certificates
-CERTBOT_READY=0
-if apt-get install -y --no-install-recommends python3-venv \
-  && python3 -m venv /opt/s2l/certbot \
-  && /opt/s2l/certbot/bin/pip install --quiet 'certbot>=5.4,<6'; then
-  CERTBOT_READY=1
-else
-  echo "证书申请组件未就绪，将使用可用证书或自签证书。" >&2
+if ! command -v nginx >/dev/null || ! command -v openssl >/dev/null; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y --no-install-recommends nginx openssl ca-certificates
 fi
+CERT=/opt/s2l/tls/self-signed.crt
+KEY=/opt/s2l/tls/self-signed.key
+CERT_TYPE=self_signed
 BACKUP="$(mktemp -d /opt/s2l/https-backup-XXXXXXXX)"
 chmod 700 "$BACKUP"
 cp "$CONFIG" "$BACKUP/config.json"
 chmod 600 "$BACKUP/config.json"
 [[ ! -f "$SITE" ]] || cp "$SITE" "$BACKUP/nginx.conf"
+[[ ! -f "$CERT" ]] || cp "$CERT" "$BACKUP/cert.pem"
+[[ ! -f "$KEY" ]] || cp "$KEY" "$BACKUP/key.pem"
 MODIFIED_CONFIG=0
+MODIFIED_CERT=0
+DEFAULT_SITE_DISABLED=0
 rollback() {
   local result=$?
   trap - ERR
@@ -65,83 +65,72 @@ rollback() {
     install -m 600 "$BACKUP/config.json" "$CONFIG"
     systemctl restart s2l || true
   fi
+  if [[ "$MODIFIED_CERT" == 1 ]]; then
+    if [[ -f "$BACKUP/cert.pem" ]]; then install -m 600 "$BACKUP/cert.pem" "$CERT"; else rm -f "$CERT"; fi
+    if [[ -f "$BACKUP/key.pem" ]]; then install -m 600 "$BACKUP/key.pem" "$KEY"; else rm -f "$KEY"; fi
+  fi
   if [[ -f "$BACKUP/nginx.conf" ]]; then
     install -m 644 "$BACKUP/nginx.conf" "$SITE"
   else
     rm -f "$SITE"
+  fi
+  if [[ "$DEFAULT_SITE_DISABLED" == 1 ]]; then
+    cp -P "$BACKUP/default-site" /etc/nginx/sites-enabled/default
   fi
   nginx -t && systemctl reload nginx || true
   echo "HTTPS 配置失败，已恢复原应用与 nginx 配置。备份：$BACKUP" >&2
   exit "$result"
 }
 trap rollback ERR
-mkdir -p /var/www/s2l-acme
-# Keep an already working HTTPS site online during repeated setup.
-if [[ ! -f "$SITE" ]]; then
-  cat >"$SITE" <<EOF
-# Managed by s2l HTTPS
-server {
-    listen 80;
-    server_name ${IP};
-    location ^~ /.well-known/acme-challenge/ { root /var/www/s2l-acme; }
-    location / { return 404; }
-}
-EOF
+# Disable only the untouched distribution default site; keep custom sites.
+if python3 - <<'PY'
+import hashlib, pathlib, subprocess, sys
+link=pathlib.Path('/etc/nginx/sites-enabled/default')
+source=pathlib.Path('/etc/nginx/sites-available/default')
+if not link.is_symlink() or link.resolve() != source or not source.is_file():
+    sys.exit(1)
+try:
+    records=subprocess.check_output(['dpkg-query','-W','-f=${Conffiles}','nginx-common'],text=True)
+except (OSError,subprocess.CalledProcessError):
+    sys.exit(1)
+for line in records.splitlines():
+    fields=line.split()
+    if len(fields)>=2 and fields[0]==str(source):
+        sys.exit(0 if hashlib.md5(source.read_bytes()).hexdigest()==fields[1] else 1)
+sys.exit(1)
+PY
+then
+  cp -P /etc/nginx/sites-enabled/default "$BACKUP/default-site"
+  rm /etc/nginx/sites-enabled/default
+  DEFAULT_SITE_DISABLED=1
 fi
-nginx -t
-systemctl enable --now nginx
-systemctl reload nginx
-CERT=/etc/letsencrypt/live/s2l-ip/fullchain.pem
-KEY=/etc/letsencrypt/live/s2l-ip/privkey.pem
-CERT_TYPE=letsencrypt
-if [[ "$CERTBOT_READY" == 1 ]] && /opt/s2l/certbot/bin/certbot certonly --non-interactive --agree-tos \
-  --register-unsafely-without-email --preferred-profile shortlived \
-  --webroot --webroot-path /var/www/s2l-acme --ip-address "$IP" --cert-name s2l-ip; then
-  echo "可信公网 IP 证书已就绪。"
-elif [[ -f "$CERT" && -f "$KEY" ]] \
-  && openssl x509 -in "$CERT" -noout -checkend 86400 >/dev/null 2>&1 \
-  && openssl x509 -in "$CERT" -noout -checkip "$IP" >/dev/null 2>&1; then
-  echo "申请失败，继续使用仍有效的现有可信证书。" >&2
-else
-  CERT_TYPE=self_signed
-  mkdir -p /opt/s2l/tls
-  chmod 700 /opt/s2l/tls
-  CERT=/opt/s2l/tls/self-signed.crt
-  KEY=/opt/s2l/tls/self-signed.key
-  if [[ ! -f "$CERT" || ! -f "$KEY" ]] \
-    || ! openssl x509 -in "$CERT" -noout -checkend 86400 >/dev/null 2>&1 \
-    || ! openssl x509 -in "$CERT" -noout -checkip "$IP" >/dev/null 2>&1; then
-    temporary="$(mktemp -d /opt/s2l/tls/.generate-XXXXXXXX)"
-    chmod 700 "$temporary"
-    openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
-      -subj "/CN=${IP}" -addext "subjectAltName=IP:${IP}" \
-      -keyout "$temporary/key.pem" -out "$temporary/cert.pem" >/dev/null 2>&1
-    chmod 600 "$temporary/key.pem" "$temporary/cert.pem"
-    mv "$temporary/key.pem" "$KEY"
-    mv "$temporary/cert.pem" "$CERT"
-    rmdir "$temporary"
-  fi
-  echo "可信证书申请失败，已使用自签证书启用 HTTPS（有效期 365 天）。" >&2
-  echo "浏览器会提示证书不受信任；请核对以下 SHA-256 指纹后手动信任或导入证书。" >&2
-  openssl x509 -in "$CERT" -noout -fingerprint -sha256
+mkdir -p /opt/s2l/tls
+chmod 700 /opt/s2l/tls
+if [[ ! -f "$CERT" || ! -f "$KEY" ]] \
+  || ! openssl x509 -in "$CERT" -noout -checkend 86400 >/dev/null 2>&1 \
+  || ! openssl x509 -in "$CERT" -noout -checkip "$IP" >/dev/null 2>&1; then
+  temporary="$(mktemp -d /opt/s2l/tls/.generate-XXXXXXXX)"
+  chmod 700 "$temporary"
+  openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
+    -subj "/CN=${IP}" -addext "subjectAltName=IP:${IP}" \
+    -keyout "$temporary/key.pem" -out "$temporary/cert.pem" >/dev/null 2>&1
+  chmod 600 "$temporary/key.pem" "$temporary/cert.pem"
+  MODIFIED_CERT=1
+  mv "$temporary/key.pem" "$KEY"
+  mv "$temporary/cert.pem" "$CERT"
+  rmdir "$temporary"
 fi
 PORT="$(python3 - "$CONFIG" "$HTTPS_PORT" <<'PY'
 import json, sys
 config=json.load(open(sys.argv[1]))
 port=int(config['listen'].rsplit(':',1)[1])
-if port in (80,int(sys.argv[2])) or not 1 <= port <= 65535:
-    raise SystemExit('后端端口不能为 80 或与 HTTPS 端口相同')
+if port == int(sys.argv[2]) or not 1 <= port <= 65535:
+    raise SystemExit('后端端口不能与 HTTPS 端口相同')
 print(port)
 PY
 )"
 cat >"$SITE" <<EOF
 # Managed by s2l HTTPS
-server {
-    listen 80;
-    server_name ${IP};
-    location ^~ /.well-known/acme-challenge/ { root /var/www/s2l-acme; }
-    location / { return 308 https://${IP}:${HTTPS_PORT}\$request_uri; }
-}
 server {
     listen ${HTTPS_PORT} ssl;
     server_name ${IP};
@@ -169,10 +158,15 @@ server {
 }
 EOF
 nginx -t
-# Commit only after obtaining a certificate and validating nginx.
+# Commit only after generating a certificate and validating nginx.
 cp "$CONFIG" "$BACKUP/config.json"
 chmod 600 "$BACKUP/config.json"
 MODIFIED_CONFIG=1
+RESTART_REQUIRED="$(python3 - "$CONFIG" "$PORT" <<'PY'
+import json,sys
+print(int(json.load(open(sys.argv[1]))["listen"] != "127.0.0.1:"+sys.argv[2]))
+PY
+)"
 python3 - "$CONFIG" "$IP" "$PORT" "$CERT_TYPE" "$HTTPS_PORT" <<'PY'
 import json, os, sys, tempfile
 path, address, port, certificate_type, https_port=sys.argv[1:]
@@ -190,31 +184,23 @@ try:
 finally:
     if os.path.exists(temporary): os.unlink(temporary)
 PY
-systemctl restart s2l
-sleep 2
+if [[ "$RESTART_REQUIRED" == 1 ]]; then
+  systemctl restart s2l
+  sleep 2
+fi
 systemctl is-active --quiet s2l
+systemctl enable --now nginx
 systemctl reload nginx
-install -m 644 "$ROOT_DIR/deploy/systemd/s2l-cert-renew.service" /etc/systemd/system/s2l-cert-renew.service
-install -m 644 "$ROOT_DIR/deploy/systemd/s2l-cert-renew.timer" /etc/systemd/system/s2l-cert-renew.timer
-mkdir -p /etc/letsencrypt/renewal-hooks/deploy
-cat >/etc/letsencrypt/renewal-hooks/deploy/s2l-nginx.sh <<'EOF'
-#!/bin/sh
-set -eu
-/usr/sbin/nginx -t
-systemctl reload nginx
-EOF
-chmod 755 /etc/letsencrypt/renewal-hooks/deploy/s2l-nginx.sh
-systemctl daemon-reload
-if [[ "$CERT_TYPE" == letsencrypt && "$CERTBOT_READY" == 1 ]]; then
-  systemctl enable --now s2l-cert-renew.timer
-else
+if systemctl cat s2l-cert-renew.timer >/dev/null 2>&1; then
   systemctl disable --now s2l-cert-renew.timer
+fi
+if systemctl cat s2l-cert-renew.service >/dev/null 2>&1; then
+  systemctl stop s2l-cert-renew.service
 fi
 trap - ERR
 echo "HTTPS 已启用：https://${IP}:${HTTPS_PORT}"
-echo "s2l 后端仅监听本机；TCP 80 用于证书验证和跳转，TCP ${HTTPS_PORT} 用于 HTTPS 管理，请在安全组和防火墙放行。"
-if [[ "$CERT_TYPE" == letsencrypt && "$CERTBOT_READY" == 1 ]]; then
-  echo "自动续期：s2l-cert-renew.timer；配置备份：$BACKUP"
-else
-  echo "自签证书或续期组件未就绪；请在修复证书申请条件后重新执行本脚本。配置备份：$BACKUP"
-fi
+echo "使用自签证书，有效期 365 天；浏览器需手动信任或导入证书。"
+echo "SHA-256 指纹："
+openssl x509 -in "$CERT" -noout -fingerprint -sha256
+echo "仅需放行 TCP ${HTTPS_PORT}；无需 TCP 80 或公网证书申请服务。"
+echo "证书：${CERT}；到期前重新执行本脚本更新证书。配置备份：${BACKUP}"

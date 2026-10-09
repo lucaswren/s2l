@@ -1,9 +1,0 @@
-[Unit]
-Description=Renew s2l public-IP TLS certificate
-After=network-online.target nginx.service
-Wants=network-online.target
-
-[Service]
-Type=oneshot
-ExecStart=/opt/s2l/certbot/bin/certbot renew --cert-name s2l-ip --quiet
-TimeoutStartSec=300
