@@ -6,7 +6,6 @@
 # 可选环境变量：
 #   REPO_URL=https://github.com/lucaswren/s2l.git
 #   BRANCH=main
-#   LISTEN_PORT=8080  # 不指定则随机生成本机后端端口
 #   HTTPS_PORT=8443 # 不指定则随机生成 HTTPS 端口
 #   PUBLIC_IP=1.2.3.4 # 默认自动检测公网 IPv4
 set -euo pipefail

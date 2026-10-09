@@ -8,7 +8,7 @@ set -euo pipefail
 APP_NAME="s2l"
 INSTALL_DIR="/opt/s2l"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
-LISTEN_PORT="${LISTEN_PORT:-}"
+LISTEN_PORT=8080
 HTTPS_PORT="${HTTPS_PORT:-}"
 SINGBOX_VERSION="${SINGBOX_VERSION:-1.11.15}"
 
@@ -88,15 +88,7 @@ fi
 HTTPS_PORT="$((10#${HTTPS_PORT}))"
 info "HTTPS 端口: ${HTTPS_PORT}；请放行公网 TCP 80、${HTTPS_PORT}"
 
-if [[ -z "${LISTEN_PORT}" ]]; then
-  LISTEN_PORT="$(python3 "${SCRIPT_DIR}/manage_config.py" random_port)"
-  while [[ "${LISTEN_PORT}" == "${HTTPS_PORT}" ]]; do
-    LISTEN_PORT="$(python3 "${SCRIPT_DIR}/manage_config.py" random_port)"
-  done
-fi
-[[ "${LISTEN_PORT}" =~ ^[0-9]{1,5}$ ]] && (( 10#${LISTEN_PORT} >= 1 && 10#${LISTEN_PORT} <= 65535 )) || error "LISTEN_PORT 需为 1-65535 的整数"
-LISTEN_PORT="$((10#${LISTEN_PORT}))"
-[[ "${LISTEN_PORT}" != "80" && "${LISTEN_PORT}" != "${HTTPS_PORT}" ]] || error "本机后端端口不能为 80 或与 HTTPS 端口相同"
+[[ "${HTTPS_PORT}" != "${LISTEN_PORT}" ]] || error "HTTPS_PORT 不能为 8080，该端口用于本机后端"
 info "本机后端端口: ${LISTEN_PORT}"
 
 ADMIN_USER="${ADMIN_USER:-admin}"

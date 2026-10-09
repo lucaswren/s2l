@@ -33,9 +33,9 @@ sudo systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 ```
 
-新服务器安装会**自动启用 HTTPS**，优先申请可信公网 IP 证书并配置自动续期；申请失败自动使用自签证书。安装前放行 TCP **80** 和 HTTPS 管理端口；成功后显示 `https://服务器IP:端口`、管理账号与 **16 位随机密码**。HTTPS 管理端口和本机后端端口分别随机选择 **10000-60000** 范围内的空闲端口，SSH 端口保留现有设置；自定义密码至少 **12 位**。
+新服务器安装会**自动启用 HTTPS**，优先申请可信公网 IP 证书并配置自动续期；申请失败自动使用自签证书。安装前放行 TCP **80** 和 HTTPS 管理端口；成功后显示 `https://服务器IP:端口`、管理账号与 **16 位随机密码**。HTTPS 管理端口随机选择 **10000-60000** 范围内的空闲端口，内部后端固定监听 **127.0.0.1:8080**，SSH 端口保留现有设置；自定义密码至少 **12 位**。
 
-公网 IPv4 默认自动识别；需指定时，将安装命令末尾的 `sudo bash` 替换为 `sudo env PUBLIC_IP=服务器公网IPv4 bash`。`LISTEN_PORT` 仅指定本机后端端口。使用 `HTTPS_PORT` 指定 HTTPS 管理端口，例如：
+公网 IPv4 默认自动识别；需指定时，将安装命令末尾的 `sudo bash` 替换为 `sudo env PUBLIC_IP=服务器公网IPv4 bash`。后端端口无需指定，也无需对外放行；HTTPS 端口不能使用 80 或 8080。使用 `HTTPS_PORT` 指定 HTTPS 管理端口，例如：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
