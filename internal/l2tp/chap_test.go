@@ -55,6 +55,17 @@ func TestClientAndLocalIP(t *testing.T) {
 	}
 }
 
+func TestChapRejectsMarkerInjection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "chap-secrets")
+	m := model.TunnelMapping{ID: "map_1\n\"attacker\" * \"password\" *", Subnet: "10.0.101.0/24", L2TPUser: "user", L2TPPass: "password"}
+	if err := NewChapManager(path).Upsert(m); err == nil {
+		t.Fatal("injected mapping marker accepted")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatal("rejected mapping wrote CHAP file")
+	}
+}
+
 func TestConfSyncUsesSemicolonComments(t *testing.T) {
 	dir := t.TempDir()
 	confPath := filepath.Join(dir, "xl2tpd.conf")

@@ -3,7 +3,9 @@ package api
 import (
 	"crypto/subtle"
 	"io/fs"
+	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -85,6 +87,25 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) withAuth(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("Cache-Control", "no-store")
+			if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+				if origin := r.Header.Get("Origin"); origin != "" {
+					u, err := url.Parse(origin)
+					if err != nil || u.User != nil || u.Host != r.Host || (u.Scheme != "http" && u.Scheme != "https") {
+						writeError(w, http.StatusForbidden, "cross-site API changes are not allowed")
+						return
+					}
+				}
+				if r.Method != http.MethodDelete {
+					mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+					if err != nil || mediaType != "application/json" {
+						writeError(w, http.StatusUnsupportedMediaType, "application/json is required")
+						return
+					}
+				}
+			}
+		}
 		s.authMu.RLock()
 		adminUser, adminPass := s.adminUser, s.adminPass
 		s.authMu.RUnlock()

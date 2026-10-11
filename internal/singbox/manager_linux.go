@@ -60,8 +60,8 @@ func (m *Manager) Start(node model.SocksNode, mapping model.TunnelMapping) error
 		return err
 	}
 
-	logPath := filepath.Join("/tmp", fmt.Sprintf("s2l-%s.log", mapping.TunName))
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	logPath := filepath.Join(RuntimeDir(), fmt.Sprintf("s2l-%s.log", mapping.TunName))
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|syscall.O_NOFOLLOW, 0o600)
 	if err != nil {
 		_ = RemoveConfig(mapping.TunName)
 		return fmt.Errorf("open sing-box log: %w", err)

@@ -12,7 +12,24 @@ import (
 	"github.com/lucaswren/s2l/internal/model"
 )
 
-const configDir = "/tmp"
+const configDir = "/run/s2l"
+
+// RuntimeDir is private to the root service, rather than a shared temporary directory.
+func RuntimeDir() string { return configDir }
+
+func ensureRuntimeDir() error {
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(configDir)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("runtime directory %s must be a private directory (0700)", configDir)
+	}
+	return nil
+}
 
 // ConfigPath 返回映射对应的 sing-box 配置文件路径
 func ConfigPath(tunName string) string {
@@ -70,15 +87,15 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, 
 		},
 		"inbounds": []map[string]any{
 			{
-				"type":                     "tun",
-				"tag":                      "tun-in",
-				"interface_name":           mapping.TunName,
-				"address":                  []string{TunInet4Address(mapping.TableID)},
-				"mtu":                      1400,
-				"auto_route":               false,
-				"strict_route":             false,
-				"stack":                    "system",
-				"sniff":                    true,
+				"type":                       "tun",
+				"tag":                        "tun-in",
+				"interface_name":             mapping.TunName,
+				"address":                    []string{TunInet4Address(mapping.TableID)},
+				"mtu":                        1400,
+				"auto_route":                 false,
+				"strict_route":               false,
+				"stack":                      "system",
+				"sniff":                      true,
 				"sniff_override_destination": true,
 			},
 		},
@@ -120,14 +137,30 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, 
 	return data, nil
 }
 
-// WriteConfig 生成并写入 /tmp/s2l-<tun_name>.json
+// WriteConfig writes credentials only inside the private runtime directory.
 func WriteConfig(node model.SocksNode, mapping model.TunnelMapping) (string, error) {
 	data, err := GenerateConfig(node, mapping)
 	if err != nil {
 		return "", err
 	}
 	path := ConfigPath(mapping.TunName)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := ensureRuntimeDir(); err != nil {
+		return "", err
+	}
+	f, err := os.CreateTemp(configDir, ".config-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(f.Name())
+	_, writeErr := f.Write(data)
+	closeErr := f.Close()
+	if writeErr != nil {
+		return "", writeErr
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	if err := os.Rename(f.Name(), path); err != nil {
 		return "", fmt.Errorf("write config %s: %w", path, err)
 	}
 	return path, nil

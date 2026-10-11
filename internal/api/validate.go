@@ -29,11 +29,14 @@ func validateSocksNode(n model.SocksNode) error {
 }
 
 func validateMapping(m model.TunnelMapping) error {
+	if m.ID != "" && !regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`).MatchString(m.ID) {
+		return fmt.Errorf("mapping id must be 1-128 letters, digits, '.', '_' or '-'")
+	}
 	if m.NodeID == "" || m.TunName == "" || m.Subnet == "" || m.L2TPUser == "" || m.L2TPPass == "" {
 		return fmt.Errorf("node_id, tun_name, subnet, l2tp_user and l2tp_pass are required")
 	}
-	if m.TableID < 1 || m.TableID > 255 {
-		return fmt.Errorf("table_id must be between 1 and 255")
+	if m.TableID < 1 || m.TableID > 252 {
+		return fmt.Errorf("table_id must be between 1 and 252; 253-255 are reserved by Linux")
 	}
 	if !tunNamePattern.MatchString(m.TunName) {
 		return fmt.Errorf("tun_name must be 1-15 letters, digits, '.', '_' or '-'")

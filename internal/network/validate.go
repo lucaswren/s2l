@@ -17,8 +17,8 @@ func ValidateMapping(m model.TunnelMapping) error {
 	if !interfaceNamePattern.MatchString(m.TunName) {
 		return fmt.Errorf("tun_name must be 1-15 letters, digits, '.', '_' or '-'")
 	}
-	if m.TableID < 1 || m.TableID > 255 {
-		return fmt.Errorf("table_id must be between 1 and 255")
+	if m.TableID < 1 || m.TableID > 252 {
+		return fmt.Errorf("table_id must be between 1 and 252; 253-255 are reserved by Linux")
 	}
 	if m.Subnet == "" {
 		return fmt.Errorf("subnet is required")

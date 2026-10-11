@@ -46,9 +46,6 @@ func (c *ConfManager) Sync(active []model.TunnelMapping) error {
 	if err := c.ensureOptions(); err != nil {
 		return err
 	}
-	if err := os.MkdirAll("/var/run/xl2tpd", 0o755); err != nil {
-		return err
-	}
 
 	content, err := renderFullConf(active, c.optionsPath, c.chapPath)
 	if err != nil {

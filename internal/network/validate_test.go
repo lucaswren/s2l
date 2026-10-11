@@ -17,6 +17,9 @@ func TestValidateMapping(t *testing.T) {
 	}
 
 	cases := []model.TunnelMapping{
+		{TunName: "tun101", TableID: 253, Subnet: "10.0.101.0/24"},
+		{TunName: "tun101", TableID: 254, Subnet: "10.0.101.0/24"},
+		{TunName: "tun101", TableID: 255, Subnet: "10.0.101.0/24"},
 		{TableID: 101, Subnet: "10.0.101.0/24"},
 		{TunName: "tun101", Subnet: "10.0.101.0/24"},
 		{TunName: "tun101", TableID: 101},

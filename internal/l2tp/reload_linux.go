@@ -4,12 +4,16 @@ package l2tp
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
 
 // Reload 触发 xl2tpd 加载最新配置；若服务已 failed 则 restart。
 func Reload() error {
+	if err := os.MkdirAll("/var/run/xl2tpd", 0o755); err != nil {
+		return err
+	}
 	stateOut, _ := exec.Command("systemctl", "is-active", "xl2tpd").CombinedOutput()
 	state := strings.TrimSpace(string(stateOut))
 

@@ -32,6 +32,9 @@ func NewChapManager(path string) *ChapManager {
 func (c *ChapManager) Upsert(m model.TunnelMapping) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if strings.ContainsAny(m.ID, "\r\n") {
+		return fmt.Errorf("mapping id must not contain line breaks")
+	}
 
 	clientIP, err := ClientIPFromSubnet(m.Subnet)
 	if err != nil {

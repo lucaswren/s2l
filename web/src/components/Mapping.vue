@@ -35,8 +35,8 @@ const mapFormats = [
 const nextTable = computed(() => {
   const used = new Set(props.allMappings.map((m) => m.table_id));
   let id = 101;
-  while (used.has(id) && id <= 255) id++;
-  if (id <= 255) return id;
+  while (used.has(id) && id <= 252) id++;
+  if (id <= 252) return id;
   return (
     Array.from({ length: 100 }, (_, i) => i + 1).find((id) => !used.has(id)) ||
     0
@@ -353,13 +353,13 @@ const editingRunning = computed(() => {
                 :label="n.name + ' (' + n.addr + ')'"
                 :value="n.id" /></el-select></el-form-item
           ><el-form-item
-            label="路由表编号（1–255）"
+            label="路由表编号（1–252）"
             prop="table_id"
             :rules="required"
             ><el-input-number
               v-model="form.table_id"
               :min="1"
-              :max="255"
+              :max="252"
               :disabled="editingRunning" /></el-form-item
           ><el-form-item label="TUN 接口" prop="tun_name" :rules="required"
             ><el-input

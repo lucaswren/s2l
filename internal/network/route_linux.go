@@ -42,6 +42,10 @@ func DelPolicyRoute(m model.TunnelMapping) error {
 	if m.Subnet == "" || m.TableID == 0 {
 		return nil
 	}
+	// Persisted mappings also pass here during cleanup; never flush system tables.
+	if err := validateMapping(m); err != nil {
+		return err
+	}
 	table := strconv.Itoa(m.TableID)
 	var errs []error
 	if err := run("ip", "route", "flush", "table", table); err != nil {

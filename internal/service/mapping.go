@@ -120,7 +120,7 @@ func (s *MappingService) startLocked(id string) error {
 	// TUN 由 sing-box 异步创建，必须等网卡就绪再加策略路由
 	if err := network.WaitInterface(m.TunName, 15*time.Second); err != nil {
 		_ = s.singbox.Stop(m.TunName)
-		msg := fmt.Sprintf("%v; check /tmp/s2l-%s.log", err, m.TunName)
+		msg := fmt.Sprintf("%v; check %s/s2l-%s.log", err, singbox.RuntimeDir(), m.TunName)
 		return s.failStart(m, previousActive, fmt.Errorf("tun: %s", msg))
 	}
 	if err := s.net.Setup(m); err != nil {
