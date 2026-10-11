@@ -15,6 +15,11 @@ def main():
     for path in documents:
         text = path.read_text(encoding="utf-8")
         name = path.relative_to(ROOT).as_posix()
+        if path.name.startswith("README") or ROOT / "docs" in path.parents:
+            lines = text.splitlines()
+            labels = re.findall(r"\[([^\]]+)\]\(", lines[2] if len(lines) > 2 else "")
+            if labels[-3:] != ["English", "繁體中文", "简体中文"]:
+                errors.append(f"{name}: expected fixed navigation labels English, 繁體中文, 简体中文")
         if re.search(r"zh-(?:TW|CN)\b", text):
             errors.append(f"{name}: use script-based Chinese language tags")
         # Current documents use inline links, without titles or escaped parentheses.

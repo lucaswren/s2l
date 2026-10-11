@@ -1,6 +1,6 @@
 # 架构、配置与开发
 
-[首页](../../README.zh-Hans.md) · [English](../en/development.md) · [繁體中文](../zh-Hant/development.md)
+[首页](../../README.zh-Hans.md) · [English](../en/development.md) · [繁體中文](../zh-Hant/development.md) · [简体中文](../zh-Hans/development.md)
 
 L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联至 sing-box TUN、策略路由表及防火墙规则，再由 sing-box 连接 SOCKS5 上游。管理界面的 Nginx HTTPS 代理与此数据路径分开。
 
@@ -11,6 +11,17 @@ L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联
 以 `config.example.json` 为起点，在合适测试主机使用 `./bin/s2l -config /path/to/config.json`。`listen` 默认 `127.0.0.1:8080`；`admin_user` 与 `admin_pass` 须一起配置，密码至少 12 字符。示例账号密码为空，只允许本机监听，但反向代理仍可能将未验证的服务公开，代理前必须设置账号密码。
 
 `singbox_bin` 程序默认为 `sing-box`，示例为 `/usr/local/bin/sing-box`；`data_dir` 默认 `./data`，相对于工作目录，含 `state.json`。安装服务工作目录为 `/opt/s2l`。`chap_secrets`、`xl2tpd_conf`、`ppp_options` 分别默认 `/etc/ppp/chap-secrets`、`/etc/xl2tpd/xl2tpd.conf`、`/etc/ppp/options.xl2tpd`。`auto_restore` 默认 `true`，恢复已保存为 `running` 的映射。脚本管理的 `public_url` 等元数据不属于 Go `Config` 字段。
+
+## 从已审阅源码安装
+
+文档优先介绍一键安装。若需安装指定的已审阅版本，请将 `YOUR_REVIEWED_COMMIT` 替换为该提交 ID，并在新主机执行以下命令；执行最后一步前，审阅安装脚本与相关管理脚本。
+
+```bash
+git clone https://github.com/lucaswren/s2l.git
+cd s2l
+git checkout YOUR_REVIEWED_COMMIT
+sudo env HTTPS_PORT=8443 bash script/install.sh
+```
 
 ## 构建与贡献
 
@@ -28,4 +39,4 @@ python3 -m unittest discover -s script/tests
 
 文档、界面与服务描述的展示名称统一为 **S2L**；可执行文件、模块与仓库路径、命令、配置键及现有程序识别标记保留小写 `s2l`。协议名称统一为 SOCKS5、L2TP、IPsec；须区分服务器端测速与客户端完整路径，以及尝试回滚与已验证的恢复结果。
 
-中文文档按文字体系使用 `zh-Hant`（繁体中文）与 `zh-Hans`（简体中文），遵循 [BCP 47 文字子标签](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3)。语言标签表示文字体系，法律适用地区另在内容中说明。文件名、导航链接与 HTML 语言属性须保持一致；提交前执行 `python3 script/check_docs.py` 检查本地文档链接。
+中文文档按文字体系使用 `zh-Hant`（繁體中文）与 `zh-Hans`（简体中文），遵循 [BCP 47 文字子标签](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3)。语言标签表示文字体系，法律适用地区另在内容中说明。文件名、导航链接与 HTML 语言属性须保持一致；提交前执行 `python3 script/check_docs.py` 检查本地文档链接。

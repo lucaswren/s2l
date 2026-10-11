@@ -1,6 +1,6 @@
 # S2L
 
-English · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
+[English](README.md) · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
 S2L manages Linux L2TP client connections and routes their traffic through selected SOCKS5 upstreams using sing-box, policy routing and iptables. The Go backend provides the management API and an embedded Vue 3 / Element Plus web interface.
 
@@ -19,28 +19,25 @@ Tunnel operation requires Linux, systemd, root privileges, TUN support, xl2tpd, 
 
 ## Installation
 
-Use a dedicated host: installation changes packages, forwarding, PPP/L2TP configuration, firewall rules and system services. Keep security updates enabled. Review scripts before running as root; pin production checkouts to a reviewed commit.
+Use a dedicated host: installation changes packages, forwarding, PPP/L2TP configuration, firewall rules and system services. Keep security updates enabled. Review the scripts before running them as root. The one-command installer follows `main` by default and is intended for a new installation.
 
 ```bash
-git clone https://github.com/lucaswren/s2l.git
-cd s2l
-# Review script/install.sh and its helpers first.
-sudo env HTTPS_PORT=8443 bash script/install.sh
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 ```
 
-Allow TCP 8443 only from trusted administrator IPs. The installer generates a 365-day self-signed certificate and random 16-character admin password, and binds the backend to `127.0.0.1:8080`. Verify the printed SHA-256 certificate fingerprint through a trusted channel before trusting the certificate. Without `HTTPS_PORT`, it selects an unused port in 10000–60000; 8080 is reserved. Public IPv4 is detected automatically; set `PUBLIC_IP` when necessary.
+Allow the printed HTTPS TCP port only from trusted administrator IPs. The installer generates a 365-day self-signed certificate and random 16-character admin password, and binds the backend to `127.0.0.1:8080`. Verify the printed SHA-256 certificate fingerprint through a trusted channel before trusting the certificate. Without `HTTPS_PORT`, it selects an unused port in 10000–60000; 8080 is reserved. Public IPv4 is detected automatically; set `PUBLIC_IP` when necessary.
 
-The remote convenience installer executes downloaded code as root and follows `main` by default. Use only for a new installation after reviewing the scripts:
+To choose a fixed HTTPS port instead of the random default, use `HTTPS_PORT`, for example 8443. Allow that port before accessing the management interface:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
 ```
 
-Open the printed HTTPS URL, add an authorized SOCKS5 node, create a mapping and start it to `running`. Configure the client with the server IP and mapping's L2TP credentials. Plain L2TP needs UDP 1701; optional IPsec needs UDP 500/4500 and ESP (IP protocol 50). Read the operations guide before exposing tunnel ports. Do not rerun the installer to upgrade.
+Open the printed HTTPS URL, add an authorized SOCKS5 node, create a mapping and start it to `running`. Configure the client with the server IP and mapping's L2TP credentials. Plain L2TP needs UDP 1701; optional IPsec needs UDP 500/4500 and ESP (IP protocol 50). Read the operations guide before exposing tunnel ports. Do not rerun the installer to upgrade. For installation from a reviewed source checkout, see the [development guide](docs/en/development.md).
 
 ## Documentation
 
-| Topic | English (primary) | 繁體中文 | 简体中文 |
+| Topic | English | 繁體中文 | 简体中文 |
 |---|---|---|---|
 | Operation, backup, updates, troubleshooting | [Guide](docs/en/operations.md) | [指南](docs/zh-Hant/operations.md) | [指南](docs/zh-Hans/operations.md) |
 | Architecture, configuration, development | [Guide](docs/en/development.md) | [指南](docs/zh-Hant/development.md) | [指南](docs/zh-Hans/development.md) |

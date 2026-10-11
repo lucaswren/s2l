@@ -1,8 +1,18 @@
 # 操作指南
 
-[首頁](../../README.zh-Hant.md) · [English](../en/operations.md) · [简体中文](../zh-Hans/operations.md)
+[首頁](../../README.zh-Hant.md) · [English](../en/operations.md) · [繁體中文](../zh-Hant/operations.md) · [简体中文](../zh-Hans/operations.md)
 
 先閱讀[法律說明](legal.md)與 README 的安全限制。保留安全更新，等待套件管理鎖釋放；會中斷連線的操作安排在維護時段。
+
+## 新安裝
+
+新安裝優先使用一鍵腳本。請使用專用 Ubuntu/Debian 主機，執行前審閱腳本：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+```
+
+腳本以 root 執行，預設取得 `main` 分支；未指定 `HTTPS_PORT` 時選用隨機空閒 TCP 埠。僅允許可信管理 IP 存取輸出的管理埠。固定埠設定見 README；從已審閱原始碼工作副本安裝的方式見開發指南。既有安裝請使用下方更新流程。
 
 ## 存取與連線
 

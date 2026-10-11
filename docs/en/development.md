@@ -1,6 +1,6 @@
 # Architecture and development
 
-[Home](../../README.md) · [繁體中文](../zh-Hant/development.md) · [简体中文](../zh-Hans/development.md)
+[Home](../../README.md) · [English](../en/development.md) · [繁體中文](../zh-Hant/development.md) · [简体中文](../zh-Hans/development.md)
 
 ## Data path and responsibilities
 
@@ -34,6 +34,17 @@ Start with `config.example.json`; run `./bin/s2l -config /path/to/config.json` o
 
 The example intentionally has no credentials. Empty credentials are accepted only with a loopback listener, but a reverse proxy can expose that unauthenticated backend: set credentials before proxying. Script-managed metadata such as `public_url` is distinct from the Go `Config` fields. Do not copy development configuration into a public deployment.
 
+## Installation from a reviewed checkout
+
+The one-command installer is the default documented method. To install a specific reviewed revision instead, replace `YOUR_REVIEWED_COMMIT` with its commit ID and run the following on a new host. Review the installation script and its helpers before the final command.
+
+```bash
+git clone https://github.com/lucaswren/s2l.git
+cd s2l
+git checkout YOUR_REVIEWED_COMMIT
+sudo env HTTPS_PORT=8443 bash script/install.sh
+```
+
 ## Build, tests and contributions
 
 From the repository root:
@@ -52,4 +63,4 @@ Keep changes focused, explain their trigger and behavior, and include relevant v
 
 Use **S2L** as the display name in documentation, UI labels and service descriptions. Keep executable names, module/repository paths, commands, configuration keys and existing machine-recognized markers lowercase (`s2l`). Use SOCKS5, L2TP and IPsec consistently; distinguish server-side probes from client-path measurements and rollback attempts from verified recovery.
 
-Chinese editions use the script-based tags `zh-Hant` (Traditional Chinese) and `zh-Hans` (Simplified Chinese), following [BCP 47 script subtags](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3). These tags identify the writing system; legal jurisdiction is stated separately in the content. Keep filenames, navigation links and HTML language attributes consistent. Run `python3 script/check_docs.py` to check local documentation links before submitting changes.
+Chinese editions use the script-based tags `zh-Hant` (繁體中文) and `zh-Hans` (简体中文), following [BCP 47 script subtags](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3). These tags identify the writing system; legal jurisdiction is stated separately in the content. Keep filenames, navigation links and HTML language attributes consistent. Run `python3 script/check_docs.py` to check local documentation links before submitting changes.

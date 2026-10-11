@@ -1,8 +1,18 @@
 # Operations guide
 
-[Home](../../README.md) · [繁體中文](../zh-Hant/operations.md) · [简体中文](../zh-Hans/operations.md)
+[Home](../../README.md) · [English](../en/operations.md) · [繁體中文](../zh-Hant/operations.md) · [简体中文](../zh-Hans/operations.md)
 
 Read the [legal notes](legal.md) and README security limits first. Keep security updates enabled; wait for package-manager locks instead of routinely disabling unattended updates. Use maintenance windows for changes that interrupt connections.
+
+## New installation
+
+Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+```
+
+It runs as root and follows `main` by default. HTTPS uses a random available TCP port unless `HTTPS_PORT` is supplied. Restrict the printed management port to trusted administrator IPs. See the README for fixed-port configuration and the development guide for installation from a reviewed source checkout. Use the update procedure below for existing installations.
 
 ## Access and client setup
 

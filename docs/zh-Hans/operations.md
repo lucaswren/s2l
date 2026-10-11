@@ -1,12 +1,12 @@
 # 操作指南
 
-[首页](../../README.zh-Hans.md) · [English](../en/operations.md) · [繁體中文](../zh-Hant/operations.md)
+[首页](../../README.zh-Hans.md) · [English](../en/operations.md) · [繁體中文](../zh-Hant/operations.md) · [简体中文](../zh-Hans/operations.md)
 
 先阅读[法律与合规说明](legal.md)。普通 L2TP 不加密；管理 HTTPS 不保护隧道流量。保留安全更新，等待软件包管理锁释放，不建议仅为安装而长期关闭自动更新。使用专用主机，以 root 权限执行脚本前审阅代码，现有安装不要重跑安装程序。
 
 ## 安装与管理
 
-建议先克隆并审阅安装脚本，正式部署固定至已审阅提交；下方远端便捷命令默认跟随 `main`，会以 root 执行下载代码。安装会修改系统软件包、转发、PPP/L2TP、防火墙与服务。
+新安装优先使用下方一键脚本。执行前审阅脚本；其默认获取 `main` 分支，并以 root 执行下载代码。安装会修改系统软件包、转发、PPP/L2TP、防火墙与服务。需要从已审阅源码工作副本安装时，参阅[开发指南](development.md)；现有安装请使用下方更新流程。
 
 安装：
 

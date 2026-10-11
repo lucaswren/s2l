@@ -1,6 +1,6 @@
 # S2L
 
-[English（主要文件）](README.md) · 繁體中文 · [简体中文](README.zh-Hans.md)
+[English](README.md) · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
 S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與 iptables 將流量導向指定 SOCKS5 上游。Go 服務內嵌 Vue 3 / Element Plus 管理介面，支援節點與映射管理、批次匯入、啟停、重啟恢復、上下行測速與系統設定。介面及安裝訊息目前主要為簡體中文。
 
@@ -12,18 +12,21 @@ S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與
 
 **預設普通 L2TP 不加密。** 管理 HTTPS 不會加密隧道流量。選配 IPsec 使用 IKEv1 與共用 PSK，須驗證用戶端相容性；SOCKS5 本身亦不加密。UDP 能力取決於上游，路由主要為 IPv4，沒有防洩漏保證。
 
-使用專用主機並保留安全更新。安裝會修改套件、轉送、PPP/L2TP、防火牆及系統服務。執行前審閱腳本，正式部署宜固定至已審閱的提交。
+使用專用主機並保留安全更新。安裝會修改套件、轉送、PPP/L2TP、防火牆及系統服務。新安裝優先使用下方一鍵腳本；執行前審閱腳本，其預設取得 `main` 分支。
 
 ```bash
-git clone https://github.com/lucaswren/s2l.git
-cd s2l
-# 先審閱 script/install.sh 與相關輔助腳本。
-sudo env HTTPS_PORT=8443 bash script/install.sh
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 ```
 
-僅允許可信管理 IP 存取 TCP 8443。安裝產生 365 天自簽憑證與 16 字元隨機管理密碼，後端監聽 `127.0.0.1:8080`。信任憑證前透過可信管道核對 SHA-256 指紋。省略 `HTTPS_PORT` 時選用 10000–60000 空閒埠，不得使用 8080；必要時以 `PUBLIC_IP` 指定公網 IPv4。
+僅允許可信管理 IP 存取安裝輸出的 HTTPS TCP 埠。安裝產生 365 天自簽憑證與 16 字元隨機管理密碼，後端監聽 `127.0.0.1:8080`。信任憑證前透過可信管道核對 SHA-256 指紋。省略 `HTTPS_PORT` 時選用 10000–60000 空閒埠，不得使用 8080；必要時以 `PUBLIC_IP` 指定公網 IPv4。
 
-登入顯示的 HTTPS 網址，新增授權節點，建立映射並啟動至 `running`。用戶端使用伺服器 IP 與映射帳密。普通 L2TP 使用 UDP 1701；IPsec 需要 UDP 500/4500 及 ESP（IP 協定 50）。先閱讀操作指南再開放連接埠。更新既有安裝不要重跑安裝程式。
+如需固定 HTTPS 埠，例如 8443，可使用下列命令，並放行對應 TCP 埠：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
+```
+
+登入顯示的 HTTPS 網址，新增授權節點，建立映射並啟動至 `running`。用戶端使用伺服器 IP 與映射帳密。普通 L2TP 使用 UDP 1701；IPsec 需要 UDP 500/4500 及 ESP（IP 協定 50）。先閱讀操作指南再開放連接埠。更新既有安裝不要重跑安裝程式。從已審閱原始碼工作副本安裝的方式見[開發指南](docs/zh-Hant/development.md)。
 
 ## 文件
 
