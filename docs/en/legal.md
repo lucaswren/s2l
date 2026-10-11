@@ -20,6 +20,6 @@ The code uses external services: generated sing-box configurations reference Clo
 
 ## Source and licenses
 
-Original s2l code and documentation are licensed under [Apache-2.0](../../LICENSE). Preserve applicable copyright/license notices and comply with its redistribution terms. Contributions must be submitted with sufficient rights under the project license. Review the licenses and notices of sing-box, xl2tpd, PPP, strongSwan, Nginx, frontend packages and other dependencies separately; the project license does not override them. See [third-party notices](../../THIRD_PARTY_NOTICES.md).
+Original S2L code and documentation are licensed under [Apache-2.0](../../LICENSE). Preserve applicable copyright/license notices and comply with its redistribution terms. Contributions must be submitted with sufficient rights under the project license. Review the licenses and notices of sing-box, xl2tpd, PPP, strongSwan, Nginx, frontend packages and other dependencies separately; the project license does not override them. See [third-party notices](../../THIRD_PARTY_NOTICES.md).
 
 When revising these notes, verify official sources, preserve the distinction between networking and business regulation, and update all three language editions. Do not make an unsupported claim that every VPN is prohibited or that a particular deployment is approved.

@@ -4,7 +4,7 @@
 
 ## Data path and responsibilities
 
-An L2TP/PPP client connects to xl2tpd. s2l associates mapping credentials and an IPv4 subnet with a sing-box TUN interface, policy routing table and firewall rules. sing-box forwards mapped traffic to the selected SOCKS5 node. Nginx terminates management HTTPS and proxies to the Go HTTP backend; it is separate from the tunnel path.
+An L2TP/PPP client connects to xl2tpd. S2L associates mapping credentials and an IPv4 subnet with a sing-box TUN interface, policy routing table and firewall rules. sing-box forwards mapped traffic to the selected SOCKS5 node. Nginx terminates management HTTPS and proxies to the Go HTTP backend; it is separate from the tunnel path.
 
 | Path | Responsibility |
 |---|---|
@@ -49,3 +49,5 @@ python3 -m unittest discover -s script/tests
 `make build` also builds the frontend; `make test` runs Go tests. `npm --prefix web run dev` starts Vite with an API proxy to localhost:8080. Non-Linux builds exercise stubs, not real Linux integration. Automated tests do not prove firewall, PPP, IPsec or client compatibility; use a disposable authorized Linux VM for privileged integration checks. Do not run `make run` or `make install-service` casually: these can modify host services and PPP files, and are not equivalent to the full HTTPS installer.
 
 Keep changes focused, explain their trigger and behavior, and include relevant validation. Never commit runtime configuration, state, dependencies or secrets. Commit rebuilt `web/dist/` with frontend edits. Documentation should be updated in English first, then Traditional Chinese, then Simplified Chinese; retain matching commands, defaults and legal meaning. Link official legal sources with a check date. Contribute only content you have the right to submit under Apache-2.0; retain third-party notices. Run `python3 script/collect_frontend_licenses.py` after dependency updates and commit the generated inventory.
+
+Use **S2L** as the display name in documentation, UI labels and service descriptions. Keep executable names, module/repository paths, commands, configuration keys and existing machine-recognized markers lowercase (`s2l`). Use SOCKS5, L2TP and IPsec consistently; distinguish server-side probes from client-path measurements and rollback attempts from verified recovery.

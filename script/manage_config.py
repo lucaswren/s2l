@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Update a management setting, restarting s2l with rollback on failure."""
+"""Update a management setting, restarting S2L with rollback on failure."""
 
 import json
 import errno
@@ -127,7 +127,7 @@ def change_https_port(original, value):
     site_original = NGINX_SITE.read_bytes()
     site = site_original.decode()
     if not site.startswith("# Managed by s2l HTTPS\n"):
-        raise ValueError("仅支持 s2l 管理的 Nginx HTTPS 配置")
+        raise ValueError("仅支持 S2L 管理的 Nginx HTTPS 配置")
     site, listeners = re.subn(r"(?m)^(\s*listen\s+)" + str(old_port) + r"(\s+ssl\s*;)", rf"\g<1>{port}\g<2>", site)
     site, redirects = re.subn(r"(?m)^(\s*location / \{ return 308 )https://[^\s;$]+\$request_uri; \}", lambda m: m[1] + config["public_url"] + "$request_uri; }", site)
     if listeners != 1 or redirects > 1:
@@ -186,7 +186,7 @@ def main():
         except (OSError, subprocess.CalledProcessError):
             raise RuntimeError("已恢复原配置，但服务启动失败；请查看 journalctl -u s2l") from error
         raise RuntimeError("新配置启动失败，已恢复原配置和服务") from error
-    print("设置已保存，s2l 已重启")
+    print("设置已保存，S2L 已重启")
 
 
 if __name__ == "__main__":

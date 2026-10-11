@@ -47,7 +47,8 @@ func TunInet4Address(tableID int) string {
 }
 
 // GenerateConfig 根据 SOCKS5 节点与映射生成 sing-box JSON 配置内容。
-// 多数 SK5 不支持 UDP，必须劫持 DNS 并用 DoH/TCP 经代理解析，否则下游打不开网页。
+// Resolve intercepted DNS via the SOCKS5 upstream using DoH and TCP DNS.
+// This avoids depending on SOCKS5 UDP support for DNS resolution.
 func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, error) {
 	host, portStr, err := net.SplitHostPort(strings.TrimSpace(node.Addr))
 	if err != nil {

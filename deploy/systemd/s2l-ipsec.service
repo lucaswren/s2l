@@ -1,5 +1,5 @@
 [Unit]
-Description=s2l L2TP/IPsec (strongSwan)
+Description=S2L L2TP/IPsec Service (strongSwan)
 After=network-online.target
 Wants=network-online.target
 

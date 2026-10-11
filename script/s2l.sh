@@ -170,10 +170,10 @@ dispatch() {
   case "$1" in
     1) show_url ;;
     2) show_status ;;
-    3) service_action restart "s2l 已重启" ;;
+    3) service_action restart "S2L 已重启" ;;
     4) show_logs ;;
-    5) service_action start "s2l 已启动" ;;
-    6) service_action stop "s2l 已停止" ;;
+    5) service_action start "S2L 已启动" ;;
+    6) service_action stop "S2L 已停止" ;;
     7) change_setting admin_pass ;;
     8) change_setting admin_user ;;
     9) change_setting listen_port ;;
@@ -190,7 +190,7 @@ fi
 
 while true; do
   clear || true
-  echo "s2l 管理菜单"
+  echo "S2L 管理菜单"
   echo "────────────────────"
   echo "1) 查看网页管理地址"
   echo "2) 查看服务状态"

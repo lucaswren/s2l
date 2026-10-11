@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 一条命令从 GitHub 安装并启动 s2l（Ubuntu/Debian）
+# Fetch and install S2L from GitHub on Ubuntu/Debian
 #
 #   curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 #

@@ -47,7 +47,7 @@ func AddFirewall(m model.TunnelMapping) error {
 	); err != nil {
 		return errors.Join(err, DelFirewall(m))
 	}
-	// 回程：从 TUN 进入的 RELATED/ESTABLISHED（PRD 未写，但实际转发必需）
+	// Accept related and established return traffic arriving through the TUN interface.
 	if err := run("iptables", "-A", "FORWARD",
 		"-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT",
 		"-m", "comment", "--comment", cmt,

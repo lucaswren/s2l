@@ -75,8 +75,8 @@ func (s *Server) Handler() http.Handler {
 	} else {
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]string{
-				"name":    "s2l",
-				"message": "API only; embed web/dist for UI",
+				"name":    "S2L",
+				"message": "S2L management API; build and embed web/dist to enable the web interface",
 			})
 		})
 	}
@@ -117,7 +117,7 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 		userOK := subtle.ConstantTimeCompare([]byte(user), []byte(adminUser)) == 1
 		passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(adminPass)) == 1
 		if !ok || !userOK || !passOK {
-			w.Header().Set("WWW-Authenticate", `Basic realm="s2l", charset="UTF-8"`)
+			w.Header().Set("WWW-Authenticate", `Basic realm="S2L", charset="UTF-8"`)
 			http.Error(w, "authentication required", http.StatusUnauthorized)
 			return
 		}

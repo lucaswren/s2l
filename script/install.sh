@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# s2l 一键安装/启动脚本（Ubuntu/Debian）
+# S2L installation script for Ubuntu/Debian
 # 用法（在项目根目录）：
 #   curl -fsSL ... | sudo bash   # 或
 #   sudo bash script/install.sh
@@ -22,7 +22,7 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 [[ "$(id -u)" -eq 0 ]] || error "请使用 root 执行：sudo bash script/install.sh"
-[[ ! -e "${INSTALL_DIR}/config.json" ]] || error "s2l 已安装；为保护现有账号和配置，请使用代码更新流程，勿重复执行安装脚本"
+[[ ! -e "${INSTALL_DIR}/config.json" ]] || error "S2L 已安装；为保护现有账号和配置，请使用应用更新流程，勿重复执行安装脚本"
 info "新安装使用自签证书启用 HTTPS；管理端口未指定则随机生成，无需放行 TCP 80"
 
 # 定位项目根目录（脚本在 script/ 下）
@@ -244,7 +244,7 @@ if systemctl is-active --quiet "${APP_NAME}"; then
   bash "${SCRIPT_DIR}/setup_https.sh" "${PUBLIC_IP}" "${HTTPS_PORT}"
   trap - ERR
   echo
-  info "安装成功！"
+  info "S2L 安装完成"
   echo "  Web UI : https://${PUBLIC_IP}:${HTTPS_PORT}"
   echo "  管理账号: ${ADMIN_USER}"
   echo "  管理密码: ${ADMIN_PASS}"

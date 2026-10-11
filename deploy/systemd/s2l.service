@@ -1,5 +1,5 @@
 [Unit]
-Description=s2l (SOCKS5 to L2TP)
+Description=S2L SOCKS5-to-L2TP Gateway
 After=network-online.target xl2tpd.service
 Wants=network-online.target
 

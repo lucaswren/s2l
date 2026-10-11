@@ -266,7 +266,7 @@ onMounted(load);
       :title="
         settings.web_port_enabled
           ? '先放行新 TCP 端口；修改后使用新地址登录。'
-          : '此环境未提供 s2l 管理的 Nginx HTTPS 服务，请升级安装文件。'
+          : '此环境未提供 S2L 管理的 Nginx HTTPS 服务，请升级安装文件。'
       "
       type="info"
       show-icon

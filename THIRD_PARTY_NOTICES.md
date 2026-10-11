@@ -1,6 +1,6 @@
 # Third-party components
 
-s2l's original code and documentation use Apache-2.0. That license does not replace third-party terms. This inventory is a starting point, not a certification of compliance for every distribution. Verify the exact versions and artifacts you ship, including transitive dependencies and operating-system packages.
+S2L's original code and documentation use Apache-2.0. That license does not replace third-party terms. This inventory is a starting point, not a certification of compliance for every distribution. Verify the exact versions and artifacts you ship, including transitive dependencies and operating-system packages.
 
 | Component | Relationship | License reference |
 |---|---|---|
@@ -18,4 +18,4 @@ Ubuntu/Debian package copyright files are normally available under `/usr/share/d
 
 The Go module currently has no external module dependencies. The frontend lockfile records build and runtime dependency versions; not every installed build package is included in the shipped browser assets. The collected license file deliberately includes installed dependency notices as a conservative inventory and must be regenerated when the lockfile changes.
 
-The installer downloading an upstream binary does not license that binary under Apache-2.0. If you redistribute sing-box or a bundled image, meet its own license/notice and corresponding-source obligations as applicable. If you copy or link third-party code into s2l, reassess compatibility; separate-process invocation alone is not a universal legal conclusion about a combined product.
+The installer downloading an upstream binary does not license that binary under Apache-2.0. If you redistribute sing-box or a bundled image, meet its own license/notice and corresponding-source obligations as applicable. If you copy or link third-party code into S2L, reassess compatibility; separate-process invocation alone is not a universal legal conclusion about a combined product.

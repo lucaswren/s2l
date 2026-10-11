@@ -14,7 +14,7 @@ PY
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG=/opt/s2l/config.json
 SITE=/etc/nginx/conf.d/s2l.conf
-[[ -f "$CONFIG" ]] || { echo "请先安装 s2l" >&2; exit 1; }
+[[ -f "$CONFIG" ]] || { echo "请先安装 S2L" >&2; exit 1; }
 HTTPS_PORT="$(python3 - "$CONFIG" "${2:-${HTTPS_PORT:-}}" "${SCRIPT_DIR}" <<'PY'
 import json, sys
 from urllib.parse import urlsplit
@@ -38,7 +38,7 @@ print(port)
 PY
 )"
 if [[ -e "$SITE" ]] && ! grep -q '^# Managed by s2l HTTPS' "$SITE"; then
-  echo "检测到非 s2l 管理的同名 nginx 配置，已停止" >&2; exit 1
+  echo "检测到非 S2L 管理的同名 Nginx 配置，已停止" >&2; exit 1
 fi
 if ! command -v nginx >/dev/null || ! command -v openssl >/dev/null; then
   export DEBIAN_FRONTEND=noninteractive

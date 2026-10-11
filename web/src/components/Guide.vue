@@ -22,7 +22,8 @@ const host = location.hostname;
     <el-collapse-item title="创建与导入" name="create"
       ><p>
         先添加 SOCKS5
-        节点，再新建映射并选择节点。路由表编号会自动选择空闲值，填写 L2TP
+        节点，再新建映射并选择节点。路由表编号自动选择未被其他映射使用的值；
+        请确认所选路由表未被主机上的其他服务占用。填写 L2TP
         账号与密码后保存并启动。批量导入格式见对应导入窗口。
       </p></el-collapse-item
     >
@@ -36,7 +37,7 @@ const host = location.hostname;
     >
     <el-collapse-item title="L2TP 客户端配置" name="client"
       ><p>
-        服务器地址填写本机公网 IP，用户名和密码填写对应映射的 L2TP
+        服务器地址填写部署 S2L 的服务器公网 IPv4 地址，用户名和密码填写对应映射的 L2TP
         凭据。服务器启用 IPsec
         时填写相同的预共享密钥，关闭时留空。若客户端同时配置其他 IPsec
         VPN，请检查预共享密钥冲突。具体兼容性需以客户端版本和实际协商结果为准。
@@ -44,13 +45,13 @@ const host = location.hostname;
     >
     <el-collapse-item title="上下行测速" name="speed"
       ><p>
-        节点页面分别显示下载和上传速度，以及 SOCKS5
-        连接延迟。测速会产生流量，任一方向失败都会单独显示原因。
+        测速由服务器经所选 SOCKS5 节点访问 Cloudflare，分别显示下载、上传速度及连接延迟。
+        测速会消耗流量，结果不代表完整 L2TP 客户端连接的性能；各方向的失败原因单独显示。
       </p></el-collapse-item
     >
   </el-collapse>
   <el-alert
-    title="普通 L2TP 不提供加密。需要加密接入时，在系统设置中启用 IPsec。"
+    title="普通 L2TP 不加密。可选 IPsec 使用 IKEv1 与共享密钥，请确认客户端兼容性及安全策略要求。"
     type="info"
     show-icon
     :closable="false"

@@ -1,8 +1,8 @@
-# s2l
+# S2L
 
 English · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md)
 
-s2l manages Linux L2TP client connections and routes their traffic through selected SOCKS5 upstreams using sing-box, policy routing and iptables. A Go service serves an embedded Vue 3 / Element Plus administration interface.
+S2L manages Linux L2TP client connections and routes their traffic through selected SOCKS5 upstreams using sing-box, policy routing and iptables. A Go service serves an embedded Vue 3 / Element Plus administration interface.
 
 Use only on authorized systems, networks and upstream services. Read the [legal and compliance notes](docs/en/legal.md) before deployment, especially for mainland China or cross-border connectivity. Software availability does not provide regulatory approval or guarantee anonymity.
 
@@ -64,4 +64,4 @@ Commit `web/dist/` with frontend changes: it is embedded in the Go binary. See t
 
 Restrict management access, use HTTPS and protect credentials/backups. Keep a recovery SSH session during access changes. Never post configuration, state, PSKs or passwords in public issues. See [security reporting](SECURITY.md).
 
-Original s2l code and documentation are licensed under [Apache-2.0](LICENSE). See [NOTICE](NOTICE) and [third-party notices](THIRD_PARTY_NOTICES.md); dependencies retain their own licenses. A software license does not grant regulatory approval. See the legal notes.
+Original S2L code and documentation are licensed under [Apache-2.0](LICENSE). See [NOTICE](NOTICE) and [third-party notices](THIRD_PARTY_NOTICES.md); dependencies retain their own licenses. A software license does not grant regulatory approval. See the legal notes.

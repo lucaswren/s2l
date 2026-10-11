@@ -134,7 +134,7 @@ func (s *Server) handleWebPort(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, _, enabled := s.webPortSettings(); !enabled {
-		writeError(w, 409, "仅支持 s2l 管理的 Nginx HTTPS 服务，请升级安装文件")
+		writeError(w, 409, "仅支持 S2L 管理的 Nginx HTTPS 服务，请升级安装文件")
 		return
 	}
 	cmd := exec.Command("python3", "/opt/s2l/manage_config.py", "listen_port")

@@ -115,7 +115,7 @@ onUnmounted(() => clearInterval(timer));
     <div class="page">
       <header class="hero">
         <div>
-          <span class="brand">s2l / 线路管理</span>
+          <span class="brand">S2L / L2TP 网关管理</span>
           <h1>SOCKS5 → L2TP</h1>
           <p class="muted">SOCKS5 出口与 L2TP 接入管理</p>
         </div>

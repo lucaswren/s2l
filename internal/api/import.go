@@ -177,7 +177,7 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-// parseNodeText 兼容主流 SK5 导出格式（每行一条）：
+// parseNodeText accepts the documented SOCKS5 import formats, one node per line:
 //
 //	host:port:user:pass
 //	user:pass@host:port

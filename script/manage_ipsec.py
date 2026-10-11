@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Manage the dedicated s2l L2TP/IPsec service without exposing its PSK."""
+"""Manage the dedicated S2L L2TP/IPsec service without exposing its PSK."""
 
 import base64
 import fcntl
