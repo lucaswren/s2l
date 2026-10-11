@@ -1,6 +1,6 @@
 # Operations guide
 
-[Home](../../README.md) · [繁體中文](../zh-TW/operations.md) · [简体中文](../zh-CN/operations.md)
+[Home](../../README.md) · [繁體中文](../zh-Hant/operations.md) · [简体中文](../zh-Hans/operations.md)
 
 Read the [legal notes](legal.md) and README security limits first. Keep security updates enabled; wait for package-manager locks instead of routinely disabling unattended updates. Use maintenance windows for changes that interrupt connections.
 

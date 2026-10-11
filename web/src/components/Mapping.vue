@@ -256,7 +256,7 @@ const editingRunning = computed(() => {
               row.status === "running"
                 ? "运行中"
                 : row.status === "error"
-                  ? "启动失败"
+                  ? "操作失败"
                   : "已停止"
             }}</el-tag
           >
@@ -292,7 +292,7 @@ const editingRunning = computed(() => {
               m.status === "running"
                 ? "运行中"
                 : m.status === "error"
-                  ? "启动失败"
+                  ? "操作失败"
                   : "已停止"
             }}</el-tag
           >

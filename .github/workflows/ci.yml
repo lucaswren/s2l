@@ -24,6 +24,7 @@ jobs:
       - run: go test -race ./...
       - run: go vet ./...
       - run: python3 -m unittest discover -s script/tests
+      - run: python3 script/check_docs.py
       - run: bash -n script/install.sh script/remote_install.sh script/setup_https.sh script/s2l.sh
       - run: npm --prefix web ci
       - run: npm --prefix web run build

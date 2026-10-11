@@ -11,7 +11,7 @@ S2L's original code and documentation use Apache-2.0. That license does not repl
 | Nginx | Separate system package for HTTPS | [Official license](https://nginx.org/LICENSE) |
 | strongSwan | Separate system package for optional IPsec | [Official project license information](https://docs.strongswan.org/docs/latest/devs/contributions.html) |
 | xl2tpd | Separate system L2TP daemon | [Upstream repository](https://github.com/xelerance/xl2tpd); check the installed package's copyright file |
-| PPP | Separate system package | [Upstream license](https://github.com/ppp-project/ppp/blob/master/LICENSE); per-file terms also apply |
+| PPP | Separate system package | [Upstream licensing overview](https://github.com/ppp-project/ppp/blob/master/COPYING); individual source files and plugins have their own terms |
 | Go standard library | Included by Go compilation | [Go license](https://go.dev/LICENSE) |
 
 Ubuntu/Debian package copyright files are normally available under `/usr/share/doc/PACKAGE/copyright`. Installation also uses Python, OpenSSL, iptables, iproute2 and other system tools, whose installed distribution terms must be reviewed separately.

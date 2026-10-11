@@ -1,6 +1,6 @@
 # Architecture and development
 
-[Home](../../README.md) · [繁體中文](../zh-TW/development.md) · [简体中文](../zh-CN/development.md)
+[Home](../../README.md) · [繁體中文](../zh-Hant/development.md) · [简体中文](../zh-Hans/development.md)
 
 ## Data path and responsibilities
 
@@ -51,3 +51,5 @@ python3 -m unittest discover -s script/tests
 Keep changes focused, explain their trigger and behavior, and include relevant validation. Never commit runtime configuration, state, dependencies or secrets. Commit rebuilt `web/dist/` with frontend edits. Documentation should be updated in English first, then Traditional Chinese, then Simplified Chinese; retain matching commands, defaults and legal meaning. Link official legal sources with a check date. Contribute only content you have the right to submit under Apache-2.0; retain third-party notices. Run `python3 script/collect_frontend_licenses.py` after dependency updates and commit the generated inventory.
 
 Use **S2L** as the display name in documentation, UI labels and service descriptions. Keep executable names, module/repository paths, commands, configuration keys and existing machine-recognized markers lowercase (`s2l`). Use SOCKS5, L2TP and IPsec consistently; distinguish server-side probes from client-path measurements and rollback attempts from verified recovery.
+
+Chinese editions use the script-based tags `zh-Hant` (Traditional Chinese) and `zh-Hans` (Simplified Chinese), following [BCP 47 script subtags](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3). These tags identify the writing system; legal jurisdiction is stated separately in the content. Keep filenames, navigation links and HTML language attributes consistent. Run `python3 script/check_docs.py` to check local documentation links before submitting changes.

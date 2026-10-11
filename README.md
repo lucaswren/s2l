@@ -1,8 +1,8 @@
 # S2L
 
-English · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md)
+English · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
-S2L manages Linux L2TP client connections and routes their traffic through selected SOCKS5 upstreams using sing-box, policy routing and iptables. A Go service serves an embedded Vue 3 / Element Plus administration interface.
+S2L manages Linux L2TP client connections and routes their traffic through selected SOCKS5 upstreams using sing-box, policy routing and iptables. The Go backend provides the management API and an embedded Vue 3 / Element Plus web interface.
 
 Use only on authorized systems, networks and upstream services. Read the [legal and compliance notes](docs/en/legal.md) before deployment, especially for mainland China or cross-border connectivity. Software availability does not provide regulatory approval or guarantee anonymity.
 
@@ -42,9 +42,9 @@ Open the printed HTTPS URL, add an authorized SOCKS5 node, create a mapping and 
 
 | Topic | English (primary) | 繁體中文 | 简体中文 |
 |---|---|---|---|
-| Operation, backup, updates, troubleshooting | [Guide](docs/en/operations.md) | [指南](docs/zh-TW/operations.md) | [指南](docs/zh-CN/operations.md) |
-| Architecture, configuration, development | [Guide](docs/en/development.md) | [指南](docs/zh-TW/development.md) | [指南](docs/zh-CN/development.md) |
-| Legal and compliance | [Notes](docs/en/legal.md) | [說明](docs/zh-TW/legal.md) | [说明](docs/zh-CN/legal.md) |
+| Operation, backup, updates, troubleshooting | [Guide](docs/en/operations.md) | [指南](docs/zh-Hant/operations.md) | [指南](docs/zh-Hans/operations.md) |
+| Architecture, configuration, development | [Guide](docs/en/development.md) | [指南](docs/zh-Hant/development.md) | [指南](docs/zh-Hans/development.md) |
+| Legal and compliance | [Notes](docs/en/legal.md) | [說明](docs/zh-Hant/legal.md) | [说明](docs/zh-Hans/legal.md) |
 
 ## Build and verification
 

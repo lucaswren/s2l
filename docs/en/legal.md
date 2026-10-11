@@ -1,6 +1,6 @@
 # Legal and compliance notes
 
-[Home](../../README.md) · [繁體中文](../zh-TW/legal.md) · [简体中文](../zh-CN/legal.md)
+[Home](../../README.md) · [繁體中文](../zh-Hant/legal.md) · [简体中文](../zh-Hans/legal.md)
 
 Reference check: 2026-10-11. These notes identify deployment risks, not a legal opinion or an exhaustive statement of current law. Applicability depends on location, network design, users, business model and data. Obtain qualified local advice and any required approvals before proceeding. A disclaimer, free distribution or an educational purpose does not remove legal obligations or liability.
 

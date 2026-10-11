@@ -1,6 +1,6 @@
 # 架构、配置与开发
 
-[首页](../../README.zh-CN.md) · [English](../en/development.md) · [繁體中文](../zh-TW/development.md)
+[首页](../../README.zh-Hans.md) · [English](../en/development.md) · [繁體中文](../zh-Hant/development.md)
 
 L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联至 sing-box TUN、策略路由表及防火墙规则，再由 sing-box 连接 SOCKS5 上游。管理界面的 Nginx HTTPS 代理与此数据路径分开。
 
@@ -27,3 +27,5 @@ python3 -m unittest discover -s script/tests
 变更须说明触发条件、结果与相关验证；勿提交运行配置、状态、依赖或秘密。前端变更须重建并提交 `web/dist/`。文档先更新英文，再繁体、简体中文，保持命令、默认值与法律语义一致。法律来源使用官方链接并记录核查日期；仅提交有权按 Apache-2.0 许可的内容，保留第三方声明。依赖更新后执行 `python3 script/collect_frontend_licenses.py` 并提交声明清单。
 
 文档、界面与服务描述的展示名称统一为 **S2L**；可执行文件、模块与仓库路径、命令、配置键及现有程序识别标记保留小写 `s2l`。协议名称统一为 SOCKS5、L2TP、IPsec；须区分服务器端测速与客户端完整路径，以及尝试回滚与已验证的恢复结果。
+
+中文文档按文字体系使用 `zh-Hant`（繁体中文）与 `zh-Hans`（简体中文），遵循 [BCP 47 文字子标签](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3)。语言标签表示文字体系，法律适用地区另在内容中说明。文件名、导航链接与 HTML 语言属性须保持一致；提交前执行 `python3 script/check_docs.py` 检查本地文档链接。

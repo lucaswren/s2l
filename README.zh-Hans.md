@@ -1,10 +1,10 @@
 # S2L
 
-[English（主要文档）](README.md) · [繁體中文](README.zh-TW.md) · 简体中文
+[English（主要文档）](README.md) · [繁體中文](README.zh-Hant.md) · 简体中文
 
 S2L 在 Linux 上管理 L2TP 客户端连接，通过 sing-box、策略路由与 iptables 将流量导向指定 SOCKS5 上游。Go 服务内嵌 Vue 3 / Element Plus 管理界面，支持节点与映射管理、批量导入、启停、重启恢复、上下行测速与系统设置。界面及安装消息目前主要为简体中文。
 
-仅在获得授权的主机、网络与上游服务上使用。部署前阅读[法律与合规说明](docs/zh-CN/legal.md)，尤其涉及中国大陆或跨境连接时。软件不提供监管许可，也不保证匿名性。
+仅在获得授权的主机、网络与上游服务上使用。部署前阅读[法律与合规说明](docs/zh-Hans/legal.md)，尤其涉及中国大陆或跨境连接时。软件不提供监管许可，也不保证匿名性。
 
 ## 安装与安全
 
@@ -27,9 +27,9 @@ sudo env HTTPS_PORT=8443 bash script/install.sh
 
 ## 文档
 
-- [操作、备份、更新与故障排查](docs/zh-CN/operations.md)
-- [架构、配置与开发](docs/zh-CN/development.md)
-- [法律与合规](docs/zh-CN/legal.md)
+- [操作、备份、更新与故障排查](docs/zh-Hans/operations.md)
+- [架构、配置与开发](docs/zh-Hans/development.md)
+- [法律与合规](docs/zh-Hans/legal.md)
 - [安全问题报告（英文）](SECURITY.md)
 
 需要 Go 1.22 以上及兼容 Node.js/npm。依次执行 `npm --prefix web ci`、`npm --prefix web run build`、`go build -o bin/s2l ./cmd/s2l`。前端变更须提交 `web/dist/`。

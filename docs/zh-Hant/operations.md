@@ -1,6 +1,6 @@
 # 操作指南
 
-[首頁](../../README.zh-TW.md) · [English](../en/operations.md) · [简体中文](../zh-CN/operations.md)
+[首頁](../../README.zh-Hant.md) · [English](../en/operations.md) · [简体中文](../zh-Hans/operations.md)
 
 先閱讀[法律說明](legal.md)與 README 的安全限制。保留安全更新，等待套件管理鎖釋放；會中斷連線的操作安排在維護時段。
 
