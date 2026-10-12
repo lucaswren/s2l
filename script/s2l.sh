@@ -5,13 +5,13 @@ APP_NAME="s2l"
 CONFIG_FILE="/opt/s2l/config.json"
 DIRECT=0
 if (( $# > 1 )); then
-  echo "用法：s2l [0-10]" >&2
+  echo "用法：s2l [0-11]" >&2
   exit 2
 fi
 if (( $# == 1 )); then
   case "$1" in
     -h|--help) echo "用法：s2l 打开菜单；s2l 1 查看地址；s2l 2 查看状态；s2l 4 查看日志；其余编号与菜单一致。"; exit 0 ;;
-    0|1|2|3|4|5|6|7|8|9|10) DIRECT=1 ;;
+    0|1|2|3|4|5|6|7|8|9|10|11) DIRECT=1 ;;
     *) echo "无效编号：$1；使用 s2l --help 查看用法。" >&2; exit 2 ;;
   esac
 fi
@@ -178,6 +178,7 @@ dispatch() {
     8) change_setting admin_user ;;
     9) change_setting listen_port ;;
     10) change_ssh_port ;;
+    11) local result=0; bash /opt/s2l/remote_update.sh || result=$?; pause; return "$result" ;;
     0) exit 0 ;;
     *) echo "无效选项"; pause ;;
   esac
@@ -202,8 +203,9 @@ while true; do
   echo "8) 修改管理用户名"
   echo "9) 修改网页管理端口"
   echo "10) 修改 SSH 端口"
+  echo "11) 升级 S2L（保留配置）"
   echo "0) 退出"
   echo
-  read -r -p "请选择操作 [0-10]: " choice
+  read -r -p "请选择操作 [0-11]: " choice
   dispatch "${choice}" || true
 done

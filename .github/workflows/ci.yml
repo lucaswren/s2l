@@ -30,8 +30,11 @@ jobs:
           sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run TestLeakGuardsIntegration -test.v
       - run: go vet ./...
       - run: python3 -m unittest discover -s script/tests
+      - name: Verify upgrade preservation and failure recovery
+        run: sudo unshare --mount --net --propagation private /usr/bin/python3 script/test_update_integration.py
       - run: python3 script/check_docs.py
-      - run: bash -n script/install.sh script/remote_install.sh script/setup_https.sh script/s2l.sh
+      - name: Check all shell scripts
+        run: for script in script/*.sh; do bash -n "$script"; done
       - run: npm --prefix web ci
       - run: npm --prefix web run build
       - run: python3 script/collect_frontend_licenses.py

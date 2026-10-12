@@ -30,6 +30,14 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 持續 PPP 防洩漏、上游 TCP 健康監控與 sing-box/TUN 自動恢復詳見[操作指南](docs/zh-Hant/operations.md)。既有安裝須先安裝新的防護服務，再重新啟動 xl2tpd。
 
+## 升級
+
+既有預設安裝優先使用一鍵升級。腳本先編譯、備份，再更新程式與必要防護服務並保留設定。執行中的用戶端須重新撥號，原本停止的服務保持停止；失敗處理與手動方式見[操作指南](docs/zh-Hant/operations.md)。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
+```
+
 ## 文件
 
 - [操作、備份、更新與疑難排解](docs/zh-Hant/operations.md)

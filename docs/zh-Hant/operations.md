@@ -22,6 +22,22 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 S2L 必須使用專用主機：持續防護涵蓋**所有 `ppp+` 介面**。PPP IPv4 僅允許已設定來源子網經對應 TUN 轉發；其他轉發及所有 PPP 對主機本機的存取均丟棄，PPP IPv6 亦阻擋。TUN 消失時，終止查找的不可達路由阻止回退至主路由表。停止 S2L 或映射後仍保留阻斷規則，避免既有 PPP 連線由主機出口繞行。`s2l-guard.service` 在 xl2tpd 前安裝規則，失敗時阻止 xl2tpd/S2L 啟動。勿清空這些規則或讓其他防火牆管理器覆寫。用戶端分流與其他網路介面不在伺服器控制範圍內。
 
+## 升級
+
+既有預設 `/opt/s2l` 安裝執行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
+```
+
+腳本先下載並編譯，再停止服務、於 `/root/s2l-backup.*` 建立私有備份、更新程式與管理腳本及服務單元；原本執行中的 S2L 會驗證本機認證 API。設定、帳號、節點、憑證與連接埠保留，原本停止的服務仍保持停止；執行中的用戶端須重新撥號。
+
+停止服務後若升級失敗，腳本會嘗試還原已備份檔案，保留阻斷規則並讓 PPP 服務保持停止，不會自動恢復撥號；依輸出的備份位置與日誌檢查後重試或手動恢復。下載或編譯失敗不停止服務。腳本不修改 Nginx、SSH、Go 工具鏈或 sing-box；須使用標準檔案路徑與本機後端監聽，自訂部署使用手動流程。
+
+遠端命令以 root 執行下載程式碼，預設跟隨 `main`，請先審閱。若要固定提交，將 `sudo bash` 改成 `sudo env S2L_REF=COMMIT bash`。首次升級後可用 `s2l 11` 呼叫相同流程；已審閱的本機工作副本可直接執行 `sudo bash script/update.sh`。
+
+### 手動升級
+
 既有安裝須建置已審閱版本，停止 **S2L 與 xl2tpd**、備份舊部署並更換程式。從已審閱工作副本安裝新服務單元後再啟動（以下使用預設 `/opt/s2l` 路徑）：
 
 ```bash
@@ -58,6 +74,7 @@ sudo systemctl start xl2tpd s2l
 | 5 / 6 | 啟動 / 停止 |
 | 7 / 8 | 管理密碼 / 帳號 |
 | 9 / 10 | 管理埠 / SSH 埠 |
+| 11 | 升級 S2L，保留設定 |
 | 0 | 離開 |
 
 管理密碼 12–128 字元，安裝與 CLI 限制可用字元。CLI 帳密變更重啟服務，可能中斷隧道；網頁變更立即生效，無須重啟，之後重新登入。網址優先採用 `public_url`，否則依監聽與公網 IP 產生，偵測退回本機地址時提示 NAT。

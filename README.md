@@ -37,6 +37,14 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 Open the printed HTTPS URL, add an authorized SOCKS5 node, create a mapping and start it to `running`. Configure the client with the server IP and mapping's L2TP credentials. Plain L2TP needs UDP 1701; optional IPsec needs UDP 500/4500 and ESP (IP protocol 50). Read the operations guide before exposing tunnel ports. Do not rerun the installer to upgrade. For installation from a reviewed source checkout, see the [development guide](docs/en/development.md).
 
+## Upgrade
+
+For an existing default installation, use the one-command updater. It builds first, backs up the deployment, preserves settings, and installs the required guard service. Running clients must reconnect; stopped services remain stopped. See the [operations guide](docs/en/operations.md) for failure recovery and manual alternatives.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
+```
+
 ## Documentation
 
 | Topic | English | 繁體中文 | 简体中文 |

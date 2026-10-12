@@ -22,6 +22,22 @@ L2TP remains connected during upstream outages. Failed application connections n
 
 S2L requires a dedicated host: its persistent guard covers **all `ppp+` interfaces**. IPv4 forwarding from PPP is permitted only for a configured source subnet toward its assigned TUN; other forwarding and all PPP access to the host are dropped. PPP IPv6 is blocked. A terminal unreachable route prevents main-table fallback when the TUN disappears. Guards remain after stopping S2L or a mapping so existing PPP sessions cannot escape via the host uplink. `s2l-guard.service` installs them before xl2tpd starts; failure prevents xl2tpd/S2L startup. Do not flush these rules or run another firewall manager that replaces them. Client-side split routing and other network adapters remain outside this server's control.
 
+## Upgrade
+
+For an existing default `/opt/s2l` installation, run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
+```
+
+The updater downloads and builds before stopping services, then creates a private backup in `/root/s2l-backup.*`, installs the application, management scripts and service units, and verifies the local authenticated API when S2L was running. Configuration, accounts, nodes, certificates and ports are preserved; services that were stopped remain stopped. Running clients must reconnect.
+
+If an upgrade fails after stopping services, it attempts to restore backed-up files and keeps PPP services stopped with guards in place. This is not an automatic return to service: inspect the printed backup path and logs, then retry or recover manually. Interrupted downloads/builds leave services running. The script does not change Nginx, SSH, the Go toolchain or sing-box. It requires the standard file paths and a local backend listener; custom deployments use the manual procedure.
+
+The remote command follows `main` and executes downloaded code as root. Review it before use; set `S2L_REF` to a reviewed commit using `sudo env S2L_REF=COMMIT bash` instead of `sudo bash`. After the first upgrade, `s2l 11` invokes the same updater. From a reviewed local checkout, use `sudo bash script/update.sh`.
+
+### Manual upgrade
+
 For an existing installation, build the reviewed version, stop **both S2L and xl2tpd**, back up the old deployment, and replace the application binary. Install the new units from the reviewed checkout before restarting (the following assumes the default `/opt/s2l` path):
 
 ```bash
@@ -62,6 +78,7 @@ Run `s2l` for the interactive menu, or `s2l NUMBER` for one action. Unprivileged
 | 5 / 6 | Start / stop service |
 | 7 / 8 | Change admin password / username |
 | 9 / 10 | Change management port / SSH port |
+| 11 | Upgrade S2L, preserving configuration |
 | 0 | Exit menu |
 
 Admin passwords are 12–128 characters; the installer/CLI allow a restricted character set. CLI account changes restart S2L and may interrupt tunnels; web account changes take effect without a service restart. Log in again afterwards. The CLI uses `public_url` when configured; otherwise it derives the address from the listener and detected IP, with a NAT warning on fallback.

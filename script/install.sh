@@ -170,6 +170,7 @@ cat >"${INSTALL_DIR}/config.json" <<EOF
 EOF
 chmod 600 "${INSTALL_DIR}/config.json"
 install -m 755 "${SCRIPT_DIR}/s2l.sh" /usr/local/bin/s2l
+install -m 700 "${SCRIPT_DIR}/remote_update.sh" "${INSTALL_DIR}/remote_update.sh"
 install -m 600 "${SCRIPT_DIR}/manage_config.py" "${INSTALL_DIR}/manage_config.py"
 install -m 600 "${SCRIPT_DIR}/manage_ssh.py" "${INSTALL_DIR}/manage_ssh.py"
 install -m 600 "${SCRIPT_DIR}/manage_ipsec.py" "${INSTALL_DIR}/manage_ipsec.py"
