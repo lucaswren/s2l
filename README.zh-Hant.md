@@ -10,7 +10,7 @@ S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與
 
 安裝程式支援 Ubuntu/Debian 的 amd64、arm64，建議基準為 Ubuntu Server 24.04 LTS amd64。隧道需要 Linux、systemd、root 權限與 TUN；非 Linux 建置無法提供隧道服務。
 
-**預設普通 L2TP 不加密。** 管理 HTTPS 不會加密隧道流量。選配 IPsec 使用 IKEv1 與共用 PSK，須驗證用戶端相容性；SOCKS5 本身亦不加密。UDP 能力取決於上游，路由主要為 IPv4，沒有防洩漏保證。
+**預設普通 L2TP 不加密。** 管理 HTTPS 不會加密隧道流量。選配 IPsec 使用 IKEv1 與共用 PSK，須驗證用戶端相容性；SOCKS5 本身亦不加密。UDP 能力取決於上游。PPP IPv4 轉發限制於對應 TUN，PPP IPv6 被阻擋；仍須驗證用戶端路由與防火牆相容性，不提供匿名性保證。
 
 使用專用主機並保留安全更新。安裝會修改套件、轉送、PPP/L2TP、防火牆及系統服務。新安裝優先使用下方一鍵腳本；執行前審閱腳本，其預設取得 `main` 分支。
 
