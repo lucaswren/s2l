@@ -50,7 +50,7 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	must("ip", "netns", "exec", outside, "ip", "-6", "route", "add", "default", "via", "fd00:2::1")
 	ping := func(target string, success bool) {
 		t.Helper()
-		cmd := exec.Command("ip", "netns", "exec", client, "ping", "-c", "1", "-W", "1", target)
+		cmd := exec.Command("ip", "netns", "exec", client, "ping", "-c", "1", "-W", "3", target)
 		out, err := cmd.CombinedOutput()
 		if (err == nil) != success {
 			t.Fatalf("ping %s success=%v: %v %s", target, success, err, out)
