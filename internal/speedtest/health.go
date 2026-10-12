@@ -3,11 +3,12 @@ package speedtest
 import (
 	"context"
 	"fmt"
-	"github.com/lucaswren/s2l/internal/model"
 	"io"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/lucaswren/s2l/internal/model"
 )
 
 // CheckHealth authenticates and transfers a small HTTPS response through SOCKS5.

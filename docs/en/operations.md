@@ -16,7 +16,19 @@ It runs as root and follows `main` by default. HTTPS uses a random available TCP
 
 ## Upstream health and leak protection
 
-Mapping `running` and upstream health are separate. The monitor checks a small HTTPS response through SOCKS5 authentication and forwarding, using Cloudflare and Google as alternate targets. These providers receive probe connections through your upstream. One failure marks the link unstable; three consecutive failures mark it unavailable. Two consecutive successful checks restore healthy status. Normal checks run about every 10 seconds; failures back off by 5, 10, 20, 40 and at most 60 seconds, plus probe duration and scheduling. The monitor limits concurrent work to four mappings. This is a TCP upstream check, not a UDP, DNS or full client-path guarantee.
+Mapping `running` and upstream health are separate. The monitor reports TCP, UDP and DNS independently:
+
+| Check | Actual probe | Interpretation |
+|---|---|---|
+| TCP | A small HTTPS response through SOCKS5 authentication and forwarding; Cloudflare and Google are alternate targets | Successful web forwarding to a probe target |
+| UDP | SOCKS5 `UDP ASSOCIATE`, followed by a DNS datagram to `1.1.1.1:53` or `8.8.8.8:53` through the negotiated relay | A valid reply must match its source, query ID and question; fragmented/invalid replies are ignored. Only explicit SOCKS reply code 7 is classified as unsupported |
+| DNS | A validated DNS response from `https://1.1.1.1/dns-query` through SOCKS5; if that fails, a TCP DNS probe to `8.8.8.8:53` through SOCKS5 | Working primary DoH is healthy. If only TCP DNS succeeds, the UI reports backup-only availability; this does **not** switch the active sing-box resolver |
+
+DNS probes query the public name `example.com`. Target traffic always uses the selected proxy; there is no direct DNS-target fallback. Proxy/relay hostnames may still require the server's own resolver to establish the upstream connection. Providers receive these probe connections and queries. The health checker does not read or upload client DNS history.
+
+An initial protocol failure is unstable; three consecutive failures are unavailable. Healthy recovery needs two consecutive successful checks. Explicit UDP non-support and DNS backup-only availability are reported separately. Working TCP with a UDP/DNS problem is partial availability, rather than a whole-node outage; remaining successful checks also prevent a blanket unavailable result. L2TP stays connected and these protocol failures do not trigger a sing-box restart.
+
+Normal checks run about every 10 seconds plus probe duration and scheduling. TCP failures back off by 5, 10, 20, 40 and at most 60 seconds; partial availability may retain the normal interval. The monitor handles at most four mappings concurrently, with three protocol probes in parallel per mapping and a 12-second overall probe deadline. These tests do not verify the local TUN/L2TP client path, every DNS name, DNSSEC, QUIC or every UDP application.
 
 L2TP remains connected during upstream outages. Failed application connections need to reconnect. A missing sing-box process or TUN triggers bounded-rate recovery without stopping L2TP. Recovery failures appear in health status and service logs. No automatic switch to another node is performed; change a mapping's node after stopping it. Connection settings of nodes used by running mappings cannot be edited.
 

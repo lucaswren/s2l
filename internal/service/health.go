@@ -17,9 +17,14 @@ type healthRecord struct {
 	failures, successes int
 	next                time.Time
 	recoveryFailures    int
+	baseState           string
+	tcp, udp, dns       protocolRecord
 }
 
 func (h *healthRecord) observe(err error, now time.Time) {
+	if h.baseState != "" {
+		h.State = h.baseState
+	}
 	h.CheckedAt = now
 	if err != nil {
 		h.successes = 0
@@ -47,6 +52,7 @@ func (h *healthRecord) observe(err error, now time.Time) {
 		}
 		h.next = now.Add(10 * time.Second)
 	}
+	h.baseState = h.State
 }
 
 func retryDelay(n int) time.Duration {
@@ -117,7 +123,9 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 		return
 	}
 	if !s.singbox.IsRunning(m.TunName) || network.WaitInterface(m.TunName, 100*time.Millisecond) != nil {
+		h.invalidateProtocols()
 		h.State = "recovering"
+		h.baseState = "recovering"
 		h.successes = 0
 		if h.OutageSince.IsZero() {
 			h.OutageSince = time.Now()
@@ -140,9 +148,10 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 			return
 		}
 		h.recoveryFailures = 0
+		h.failures = 0
 	}
 	s.mu.Unlock()
-	err := speedtest.CheckHealth(ctx, node)
+	report := speedtest.ProbeHealth(ctx, node)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	current, ok = s.store.GetMapping(m.ID)
@@ -151,8 +160,80 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 		return
 	}
 	old := h.State
-	h.observe(err, time.Now())
+	h.applyReport(report, time.Now())
 	if old != h.State {
 		log.Printf("mapping %s upstream health: %s", m.ID, h.State)
 	}
+}
+
+type protocolRecord struct {
+	model.ProtocolHealth
+	failures, successes int
+}
+
+func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
+	p.CheckedAt = now
+	p.Method = result.Method
+	switch result.State {
+	case "healthy":
+		p.failures = 0
+		p.successes++
+		if p.successes >= 2 {
+			p.State = "healthy"
+			p.Error = ""
+		} else if p.State == "" || p.State == "unsupported" {
+			p.State = "checking"
+			p.Error = ""
+		}
+	case "degraded":
+		p.State = "degraded"
+		p.Error = result.Error
+		p.failures = 0
+		p.successes = 0
+	case "unsupported":
+		p.State = "unsupported"
+		p.Error = result.Error
+		p.failures = 0
+		p.successes = 0
+	default:
+		p.successes = 0
+		p.failures++
+		p.Error = result.Error
+		if p.failures >= 3 {
+			p.State = "unavailable"
+		} else {
+			p.State = "unstable"
+		}
+	}
+}
+
+func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time) {
+	var tcpError error
+	if report.TCP.State != "healthy" {
+		tcpError = fmt.Errorf("TCP HTTPS forwarding check failed")
+	}
+	h.observe(tcpError, now)
+	h.tcp.observe(report.TCP, now)
+	h.udp.observe(report.UDP, now)
+	h.dns.observe(report.DNS, now)
+	h.TCP = h.tcp.ProtocolHealth
+	h.UDP = h.udp.ProtocolHealth
+	h.DNS = h.dns.ProtocolHealth
+	if h.State == "healthy" && (h.UDP.State != "healthy" || h.DNS.State != "healthy") {
+		h.State = "degraded"
+		h.Error = "TCP is available; inspect the separate UDP and DNS results"
+	} else if h.State == "unavailable" && (h.UDP.State == "healthy" || (h.DNS.State == "healthy" || h.DNS.State == "degraded")) {
+		h.State = "degraded"
+		h.Error = "Some upstream checks succeed; inspect the TCP result"
+		h.next = now.Add(10 * time.Second)
+	}
+}
+
+func (h *healthRecord) invalidateProtocols() {
+	h.tcp = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "checking"}}
+	h.udp = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "checking"}}
+	h.dns = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "checking"}}
+	h.TCP = h.tcp.ProtocolHealth
+	h.UDP = h.udp.ProtocolHealth
+	h.DNS = h.dns.ProtocolHealth
 }

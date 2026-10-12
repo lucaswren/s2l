@@ -2,9 +2,11 @@ package service
 
 import (
 	"errors"
-	"github.com/lucaswren/s2l/internal/model"
 	"testing"
 	"time"
+
+	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/speedtest"
 )
 
 func TestHealthHysteresisAndRecovery(t *testing.T) {
@@ -46,5 +48,72 @@ func TestRetryDelayBounded(t *testing.T) {
 		if got := retryDelay(i + 1); got != want*time.Second {
 			t.Fatalf("attempt %d: %v", i+1, got)
 		}
+	}
+}
+
+func TestSeparateProtocolsDoNotDisableHealthyTCP(t *testing.T) {
+	h := healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking"}}
+	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy", Method: "doh"}, UDP: model.ProtocolHealth{State: "unsupported", Error: "UDP unsupported"}}
+	now := time.Now()
+	for i := 0; i < 4; i++ {
+		h.applyReport(report, now.Add(time.Duration(i)*time.Second))
+	}
+	if h.State != "degraded" || h.TCP.State != "healthy" || h.UDP.State != "unsupported" || h.DNS.Method != "doh" {
+		t.Fatal(h)
+	}
+	recovered := h.RecoveredAt
+	h.applyReport(report, now.Add(5*time.Second))
+	if h.RecoveredAt != recovered {
+		t.Fatal("partial capability updates changed TCP recovery time")
+	}
+	report.UDP = model.ProtocolHealth{State: "healthy"}
+	h.applyReport(report, now.Add(6*time.Second))
+	if h.UDP.State == "healthy" {
+		t.Fatal("UDP recovery needs two successes")
+	}
+	h.applyReport(report, now.Add(7*time.Second))
+	if h.State != "healthy" {
+		t.Fatal(h)
+	}
+	report.DNS = model.ProtocolHealth{State: "unavailable", Error: "DNS failed"}
+	for i := 0; i < 3; i++ {
+		h.applyReport(report, now.Add(time.Duration(8+i)*time.Second))
+	}
+	if h.State != "degraded" || h.TCP.State != "healthy" || h.DNS.State != "unavailable" {
+		t.Fatal(h)
+	}
+	h.invalidateProtocols()
+	if h.TCP.State != "checking" || h.UDP.State != "checking" || h.DNS.State != "checking" {
+		t.Fatal("recovery left stale protocol results")
+	}
+}
+
+func TestHTTPSFailureWithWorkingDNSIsPartialAvailability(t *testing.T) {
+	h := healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking"}}
+	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "unavailable"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "unsupported"}}
+	for i := 0; i < 3; i++ {
+		h.applyReport(report, time.Now())
+	}
+	if h.State != "degraded" || h.TCP.State != "unavailable" {
+		t.Fatal(h)
+	}
+}
+
+func TestDNSBackupDoesNotClaimPrimaryRecovery(t *testing.T) {
+	p := protocolRecord{}
+	fallback := model.ProtocolHealth{State: "degraded", Method: "tcp-fallback", Error: "primary DNS failed"}
+	for i := 0; i < 3; i++ {
+		p.observe(fallback, time.Now())
+	}
+	if p.State != "degraded" {
+		t.Fatal(p)
+	}
+	p.observe(model.ProtocolHealth{State: "healthy", Method: "doh"}, time.Now())
+	if p.State == "healthy" {
+		t.Fatal("one primary success must not clear fallback warning")
+	}
+	p.observe(model.ProtocolHealth{State: "healthy", Method: "doh"}, time.Now())
+	if p.State != "healthy" || p.Error != "" {
+		t.Fatal(p)
 	}
 }

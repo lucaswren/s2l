@@ -2,13 +2,14 @@ package speedtest
 
 import (
 	"context"
-	"github.com/lucaswren/s2l/internal/model"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/lucaswren/s2l/internal/model"
 )
 
 func TestHealthRequiresSOCKSForwardingAndTriesSecondTarget(t *testing.T) {

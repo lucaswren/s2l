@@ -28,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 登录显示的 HTTPS 地址，添加授权节点，创建映射并启动至 `running`。客户端使用服务器 IP 与映射账号密码。普通 L2TP 使用 UDP 1701；IPsec 需要 UDP 500/4500 及 ESP（IP 协议 50）。先阅读操作指南再开放端口。更新现有安装不要重跑安装程序。从已审阅源码工作副本安装的方法见[开发指南](docs/zh-Hans/development.md)。
 
-持续 PPP 防泄漏、上游 TCP 健康监控与 sing-box/TUN 自动恢复详见[操作指南](docs/zh-Hans/operations.md)。现有安装须先安装新的防护服务，再重新启动 xl2tpd。
+持续 PPP 防泄漏、上游 TCP／UDP／DNS 独立健康监控与 sing-box/TUN 自动恢复详见[操作指南](docs/zh-Hans/operations.md)。现有安装须先安装新的防护服务，再重新启动 xl2tpd。
 
 ## 升级
 

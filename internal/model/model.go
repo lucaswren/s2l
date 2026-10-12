@@ -40,14 +40,24 @@ type TunTraffic struct {
 	TxPackets uint64 `json:"tx_packets"`
 }
 
-// SystemStatus 系统运行状态汇总
+// ProtocolHealth describes one separately verified upstream capability.
+type ProtocolHealth struct {
+	State     string    `json:"state"`
+	Method    string    `json:"method,omitempty"`
+	Error     string    `json:"error,omitempty"`
+	CheckedAt time.Time `json:"checked_at"`
+}
+
 type UpstreamHealth struct {
-	State       string    `json:"state"`
-	TunName     string    `json:"tun_name"`
-	Error       string    `json:"error,omitempty"`
-	CheckedAt   time.Time `json:"checked_at"`
-	OutageSince time.Time `json:"outage_since"`
-	RecoveredAt time.Time `json:"recovered_at"`
+	TCP         ProtocolHealth `json:"tcp"`
+	UDP         ProtocolHealth `json:"udp"`
+	DNS         ProtocolHealth `json:"dns"`
+	State       string         `json:"state"`
+	TunName     string         `json:"tun_name"`
+	Error       string         `json:"error,omitempty"`
+	CheckedAt   time.Time      `json:"checked_at"`
+	OutageSince time.Time      `json:"outage_since"`
+	RecoveredAt time.Time      `json:"recovered_at"`
 }
 
 type SystemStatus struct {
