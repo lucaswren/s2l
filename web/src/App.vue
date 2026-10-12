@@ -85,6 +85,7 @@ async function refresh() {
       uptime_sec: st?.uptime_sec || 0,
       tun_traffic: Array.isArray(st?.tun_traffic) ? st.tun_traffic : [],
       singbox_pids: st?.singbox_pids || {},
+ upstream_health: st?.upstream_health || {},
     };
     error.value = "";
   } catch (e) {

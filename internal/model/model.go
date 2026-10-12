@@ -41,11 +41,21 @@ type TunTraffic struct {
 }
 
 // SystemStatus 系统运行状态汇总
+type UpstreamHealth struct {
+	State       string    `json:"state"`
+	TunName     string    `json:"tun_name"`
+	Error       string    `json:"error,omitempty"`
+	CheckedAt   time.Time `json:"checked_at"`
+	OutageSince time.Time `json:"outage_since"`
+	RecoveredAt time.Time `json:"recovered_at"`
+}
+
 type SystemStatus struct {
-	Uptime      time.Duration        `json:"uptime_ns"`
-	Mappings    []TunnelMapping      `json:"mappings"`
-	TunTraffic  []TunTraffic         `json:"tun_traffic"`
-	SingboxPIDs map[string]int       `json:"singbox_pids"` // tun_name -> pid
+	UpstreamHealth map[string]UpstreamHealth `json:"upstream_health"`
+	Uptime         time.Duration             `json:"uptime_ns"`
+	Mappings       []TunnelMapping           `json:"mappings"`
+	TunTraffic     []TunTraffic              `json:"tun_traffic"`
+	SingboxPIDs    map[string]int            `json:"singbox_pids"` // tun_name -> pid
 }
 
 // AppState 持久化到 data/state.json 的完整状态

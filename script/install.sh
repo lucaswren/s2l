@@ -175,6 +175,14 @@ install -m 600 "${SCRIPT_DIR}/manage_ssh.py" "${INSTALL_DIR}/manage_ssh.py"
 install -m 600 "${SCRIPT_DIR}/manage_ipsec.py" "${INSTALL_DIR}/manage_ipsec.py"
 install -m 644 "${ROOT_DIR}/deploy/systemd/s2l-ipsec.service" /etc/systemd/system/s2l-ipsec.service
 
+# Install fail-closed guards before allowing any PPP client to connect.
+install -m 644 "${ROOT_DIR}/deploy/systemd/s2l-guard.service" /etc/systemd/system/s2l-guard.service
+mkdir -p /etc/systemd/system/xl2tpd.service.d
+install -m 644 "${ROOT_DIR}/deploy/systemd/xl2tpd-s2l.conf" /etc/systemd/system/xl2tpd.service.d/s2l.conf
+systemctl daemon-reload
+systemctl enable s2l-guard.service
+systemctl restart s2l-guard.service
+
 # 确保 chap-secrets / xl2tpd 可用（xl2tpd 只认 ; 注释，必须覆盖损坏的旧配置）
 mkdir -p /etc/ppp /etc/xl2tpd /var/run/xl2tpd
 touch /etc/ppp/chap-secrets

@@ -22,7 +22,14 @@ import (
 
 func main() {
 	cfgPath := flag.String("config", "", "path to config JSON (optional)")
+	guardOnly := flag.Bool("guard-only", false, "install PPP traffic guards and exit (Linux root only)")
 	flag.Parse()
+	if *guardOnly {
+		if err := network.NewController().EnsureGuard(); err != nil {
+			log.Fatalf("install traffic guards: %v", err)
+		}
+		return
+	}
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
@@ -41,6 +48,13 @@ func main() {
 	netCtrl := network.NewController()
 	l2tpMgr := l2tp.NewManager(cfg.ChapSecrets, cfg.Xl2tpdConf, cfg.PPPOptions)
 	svc := service.NewMappingService(st, sb, netCtrl, l2tpMgr)
+
+	if err := netCtrl.EnsureGuard(); err != nil {
+		log.Fatalf("install traffic guards: %v", err)
+	}
+	monitorCtx, stopMonitor := context.WithCancel(context.Background())
+	monitorDone := make(chan struct{})
+	go func() { defer close(monitorDone); svc.Monitor(monitorCtx) }()
 
 	// 先修复可能被 # 注释写坏的 xl2tpd.conf，再恢复隧道
 	svc.EnsureL2TP()
@@ -85,6 +99,8 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(ctx)
+	stopMonitor()
+	<-monitorDone
 	svc.Shutdown()
 	log.Println("bye")
 }

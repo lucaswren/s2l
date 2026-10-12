@@ -38,6 +38,9 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 	if err := validateMapping(m); err != nil {
 		return err
 	}
+	if err := ensureGuard(); err != nil {
+		return err
+	}
 	if err := ensureIPForward(); err != nil {
 		return err
 	}

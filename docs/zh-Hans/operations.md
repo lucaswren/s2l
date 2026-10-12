@@ -40,6 +40,28 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 配置：`/opt/s2l/config.json`；运行数据：`/opt/s2l/data/state.json`。数据文件含代理和拨号凭据，请限制访问权限。
 
+## 上游健康与防泄漏
+
+映射 `running` 与上游健康分别显示。监控通过 SOCKS5 认证与转发取得小型 HTTPS 响应，使用 Cloudflare 与 Google 作为替代目标；这些提供商会收到经上游发出的探测连接。一次失败标记为不稳定，连续三次失败标记为不可用；连续两次成功才恢复正常。正常约每 10 秒检查，失败后按 5、10、20、40、最多 60 秒退避，另加探测与调度时间；同时最多处理四条映射。这仅检查上游 TCP，不保证 UDP、DNS 或完整客户端路径。
+
+上游中断时保留 L2TP，已失败的应用连接需要重新建立。sing-box 进程或 TUN 消失时，以受限频率自动恢复，不停止 L2TP；失败显示在健康状态与服务日志中。目前不自动切换其他节点；更换映射节点前先停止映射。运行中映射使用的节点不可修改连接设置。
+
+S2L 必须使用专用主机：持续防护覆盖**所有 `ppp+` 接口**。PPP IPv4 仅允许已配置来源子网经对应 TUN 转发；其他转发及所有 PPP 对服务器本机的访问均丢弃，PPP IPv6 也被阻断。TUN 消失时，终止查找的不可达路由阻止回退到主路由表。停止 S2L 或映射后仍保留阻断规则，避免现有 PPP 连接从主机出口绕行。`s2l-guard.service` 在 xl2tpd 前安装规则，失败时阻止 xl2tpd/S2L 启动。不要清空这些规则或让其他防火墙管理器覆盖。客户端分流与其他网络接口不在服务器控制范围内。
+
+现有安装需要构建已审阅版本，停止 **S2L 与 xl2tpd**、备份旧部署并替换程序。从已审阅工作副本安装新服务单元后再启动（以下使用默认 `/opt/s2l` 路径）：
+
+```bash
+sudo install -m 644 deploy/systemd/s2l-guard.service /etc/systemd/system/s2l-guard.service
+sudo install -m 644 deploy/systemd/s2l.service /etc/systemd/system/s2l.service
+sudo mkdir -p /etc/systemd/system/xl2tpd.service.d
+sudo install -m 644 deploy/systemd/xl2tpd-s2l.conf /etc/systemd/system/xl2tpd.service.d/s2l.conf
+sudo systemctl daemon-reload
+sudo systemctl enable s2l-guard.service
+sudo systemctl restart s2l-guard.service
+sudo systemctl start xl2tpd s2l
+```
+
+
 ## 网页 HTTPS（公网 IP）
 
 新安装自动完成以下步骤。已有安装可在放行指定 HTTPS 端口后，于项目目录执行：

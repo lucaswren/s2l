@@ -2,6 +2,8 @@
 Description=S2L SOCKS5-to-L2TP Gateway
 After=network-online.target xl2tpd.service
 Wants=network-online.target
+Requires=s2l-guard.service
+After=s2l-guard.service
 
 [Service]
 Type=simple
@@ -17,7 +19,7 @@ LimitNOFILE=1048576
 
 # 保留 running 状态，由 auto_restore 在下次启动时恢复映射
 KillMode=mixed
-TimeoutStopSec=20
+TimeoutStopSec=60
 
 [Install]
 WantedBy=multi-user.target

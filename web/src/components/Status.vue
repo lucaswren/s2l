@@ -15,6 +15,8 @@ const pids = computed(() =>
   })),
 );
 
+const health = computed(() => Object.entries(props.status.upstream_health || {}).map(([id, h]) => ({id, ...h})));
+const healthLabels = {checking: "检测中", healthy: "正常", unstable: "连接不稳定", unavailable: "上游不可用", recovering: "恢复中"};
 function formatBytes(n) {
   if (!n) return "0 B";
   const u = ["B", "KB", "MB", "GB", "TB"];
@@ -31,9 +33,19 @@ function formatBytes(n) {
   <div class="section-head">
     <div>
       <h2>运行监控</h2>
-      <p class="muted">sing-box 进程与 TUN 累计流量</p>
+      <p class="muted">上游 TCP 健康状态、sing-box 进程与 TUN 累计流量</p>
     </div>
   </div>
+  <el-card shadow="never" class="section-gap">
+    <template #header>上游健康状态（TCP）</template>
+    <el-table :data="health" empty-text="暂无活动映射">
+      <el-table-column prop="tun_name" label="接口" />
+      <el-table-column label="健康状态"><template #default="{ row }">{{ healthLabels[row.state] || row.state }}</template></el-table-column>
+      <el-table-column label="最近检测"><template #default="{ row }">{{ row.checked_at && !row.checked_at.startsWith('0001') ? new Date(row.checked_at).toLocaleString() : '等待检测' }}</template></el-table-column>
+      <el-table-column prop="error" label="故障说明" min-width="220" />
+    </el-table>
+    <p class="muted">映射运行中不代表上游可用；此检测不验证 UDP 或客户端完整链路。</p>
+  </el-card>
   <el-row :gutter="16"
     ><el-col :xs="24" :md="8"
       ><el-card shadow="never" class="section-gap"

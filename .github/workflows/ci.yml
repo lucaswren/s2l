@@ -22,6 +22,12 @@ jobs:
         with:
           python-version: '3.x'
       - run: go test -race ./...
+      - name: Verify leak protection in isolated Linux networking
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y iproute2 iptables iputils-ping
+          go test -c -o /tmp/s2l-network.test ./internal/network
+          sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run TestLeakGuardsIntegration -test.v
       - run: go vet ./...
       - run: python3 -m unittest discover -s script/tests
       - run: python3 script/check_docs.py

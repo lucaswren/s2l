@@ -29,11 +29,14 @@ func AddFirewall(m model.TunnelMapping) error {
 	}
 
 	cmt := mappingComment(m)
+	if err := run("iptables", "-I", "S2L_FORWARD", "1", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt); err != nil {
+		return err
+	}
 	if err := run("iptables", "-t", "nat", "-A", "POSTROUTING",
 		"-o", m.TunName, "-j", "MASQUERADE",
 		"-m", "comment", "--comment", cmt,
 	); err != nil {
-		return err
+		return errors.Join(err, DelFirewall(m))
 	}
 	if err := run("iptables", "-A", "FORWARD",
 		"-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT",
@@ -61,6 +64,7 @@ func AddFirewall(m model.TunnelMapping) error {
 func DelFirewall(m model.TunnelMapping) error {
 	cmt := mappingComment(m)
 	return errors.Join(
+		deleteFirewallRule("-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-t", "nat", "-D", "POSTROUTING", "-o", m.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-o", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),

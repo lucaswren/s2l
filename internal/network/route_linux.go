@@ -26,10 +26,13 @@ func AddPolicyRoute(m model.TunnelMapping) error {
 		return fmt.Errorf("clear old policy route: %w", err)
 	}
 
-	if err := run("ip", "rule", "add", "from", m.Subnet, "table", table); err != nil {
+	if err := run("ip", "route", "add", "unreachable", "default", "metric", "32767", "table", table); err != nil {
 		return err
 	}
-	if err := run("ip", "route", "add", "default", "dev", m.TunName, "table", table); err != nil {
+	if err := run("ip", "rule", "add", "priority", strconv.Itoa(10000+m.TableID), "from", m.Subnet, "table", table); err != nil {
+		return err
+	}
+	if err := run("ip", "route", "add", "default", "dev", m.TunName, "metric", "100", "table", table); err != nil {
 		// 回滚 rule，避免残留半套规则
 		rollbackErr := run("ip", "rule", "del", "from", m.Subnet, "table", table)
 		return errors.Join(err, rollbackErr)

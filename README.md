@@ -17,6 +17,8 @@ Tunnel operation requires Linux, systemd, root privileges, TUN support, xl2tpd, 
 
 **Plain L2TP is unencrypted and is the default.** Management HTTPS does not encrypt tunnel traffic. Optional IPsec uses IKEv1 with a shared PSK; validate client compatibility and your security policy. SOCKS5 alone provides no transport encryption. UDP capability depends on the upstream; routing is primarily IPv4. No leak-prevention or anonymity guarantee is provided.
 
+Persistent PPP leak guards, upstream TCP health monitoring, and automatic sing-box/TUN recovery are described in the [operations guide](docs/en/operations.md). Existing installations must install the new guard service before restarting xl2tpd.
+
 ## Installation
 
 Use a dedicated host: installation changes packages, forwarding, PPP/L2TP configuration, firewall rules and system services. Keep security updates enabled. Review the scripts before running them as root. The one-command installer follows `main` by default and is intended for a new installation.

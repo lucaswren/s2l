@@ -14,6 +14,28 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 It runs as root and follows `main` by default. HTTPS uses a random available TCP port unless `HTTPS_PORT` is supplied. Restrict the printed management port to trusted administrator IPs. See the README for fixed-port configuration and the development guide for installation from a reviewed source checkout. Use the update procedure below for existing installations.
 
+## Upstream health and leak protection
+
+Mapping `running` and upstream health are separate. The monitor checks a small HTTPS response through SOCKS5 authentication and forwarding, using Cloudflare and Google as alternate targets. These providers receive probe connections through your upstream. One failure marks the link unstable; three consecutive failures mark it unavailable. Two consecutive successful checks restore healthy status. Normal checks run about every 10 seconds; failures back off by 5, 10, 20, 40 and at most 60 seconds, plus probe duration and scheduling. The monitor limits concurrent work to four mappings. This is a TCP upstream check, not a UDP, DNS or full client-path guarantee.
+
+L2TP remains connected during upstream outages. Failed application connections need to reconnect. A missing sing-box process or TUN triggers bounded-rate recovery without stopping L2TP. Recovery failures appear in health status and service logs. No automatic switch to another node is performed; change a mapping's node after stopping it. Connection settings of nodes used by running mappings cannot be edited.
+
+S2L requires a dedicated host: its persistent guard covers **all `ppp+` interfaces**. IPv4 forwarding from PPP is permitted only for a configured source subnet toward its assigned TUN; other forwarding and all PPP access to the host are dropped. PPP IPv6 is blocked. A terminal unreachable route prevents main-table fallback when the TUN disappears. Guards remain after stopping S2L or a mapping so existing PPP sessions cannot escape via the host uplink. `s2l-guard.service` installs them before xl2tpd starts; failure prevents xl2tpd/S2L startup. Do not flush these rules or run another firewall manager that replaces them. Client-side split routing and other network adapters remain outside this server's control.
+
+For an existing installation, build the reviewed version, stop **both S2L and xl2tpd**, back up the old deployment, and replace the application binary. Install the new units from the reviewed checkout before restarting (the following assumes the default `/opt/s2l` path):
+
+```bash
+sudo install -m 644 deploy/systemd/s2l-guard.service /etc/systemd/system/s2l-guard.service
+sudo install -m 644 deploy/systemd/s2l.service /etc/systemd/system/s2l.service
+sudo mkdir -p /etc/systemd/system/xl2tpd.service.d
+sudo install -m 644 deploy/systemd/xl2tpd-s2l.conf /etc/systemd/system/xl2tpd.service.d/s2l.conf
+sudo systemctl daemon-reload
+sudo systemctl enable s2l-guard.service
+sudo systemctl restart s2l-guard.service
+sudo systemctl start xl2tpd s2l
+```
+
+
 ## Access and client setup
 
 The installation prints the HTTPS URL, username and initial password. Restrict the management TCP port to trusted source IPs in both host firewall and cloud security groups. Keep backend TCP 8080 private. Add an authorized SOCKS5 node and an L2TP mapping, then start it. A `running` status is not an end-to-end connectivity or security test: verify the intended egress, DNS, IPv6 handling and failure behavior from an actual client.

@@ -16,13 +16,15 @@ import (
 
 // MappingService 编排「sing-box + 网络规则 + L2TP」整条链路
 type MappingService struct {
-	store     *store.Store
-	singbox   *singbox.Manager
-	net       *network.Controller
-	l2tp      *l2tp.Manager
-	startedAt time.Time
+	store        *store.Store
+	singbox      *singbox.Manager
+	net          *network.Controller
+	l2tp         *l2tp.Manager
+	startedAt    time.Time
+	shuttingDown bool
 
-	mu sync.Mutex
+	mu     sync.Mutex
+	health map[string]*healthRecord
 }
 
 func NewMappingService(
@@ -37,6 +39,7 @@ func NewMappingService(
 		net:       netCtrl,
 		l2tp:      l2tpMgr,
 		startedAt: time.Now(),
+		health:    make(map[string]*healthRecord),
 	}
 }
 
@@ -81,6 +84,9 @@ func (s *MappingService) RestoreRunning() {
 func (s *MappingService) Start(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.shuttingDown {
+		return fmt.Errorf("service is shutting down")
+	}
 	return s.startLocked(id)
 }
 
@@ -99,6 +105,8 @@ func (s *MappingService) startLocked(id string) error {
 	if m.L2TPUser == "" || m.L2TPPass == "" {
 		return fmt.Errorf("l2tp_user/l2tp_pass required")
 	}
+
+	delete(s.health, id)
 
 	// 幂等：先清残留（适配开机恢复 / 重复 start）
 	if err := s.cleanupRuntime(m); err != nil {
@@ -133,6 +141,7 @@ func (s *MappingService) startLocked(id string) error {
 		rollbackErr := s.l2tp.ApplyStop(m.ID, previousActive)
 		return errors.Join(fmt.Errorf("persist running status: %w", err), cleanupErr, rollbackErr)
 	}
+	s.health[id] = &healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking", TunName: m.TunName}}
 	return nil
 }
 
@@ -146,6 +155,7 @@ func (s *MappingService) Stop(id string) error {
 		return fmt.Errorf("mapping %s not found", id)
 	}
 
+	delete(s.health, id)
 	cleanupErr := s.cleanupRuntime(m)
 	active := s.activeAfter(m, false)
 	l2tpErr := s.l2tp.ApplyStop(m.ID, active)
@@ -162,6 +172,7 @@ func (s *MappingService) Stop(id string) error {
 func (s *MappingService) Shutdown() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.shuttingDown = true
 	for _, m := range s.store.ListMappings() {
 		if m.Status == model.StatusRunning {
 			_ = s.cleanupRuntime(m)
@@ -175,7 +186,13 @@ func (s *MappingService) Shutdown() {
 
 // Status 汇总运行状态与 TUN 流量
 func (s *MappingService) Status() model.SystemStatus {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	mappings := s.store.ListMappings()
+	health := make(map[string]model.UpstreamHealth)
+	for id, h := range s.health {
+		health[id] = h.UpstreamHealth
+	}
 	traffic := make([]model.TunTraffic, 0, len(mappings))
 	for _, m := range mappings {
 		if m.Status != model.StatusRunning {
@@ -188,10 +205,11 @@ func (s *MappingService) Status() model.SystemStatus {
 		traffic = append(traffic, t)
 	}
 	return model.SystemStatus{
-		Uptime:      time.Since(s.startedAt),
-		Mappings:    mappings,
-		TunTraffic:  traffic,
-		SingboxPIDs: s.singbox.PIDs(),
+		Uptime:         time.Since(s.startedAt),
+		Mappings:       mappings,
+		TunTraffic:     traffic,
+		SingboxPIDs:    s.singbox.PIDs(),
+		UpstreamHealth: health,
 	}
 }
 

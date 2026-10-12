@@ -9,6 +9,9 @@ import (
 
 // run 执行系统命令，失败时返回合并后的 stderr/stdout。
 func run(name string, args ...string) error {
+	if name == "iptables" || name == "ip6tables" {
+		args = append([]string{"-w", "5"}, args...)
+	}
 	cmd := exec.Command(name, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -30,6 +33,9 @@ func runAllowFail(name string, args ...string) {
 
 // output 执行命令并返回 stdout。
 func output(name string, args ...string) (string, error) {
+	if name == "iptables" || name == "ip6tables" {
+		args = append([]string{"-w", "5"}, args...)
+	}
 	cmd := exec.Command(name, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

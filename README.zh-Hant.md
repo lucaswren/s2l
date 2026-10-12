@@ -28,6 +28,8 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 登入顯示的 HTTPS 網址，新增授權節點，建立映射並啟動至 `running`。用戶端使用伺服器 IP 與映射帳密。普通 L2TP 使用 UDP 1701；IPsec 需要 UDP 500/4500 及 ESP（IP 協定 50）。先閱讀操作指南再開放連接埠。更新既有安裝不要重跑安裝程式。從已審閱原始碼工作副本安裝的方式見[開發指南](docs/zh-Hant/development.md)。
 
+持續 PPP 防洩漏、上游 TCP 健康監控與 sing-box/TUN 自動恢復詳見[操作指南](docs/zh-Hant/operations.md)。既有安裝須先安裝新的防護服務，再重新啟動 xl2tpd。
+
 ## 文件
 
 - [操作、備份、更新與疑難排解](docs/zh-Hant/operations.md)

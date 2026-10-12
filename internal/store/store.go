@@ -116,6 +116,13 @@ func (s *Store) UpsertNode(n model.SocksNode) error {
 	previous := cloneState(s.state)
 	for i, existing := range s.state.Nodes {
 		if existing.ID == n.ID {
+			if existing.Addr != n.Addr || existing.Username != n.Username || existing.Password != n.Password {
+				for _, m := range s.state.Mappings {
+					if m.NodeID == n.ID && m.Status == model.StatusRunning {
+						return fmt.Errorf("node is used by a running mapping; stop it before changing connection settings")
+					}
+				}
+			}
 			s.state.Nodes[i] = n
 			return s.saveOrRestoreLocked(previous)
 		}

@@ -46,3 +46,5 @@ func (c *Controller) ActiveCount() int {
 	defer c.mu.Unlock()
 	return len(c.active)
 }
+
+func (c *Controller) EnsureGuard() error { return fmt.Errorf("PPP guards require Linux") }

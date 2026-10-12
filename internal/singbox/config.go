@@ -111,10 +111,6 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, 
 				"password":    node.Password,
 			},
 			{
-				"type": "direct",
-				"tag":  "direct",
-			},
-			{
 				"type": "block",
 				"tag":  "block",
 			},

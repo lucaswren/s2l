@@ -60,6 +60,19 @@ func TestGenerateConfig(t *testing.T) {
 	if !ok || len(outbounds) < 1 {
 		t.Fatalf("expected outbounds, got %#v", cfg["outbounds"])
 	}
+	for _, outbound := range outbounds {
+		if outbound.(map[string]any)["type"] == "direct" {
+			t.Fatal("direct outbound must not be available")
+		}
+	}
+	if cfg["route"].(map[string]any)["final"] != "proxy" {
+		t.Fatal("traffic must use proxy")
+	}
+	for _, server := range cfg["dns"].(map[string]any)["servers"].([]any) {
+		if server.(map[string]any)["detour"] != "proxy" {
+			t.Fatal("DNS must use proxy")
+		}
+	}
 	proxy := outbounds[0].(map[string]any)
 	if proxy["type"] != "socks" {
 		t.Fatalf("outbound type = %v", proxy["type"])
