@@ -10,8 +10,10 @@ import tempfile
 
 
 def main():
-    if os.geteuid() != 0 or os.readlink("/proc/self/ns/mnt") == os.readlink("/proc/1/ns/mnt"):
+    if os.geteuid() != 0 or any(os.readlink(f"/proc/self/ns/{kind}") == os.readlink(f"/proc/1/ns/{kind}") for kind in ("mnt", "net")):
         raise SystemExit("requires a private root mount namespace")
+    subprocess.run(["ip", "link", "set", "lo", "up"], check=True)
+    original_root_mode = Path("/").stat().st_mode
     script = Path(__file__).resolve().parent / "update.sh"
     with tempfile.TemporaryDirectory(prefix="s2l-update-test-") as tmp:
         root = Path(tmp)
@@ -27,7 +29,13 @@ def main():
             tools = root / "tools"
             tools.mkdir()
             mocks = {
-                "go": '[[ "${FAIL_BUILD:-0}" != 1 ]] || exit 1; cp /bin/true "$3"',
+                "go": r'''[[ "${FAIL_BUILD:-0}" != 1 ]] || exit 1
+cat > "$3" <<'BINARY'
+#!/bin/bash
+echo guard-only >> "$S2L_TEST_LOG"
+exit 0
+BINARY
+chmod 755 "$3"''',
                 "systemctl": r'''echo "$*" >> "$S2L_TEST_LOG"
 case "$1" in
 is-active) [[ -f "$S2L_TEST_STATE/${@: -1}" ]] ;;
@@ -87,6 +95,7 @@ exec /usr/bin/install "$@"''',
                     assert "stop" not in log.read_text(), "build failure stopped live services"
                     assert binary.read_bytes() == old_binary
                 elif scenario == "success_stopped":
+                    assert log.read_text().index("guard-only") < log.read_text().index("stop xl2tpd"), "PPP was stopped before guards were installed"
                     assert binary.read_bytes() != old_binary
                     assert not (state / "s2l").exists(), "stopped service was started"
                     assert not (state / "xl2tpd").exists()
@@ -97,6 +106,7 @@ exec /usr/bin/install "$@"''',
                     assert Path("/etc/systemd/system/s2l.service").read_text() == "original-unit"
                     assert not (state / "s2l").exists() and not (state / "xl2tpd").exists()
                     assert Path("/etc/systemd/system/xl2tpd.service.d/s2l.conf").exists(), "rollback removed boot guard"
+                assert Path("/").stat().st_mode == original_root_mode, "upgrade changed root directory permissions"
                 print(f"PASS: {scenario}")
         finally:
             for target in reversed(mounted):

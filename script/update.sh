@@ -59,6 +59,8 @@ echo "[INFO] 构建完成；短暂停止拨号并备份到 $backup ..."
 systemctl is-active --quiet s2l && was_s2l=1 || true
 systemctl is-active --quiet xl2tpd && was_l2tp=1 || true
 changed=1
+# Block PPP before removing old routes, including upgrades from unguarded versions.
+"$work/s2l" -guard-only
 systemctl stop xl2tpd
 systemctl stop s2l
 cp -a /opt/s2l "$backup/app"
@@ -71,7 +73,6 @@ for file in /usr/local/bin/s2l /etc/systemd/system/s2l.service /etc/systemd/syst
   fi
 done
 snapshot=1
-"$work/s2l" -guard-only
 iptables-save > "$backup/iptables.v4"
 ip6tables-save > "$backup/iptables.v6"
 printf '%s\n' "${S2L_REF:-reviewed-checkout}" > "$backup/requested-ref.txt"
