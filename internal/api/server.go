@@ -19,6 +19,7 @@ type Server struct {
 	svc        *service.MappingService
 	webFS      fs.FS // web/dist 内容；可为 nil（仅 API）
 	settingsMu sync.Mutex
+	mutationMu sync.Mutex
 	authMu     sync.RWMutex
 	configPath string
 	adminUser  string
@@ -81,7 +82,29 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 
-	return s.withAuth(mux)
+	return s.withAuth(s.withMutations(mux))
+}
+
+// Keep validation and writes atomic across API requests. State edits also share
+// the lifecycle lock so a node/mapping cannot change while Start reads it.
+func (s *Server) withMutations(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resource := r.URL.Path == "/api/nodes" || strings.HasPrefix(r.URL.Path, "/api/nodes/") ||
+			r.URL.Path == "/api/mappings" || strings.HasPrefix(r.URL.Path, "/api/mappings/")
+		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasSuffix(r.URL.Path, "/speedtest") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		s.mutationMu.Lock()
+		defer s.mutationMu.Unlock()
+		lifecycle := strings.HasPrefix(r.URL.Path, "/api/mappings/") &&
+			(r.Method == http.MethodDelete || strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/action"))
+		if s.svc != nil && !lifecycle {
+			s.svc.SynchronizeState(func() { next.ServeHTTP(w, r) })
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) withAuth(next http.Handler) http.Handler {

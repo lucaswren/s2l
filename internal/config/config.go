@@ -36,7 +36,7 @@ func Default() Config {
 	}
 }
 
-// Load 从 JSON 文件加载；文件不存在则返回默认配置。
+// Load 从指定 JSON 文件加载；未指定路径时返回默认配置。
 func Load(path string) (Config, error) {
 	cfg := Default()
 	if path == "" {
@@ -44,10 +44,10 @@ func Load(path string) (Config, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
-		}
 		return cfg, err
+	}
+	if strings.TrimSpace(string(data)) == "null" {
+		return cfg, fmt.Errorf("config must be a JSON object")
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return cfg, err

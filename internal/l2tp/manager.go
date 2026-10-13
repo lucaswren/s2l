@@ -21,7 +21,7 @@ func NewManager(chapPath, confPath, optionsPath string) *Manager {
 }
 
 // ApplyStart 写入账号并同步 xl2tpd 配置（active 为全部应对外暴露的运行中映射）
-// 返回 (hardErr, reloadErr)：hardErr 必须失败；reloadErr 仅警告。
+// 返回 (hardErr, reloadErr)：任一错误均由服务层处理为启动失败。
 func (m *Manager) ApplyStart(mapping model.TunnelMapping, active []model.TunnelMapping) (error, error) {
 	if err := m.Chap.Upsert(mapping); err != nil {
 		return fmt.Errorf("chap-secrets: %w", err), nil

@@ -21,6 +21,8 @@ An L2TP/PPP client connects to xl2tpd. S2L associates mapping credentials and an
 
 Start with `config.example.json`; run `./bin/s2l -config /path/to/config.json` only on a suitable test host. Relative `data_dir` is resolved from the working directory; the installed service works in `/opt/s2l`.
 
+Omitting `-config` uses defaults. An explicitly specified file must exist and contain a JSON object; a missing file or `null` stops startup instead of silently using defaults.
+
 | Key | Default / purpose |
 |---|---|
 | `listen` | `127.0.0.1:8080`, backend HTTP listener |

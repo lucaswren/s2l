@@ -72,12 +72,34 @@ func (s *MappingService) RestoreRunning() {
 	}
 	log.Printf("restore: bringing up %d mapping(s)...", len(ids))
 	for _, id := range ids {
-		if err := s.Start(id); err != nil {
+		restored, err := s.restoreMapping(id)
+		if !restored {
+			continue
+		}
+		if err != nil {
 			log.Printf("restore: mapping %s failed: %v", id, err)
 			continue
 		}
 		log.Printf("restore: mapping %s ok", id)
 	}
+}
+
+func (s *MappingService) restoreMapping(id string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, ok := s.store.GetMapping(id)
+	if !ok || m.Status != model.StatusRunning || s.shuttingDown {
+		return false, nil
+	}
+	return true, s.startLocked(id)
+}
+
+// SynchronizeState coordinates API state edits with startup and recovery.
+// The callback must not call lifecycle methods, which acquire the same lock.
+func (s *MappingService) SynchronizeState(change func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	change()
 }
 
 // Start 启动一条映射：L2TP → sing-box → 策略路由/iptables

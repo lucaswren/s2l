@@ -12,8 +12,12 @@ import (
 )
 
 var tunNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,15}$`)
+var idPattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
 func validateSocksNode(n model.SocksNode) error {
+	if n.ID != "" && (!idPattern.MatchString(n.ID) || n.ID == "." || n.ID == "..") {
+		return fmt.Errorf("node id must be 1-128 letters, digits, '.', '_' or '-'")
+	}
 	host, portText, err := net.SplitHostPort(strings.TrimSpace(n.Addr))
 	if err != nil || host == "" {
 		return fmt.Errorf("addr must be host:port")
@@ -29,7 +33,7 @@ func validateSocksNode(n model.SocksNode) error {
 }
 
 func validateMapping(m model.TunnelMapping) error {
-	if m.ID != "" && !regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`).MatchString(m.ID) {
+	if m.ID != "" && (!idPattern.MatchString(m.ID) || m.ID == "." || m.ID == "..") {
 		return fmt.Errorf("mapping id must be 1-128 letters, digits, '.', '_' or '-'")
 	}
 	if m.NodeID == "" || m.TunName == "" || m.Subnet == "" || m.L2TPUser == "" || m.L2TPPass == "" {

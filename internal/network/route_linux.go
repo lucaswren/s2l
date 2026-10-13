@@ -15,7 +15,7 @@ import (
 //
 //	ip rule add from <Subnet> table <TableID>
 //	ip route add default dev <TunName> table <TableID>
-func AddPolicyRoute(m model.TunnelMapping) error {
+func AddPolicyRoute(m model.TunnelMapping) (result error) {
 	if err := validateMapping(m); err != nil {
 		return err
 	}
@@ -25,6 +25,11 @@ func AddPolicyRoute(m model.TunnelMapping) error {
 	if err := DelPolicyRoute(m); err != nil {
 		return fmt.Errorf("clear old policy route: %w", err)
 	}
+	defer func() {
+		if result != nil {
+			result = errors.Join(result, DelPolicyRoute(m))
+		}
+	}()
 
 	if err := run("ip", "route", "add", "unreachable", "default", "metric", "32767", "table", table); err != nil {
 		return err
@@ -33,9 +38,7 @@ func AddPolicyRoute(m model.TunnelMapping) error {
 		return err
 	}
 	if err := run("ip", "route", "add", "default", "dev", m.TunName, "metric", "100", "table", table); err != nil {
-		// 回滚 rule，避免残留半套规则
-		rollbackErr := run("ip", "rule", "del", "from", m.Subnet, "table", table)
-		return errors.Join(err, rollbackErr)
+		return err
 	}
 	return nil
 }

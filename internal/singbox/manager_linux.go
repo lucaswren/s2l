@@ -23,10 +23,9 @@ type Manager struct {
 }
 
 type managedProc struct {
-	cmd    *exec.Cmd
-	pid    int
-	config string
-	done   chan struct{}
+	cmd  *exec.Cmd
+	pid  int
+	done chan struct{}
 }
 
 // NewManager 创建进程管理器。binPath 为空时默认使用 PATH 中的 "sing-box"。
@@ -49,7 +48,7 @@ func (m *Manager) Start(node model.SocksNode, mapping model.TunnelMapping) error
 		return fmt.Errorf("tun_name is required")
 	}
 	if p, ok := m.procs[mapping.TunName]; ok && p.cmd.Process != nil {
-		if alive(p.pid) {
+		if p.running() {
 			return fmt.Errorf("sing-box for %s already running (pid=%d)", mapping.TunName, p.pid)
 		}
 		delete(m.procs, mapping.TunName)
@@ -81,23 +80,22 @@ func (m *Manager) Start(node model.SocksNode, mapping model.TunnelMapping) error
 	_ = logFile.Close()
 
 	proc := &managedProc{
-		cmd:    cmd,
-		pid:    cmd.Process.Pid,
-		config: cfgPath,
-		done:   make(chan struct{}),
+		cmd:  cmd,
+		pid:  cmd.Process.Pid,
+		done: make(chan struct{}),
 	}
 	m.procs[mapping.TunName] = proc
+	go m.reap(mapping.TunName, proc)
 
 	// 短暂观察，避免配置错误导致瞬间退出未被发现
-	time.Sleep(500 * time.Millisecond)
-	if !alive(cmd.Process.Pid) {
-		_ = cmd.Wait()
+	select {
+	case <-proc.done:
 		delete(m.procs, mapping.TunName)
 		_ = RemoveConfig(mapping.TunName)
 		return fmt.Errorf("sing-box for %s exited immediately, see %s and %s", mapping.TunName, cfgPath, logPath)
+	case <-time.After(500 * time.Millisecond):
 	}
 
-	go m.reap(mapping.TunName, proc)
 	return nil
 }
 
@@ -117,6 +115,10 @@ func (m *Manager) stopLocked(tunName string) error {
 	}
 
 	pid := p.pid
+	if !p.running() {
+		delete(m.procs, tunName)
+		return RemoveConfig(tunName)
+	}
 	if err := syscall.Kill(-pid, syscall.SIGTERM); err != nil {
 		_ = p.cmd.Process.Signal(syscall.SIGTERM)
 	}
@@ -147,7 +149,7 @@ func (m *Manager) PID(tunName string) int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	p, ok := m.procs[tunName]
-	if !ok || !alive(p.pid) {
+	if !ok || !p.running() {
 		return 0
 	}
 	return p.pid
@@ -159,7 +161,7 @@ func (m *Manager) PIDs() map[string]int {
 	defer m.mu.Unlock()
 	out := make(map[string]int, len(m.procs))
 	for name, p := range m.procs {
-		if alive(p.pid) {
+		if p.running() {
 			out[name] = p.pid
 		}
 	}
@@ -190,13 +192,11 @@ func (m *Manager) reap(tunName string, p *managedProc) {
 	}
 }
 
-func alive(pid int) bool {
-	if pid <= 0 {
+func (p *managedProc) running() bool {
+	select {
+	case <-p.done:
 		return false
+	default:
+		return true
 	}
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		return false
-	}
-	return proc.Signal(syscall.Signal(0)) == nil
 }

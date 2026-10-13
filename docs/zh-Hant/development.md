@@ -8,6 +8,8 @@ L2TP/PPP 用戶端連至 xl2tpd；S2L 將映射帳密與 IPv4 子網連結至 si
 
 ## 設定
 
+未指定 `-config` 時使用預設設定；明確指定的檔案必須存在且內容為 JSON 物件。檔案不存在或內容為 `null` 時會停止啟動，不會悄悄改用預設值。
+
 以 `config.example.json` 為起點，在合適測試主機使用 `./bin/s2l -config /path/to/config.json`。`listen` 預設 `127.0.0.1:8080`；`admin_user` 與 `admin_pass` 須一起設定，密碼至少 12 字元。範例帳密空白，只允許本機監聽，但反向代理仍可能將未驗證的服務公開，代理前必須設定帳密。
 
 `singbox_bin` 程序預設為 `sing-box`，範例為 `/usr/local/bin/sing-box`；`data_dir` 預設 `./data`，相對於工作目錄，含 `state.json`。安裝服務工作目錄為 `/opt/s2l`。`chap_secrets`、`xl2tpd_conf`、`ppp_options` 分別預設 `/etc/ppp/chap-secrets`、`/etc/xl2tpd/xl2tpd.conf`、`/etc/ppp/options.xl2tpd`。`auto_restore` 預設 `true`，恢復已保存為 `running` 的映射。腳本管理的 `public_url` 等中繼資料不屬於 Go `Config` 欄位。
