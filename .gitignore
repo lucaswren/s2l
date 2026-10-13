@@ -11,3 +11,23 @@ __pycache__/
 /config.json
 .vscode/
 .DS_Store
+
+# Local IDE and AI tool state
+*.iml
+.cursor/
+.claude/
+.codex/
+.gemini/
+.qwen/
+.windsurf/
+.continue/
+.roo/
+.cline/
+.aider*
+
+# Local caches and OS metadata
+.pytest_cache/
+.vite/
+.vite-temp/
+Thumbs.db
+Desktop.ini
