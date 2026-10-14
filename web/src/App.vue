@@ -25,6 +25,8 @@ const helpVisible = ref(false);
 const q = ref("");
 let timer;
 const refreshing = ref(false);
+let refreshPending = false;
+let disposed = false;
 
 const runningCount = computed(
   () => mappings.value.filter((m) => m.status === "running").length,
@@ -71,7 +73,11 @@ function pushToast({ type = "info", message }) {
 }
 
 async function refresh() {
-  if (refreshing.value) return;
+  if (refreshing.value) {
+    refreshPending = true;
+    return;
+  }
+  if (disposed) return;
   refreshing.value = true;
   try {
     const [n, m, st] = await Promise.all([
@@ -79,6 +85,7 @@ async function refresh() {
       api.listMappings(),
       api.status(),
     ]);
+    if (disposed) return;
     nodes.value = Array.isArray(n) ? n : [];
     mappings.value = Array.isArray(m) ? m : [];
     status.value = {
@@ -92,6 +99,10 @@ async function refresh() {
     error.value = e.message;
   } finally {
     refreshing.value = false;
+    if (refreshPending && !disposed) {
+      refreshPending = false;
+      void refresh();
+    }
   }
 }
 
@@ -109,7 +120,7 @@ onMounted(() => {
   refresh();
   timer = setInterval(refresh, 5000);
 });
-onUnmounted(() => clearInterval(timer));
+onUnmounted(() => { disposed = true; clearInterval(timer); });
 </script>
 <template>
   <el-config-provider size="default">

@@ -48,3 +48,5 @@ func (c *Controller) ActiveCount() int {
 }
 
 func (c *Controller) EnsureGuard() error { return fmt.Errorf("PPP guards require Linux") }
+
+func TunePeers(model.TunnelMapping) error { return nil }

@@ -22,6 +22,12 @@ jobs:
         with:
           python-version: '3.x'
       - run: go test -race ./...
+      - name: Validate runtime configurations with pinned sing-box
+        shell: bash
+        run: |
+          curl -fL --retry 2 --connect-timeout 15 --max-time 180 https://github.com/SagerNet/sing-box/releases/download/v1.11.15/sing-box-1.11.15-linux-amd64.tar.gz -o "$RUNNER_TEMP/sing-box.tgz"
+          tar -xzf "$RUNNER_TEMP/sing-box.tgz" -C "$RUNNER_TEMP"
+          S2L_SINGBOX_CHECK_BIN="$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" go test ./internal/singbox -run TestSingBoxRuntimeConfigCheck -v
       - name: Verify leak protection in isolated Linux networking
         run: |
           sudo apt-get update -qq

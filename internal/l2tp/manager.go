@@ -3,26 +3,32 @@ package l2tp
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/lucaswren/s2l/internal/model"
 )
 
 // Manager 统一管理 chap-secrets + xl2tpd.conf + 服务重载
 type Manager struct {
+	mu   sync.Mutex
 	Chap *ChapManager
 	Conf *ConfManager
 }
 
 func NewManager(chapPath, confPath, optionsPath string) *Manager {
-	return &Manager{
+	m := &Manager{
 		Chap: NewChapManager(chapPath),
 		Conf: NewConfManager(confPath, optionsPath, chapPath),
 	}
+	m.Conf.beforeChange = AllowStructuralChange
+	return m
 }
 
 // ApplyStart 写入账号并同步 xl2tpd 配置（active 为全部应对外暴露的运行中映射）
 // 返回 (hardErr, reloadErr)：任一错误均由服务层处理为启动失败。
 func (m *Manager) ApplyStart(mapping model.TunnelMapping, active []model.TunnelMapping) (error, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if err := m.Chap.Upsert(mapping); err != nil {
 		return fmt.Errorf("chap-secrets: %w", err), nil
 	}
@@ -32,18 +38,20 @@ func (m *Manager) ApplyStart(mapping model.TunnelMapping, active []model.TunnelM
 		rollbackErr := errors.Join(rollbackChapErr, rollbackConfErr)
 		return errors.Join(fmt.Errorf("xl2tpd.conf: %w", err), rollbackErr), nil
 	}
-	return nil, Reload()
+	return nil, EnsureDaemon(m.Conf.Changed())
 }
 
 // ApplyStop 移除账号并同步配置
 func (m *Manager) ApplyStop(mappingID string, active []model.TunnelMapping) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if err := m.Chap.Remove(mappingID); err != nil {
 		return fmt.Errorf("chap-secrets: %w", err)
 	}
 	if err := m.Conf.Sync(active); err != nil {
 		return fmt.Errorf("xl2tpd.conf: %w", err)
 	}
-	if err := Reload(); err != nil {
+	if err := EnsureDaemon(m.Conf.Changed()); err != nil {
 		return fmt.Errorf("reload xl2tpd: %w", err)
 	}
 	return nil
@@ -61,8 +69,10 @@ func activeWithout(active []model.TunnelMapping, id string) []model.TunnelMappin
 
 // SyncConfOnly 仅重写 xl2tpd.conf（开机恢复批量用）
 func (m *Manager) SyncConfOnly(active []model.TunnelMapping) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if err := m.Conf.Sync(active); err != nil {
 		return err
 	}
-	return Reload()
+	return EnsureDaemon(m.Conf.Changed())
 }

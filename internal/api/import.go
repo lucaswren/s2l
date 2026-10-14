@@ -112,8 +112,9 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	maps := req.Mappings
+	textImport := len(maps) == 0 && strings.TrimSpace(req.Text) != ""
 	parseErrs := []string{}
-	if len(maps) == 0 && strings.TrimSpace(req.Text) != "" {
+	if textImport {
 		maps, parseErrs = parseMappingText(req.Text, s)
 	}
 	res := importResult{Errors: append([]string{}, parseErrs...)}
@@ -156,6 +157,12 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 				res.Skipped++
 				res.Errors = append(res.Errors, fmt.Sprintf("row %d: mapping %s is running, stop first", i+1, m.ID))
 				continue
+			}
+			// The documented text format has no network tuning columns.
+			// Updating credentials through it must preserve existing tuning.
+			if textImport {
+				m.MTU, m.MSS, m.QueueLength = existing.MTU, existing.MSS, existing.QueueLength
+				m.UDPPolicy, m.DNSMode = existing.UDPPolicy, existing.DNSMode
 			}
 			m.Status = existing.Status
 		} else {

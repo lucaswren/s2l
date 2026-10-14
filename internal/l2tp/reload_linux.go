@@ -3,33 +3,66 @@
 package l2tp
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
-// Reload 触发 xl2tpd 加载最新配置；若服务已 failed 则 restart。
-func Reload() error {
-	if err := os.MkdirAll("/var/run/xl2tpd", 0o755); err != nil {
+// Credentials are read by each new pppd session. Mapping/comment updates do
+// not require restarting xl2tpd, whose upstream SIGHUP handler is a no-op.
+func Reload() error { return EnsureDaemon(false) }
+
+func AllowStructuralChange() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	active, err := daemonActive(ctx)
+	if err != nil {
 		return err
 	}
-	stateOut, _ := exec.Command("systemctl", "is-active", "xl2tpd").CombinedOutput()
-	state := strings.TrimSpace(string(stateOut))
-
-	if state == "active" {
-		if out, err := exec.Command("systemctl", "reload", "xl2tpd").CombinedOutput(); err == nil {
-			return nil
-		} else {
-			// reload 不支持时走 restart
-			_ = out
-		}
+	if active {
+		return fmt.Errorf("xl2tpd global configuration changed; stop xl2tpd in a maintenance window before retrying")
 	}
+	return nil
+}
 
-	// failed / inactive / reload 失败：强制拉起
-	_ = exec.Command("pkill", "-x", "xl2tpd").Run()
-	if out, err := exec.Command("systemctl", "restart", "xl2tpd").CombinedOutput(); err != nil {
-		return fmt.Errorf("restart xl2tpd: %v (%s)", err, strings.TrimSpace(string(out)))
+func daemonActive(ctx context.Context) (bool, error) {
+	state, err := exec.CommandContext(ctx, "systemctl", "is-active", "xl2tpd").CombinedOutput()
+	if ctx.Err() != nil {
+		return false, fmt.Errorf("check xl2tpd state: %w", ctx.Err())
+	}
+	switch strings.TrimSpace(string(state)) {
+	case "active":
+		if err == nil {
+			return true, nil
+		}
+	case "inactive", "failed":
+		return false, nil
+	case "activating", "deactivating", "reloading":
+		return false, fmt.Errorf("xl2tpd is changing state; retry later")
+	}
+	return false, fmt.Errorf("cannot determine xl2tpd state: %v (%s)", err, strings.TrimSpace(string(state)))
+}
+func EnsureDaemon(structuralChange bool) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	active, err := daemonActive(ctx)
+	if err != nil {
+		return err
+	}
+	if active {
+		if structuralChange {
+			return fmt.Errorf("xl2tpd global configuration changed; stop xl2tpd during a maintenance window and retry; existing sessions were not restarted")
+		}
+		return nil
+	}
+	if err := os.MkdirAll("/var/run/xl2tpd", 0755); err != nil {
+		return err
+	}
+	if out, err := exec.CommandContext(ctx, "systemctl", "start", "xl2tpd").CombinedOutput(); err != nil {
+		return fmt.Errorf("start xl2tpd: %v (%s)", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

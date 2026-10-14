@@ -57,11 +57,25 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(s.path), ".s2l-state-*")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	defer os.Remove(f.Name())
+	if err = f.Chmod(0o600); err == nil {
+		_, err = f.Write(data)
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return os.Rename(f.Name(), s.path)
 }
 
 func cloneState(in model.AppState) model.AppState {

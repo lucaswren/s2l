@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log"
 	"net"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 )
 
 // HTTPS termination is trusted only when the immediate peer is loopback.
@@ -62,7 +64,11 @@ func (s *Server) handleSSHPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Limit this endpoint to the existing root account; never accept a shell command or user name.
-	output, err := exec.Command("passwd", "--status", "root").Output()
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	statusCmd := exec.CommandContext(ctx, "passwd", "--status", "root")
+	statusCmd.WaitDelay = time.Second
+	output, err := statusCmd.Output()
 	fields := strings.Fields(string(output))
 	if err != nil || len(fields) < 2 || fields[0] != "root" {
 		writeError(w, 500, "无法读取 root 账号状态")
@@ -72,7 +78,8 @@ func (s *Server) handleSSHPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 409, "root 账号已锁定，请通过 SSH 或服务器控制台处理")
 		return
 	}
-	cmd := exec.Command("chpasswd")
+	cmd := exec.CommandContext(ctx, "chpasswd")
+	cmd.WaitDelay = time.Second
 	cmd.Stdin = strings.NewReader("root:" + body.Password + "\n")
 	// Passwords never appear in command arguments, application logs, or responses.
 	if cmd.Run() != nil {

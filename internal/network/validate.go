@@ -11,6 +11,9 @@ import (
 var interfaceNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,15}$`)
 
 func ValidateMapping(m model.TunnelMapping) error {
+	if err := m.ValidateOptions(); err != nil {
+		return err
+	}
 	if m.TunName == "" {
 		return fmt.Errorf("tun_name is required")
 	}

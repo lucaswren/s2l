@@ -3,16 +3,17 @@ export function clearCredentials() {
 }
 let authorization = "";
 export function setCredentials(user, password) {
-  authorization = "Basic " + btoa(user + ":" + password);
+  const bytes = new TextEncoder().encode(user + ":" + password);
+  authorization = "Basic " + btoa(String.fromCharCode(...bytes));
 }
 async function request(path, options = {}) {
   const res = await fetch(path, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
       ...(authorization ? { Authorization: authorization } : {}),
       ...(options.headers || {}),
     },
-    ...options,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -40,6 +41,7 @@ export const api = {
 
   listMappings: () => request("/api/mappings"),
   getMapping: (id) => request(`/api/mappings/${id}`),
+	 diagnoseMapping: (id, url) => request(`/api/mappings/${id}/diagnose`, {method:"POST",body:JSON.stringify({url})}),
   saveMapping: (body) =>
     request("/api/mappings", { method: "POST", body: JSON.stringify(body) }),
   deleteMapping: (id) => request(`/api/mappings/${id}`, { method: "DELETE" }),

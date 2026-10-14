@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { ElMessageBox } from "element-plus";
 import MappingActions from "./MappingActions.vue";
+import Diagnostics from "./Diagnostics.vue";
 import { api } from "../api/client";
 
 const props = defineProps({
@@ -11,6 +12,7 @@ const props = defineProps({
 });
 const emit = defineEmits(["changed", "toast"]);
 
+const diagnosticMapping = ref(null);
 const mode = ref(""); // '' | edit | import
 const editingId = ref("");
 const busy = ref(false);
@@ -24,6 +26,7 @@ const form = reactive({
   subnet: "10.0.101.0/24",
   l2tp_user: "",
   l2tp_pass: "",
+  mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject-quic", dns_mode: "auto",
 });
 const importText = ref("");
 const importErrors = ref([]);
@@ -74,6 +77,7 @@ function resetForm() {
     subnet: `10.0.${id % 256}.0/24`,
     l2tp_user: `l2tp${id}`,
     l2tp_pass: "",
+  mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject-quic", dns_mode: "auto",
   });
 }
 
@@ -101,6 +105,7 @@ async function openEdit(m) {
     subnet: m.subnet,
     l2tp_user: m.l2tp_user || "",
     l2tp_pass: m.l2tp_pass || "",
+    mtu: m.mtu || 1400, mss: m.mss || 1200, queue_length: m.queue_length || 1000, udp_policy: m.udp_policy || "reject-quic", dns_mode: m.dns_mode || "auto",
   });
   mode.value = "edit";
 }
@@ -205,6 +210,7 @@ const editingRunning = computed(() => {
 </script>
 <template>
   <section>
+    <Diagnostics :mapping="diagnosticMapping" @close="diagnosticMapping = null" />
     <div class="section-head">
       <div>
         <h2>隧道映射</h2>
@@ -264,11 +270,12 @@ const editingRunning = computed(() => {
             {{ row.error_msg }}
           </div></template
         ></el-table-column
-      ><el-table-column label="操作" width="220" fixed="right"
+      ><el-table-column label="操作" width="290" fixed="right"
         ><template #default="{ row }"
           ><MappingActions
             :mapping="row"
             :action-id="actionId"
+            @diagnose="diagnosticMapping = $event"
             @edit="openEdit"
             @action="action"
             @remove="remove" /></template></el-table-column
@@ -311,7 +318,8 @@ const editingRunning = computed(() => {
           class="section-gap" /><MappingActions
           :mapping="m"
           :action-id="actionId"
-          @edit="openEdit"
+          @diagnose="diagnosticMapping = $event"
+            @edit="openEdit"
           @action="action"
           @remove="remove"
       /></el-card>
@@ -385,7 +393,14 @@ const editingRunning = computed(() => {
               show-password
               :readonly="editingRunning"
               autocomplete="new-password"
-          /></el-form-item></div></el-form
+          /></el-form-item>
+          <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingRunning" /></el-form-item>
+          <el-form-item label="TCP MSS"><el-input-number v-model="form.mss" :min="536" :max="form.mtu - 40" :disabled="editingRunning" /></el-form-item>
+          <el-form-item label="接口队列长度"><el-input-number v-model="form.queue_length" :min="100" :max="10000" :disabled="editingRunning" /></el-form-item>
+          <el-form-item label="UDP 策略"><el-select v-model="form.udp_policy" :disabled="editingRunning"><el-option value="reject-quic" label="拒绝 UDP/443，支持时回退 TCP" /><el-option value="allow" label="允许 UDP（需上游支持）" /><el-option value="reject" label="拒绝其他 UDP（保留 53 端口 DNS）" /></el-select></el-form-item>
+          <el-form-item label="DNS 模式" class="form-wide"><el-select v-model="form.dns_mode" :disabled="editingRunning"><el-option value="auto" label="自动：DoH 故障时切换 TCP DNS" /><el-option value="doh" label="仅 DoH" /><el-option value="tcp" label="仅 TCP DNS" /></el-select></el-form-item>
+          <p class="muted form-wide">默认 MTU 1400、MSS 1200。减小 MTU 时请同步调整 MSS；允许 UDP 无法为不支持 UDP 的节点增加能力。</p>
+          </div></el-form
       ><template #footer
         ><el-button v-if="!editingId" :disabled="busy" @click="applyPreset"
           >按路由表填充</el-button

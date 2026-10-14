@@ -12,6 +12,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
+	if s.svc == nil {
+		writeError(w, http.StatusServiceUnavailable, "mapping service unavailable")
+		return
+	}
 	st := s.svc.Status()
 	mappings := redactMappings(st.Mappings)
 	if mappings == nil {

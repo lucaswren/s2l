@@ -49,7 +49,10 @@ func TunInet4Address(tableID int) string {
 // GenerateConfig 根据 SOCKS5 节点与映射生成 sing-box JSON 配置内容。
 // Resolve intercepted DNS via the SOCKS5 upstream using DoH and TCP DNS.
 // This avoids depending on SOCKS5 UDP support for DNS resolution.
-func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, error) {
+func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverAddress ...string) ([]byte, error) {
+	if err := mapping.ValidateOptions(); err != nil {
+		return nil, err
+	}
 	host, portStr, err := net.SplitHostPort(strings.TrimSpace(node.Addr))
 	if err != nil {
 		return nil, fmt.Errorf("invalid socks addr %q: %w", node.Addr, err)
@@ -88,16 +91,14 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, 
 		},
 		"inbounds": []map[string]any{
 			{
-				"type":                       "tun",
-				"tag":                        "tun-in",
-				"interface_name":             mapping.TunName,
-				"address":                    []string{TunInet4Address(mapping.TableID)},
-				"mtu":                        1400,
-				"auto_route":                 false,
-				"strict_route":               false,
-				"stack":                      "system",
-				"sniff":                      true,
-				"sniff_override_destination": true,
+				"type":           "tun",
+				"tag":            "tun-in",
+				"interface_name": mapping.TunName,
+				"address":        []string{TunInet4Address(mapping.TableID)},
+				"mtu":            mapping.EffectiveMTU(),
+				"auto_route":     false,
+				"strict_route":   false,
+				"stack":          "system",
 			},
 		},
 		"outbounds": []map[string]any{
@@ -119,6 +120,24 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, 
 			"auto_detect_interface": true,
 			"rules": []map[string]any{
 				{
+					"port":   53,
+					"action": "hijack-dns",
+				},
+				// Avoid QUIC black holes on SOCKS5 relays with unreliable UDP.
+				// Keep other UDP applications on the selected upstream.
+				{
+					"network": "udp",
+					"port":    443,
+					"action":  "reject",
+					"method":  "default",
+					"no_drop": true,
+				},
+				// Sniff only after early TUN rejection so UDP receives ICMP
+				// rather than closing an already assembled packet connection.
+				{
+					"action": "sniff",
+				},
+				{
 					"protocol": "dns",
 					"action":   "hijack-dns",
 				},
@@ -126,6 +145,28 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, 
 			"final": "proxy",
 		},
 	}
+	if len(resolverAddress) > 0 {
+		host, portText, err := net.SplitHostPort(resolverAddress[0])
+		resolverPort, portErr := strconv.Atoi(portText)
+		if err != nil || host != "127.0.0.1" || portErr != nil || resolverPort < 1 || resolverPort > 65535 {
+			return nil, fmt.Errorf("DNS resolver must be on IPv4 loopback")
+		}
+		cfg["dns"] = map[string]any{
+			"servers": []map[string]any{{"tag": "local-proxy", "address": "tcp://" + resolverAddress[0], "strategy": "ipv4_only", "detour": "dns-loopback"}},
+			"final":   "local-proxy", "strategy": "ipv4_only", "independent_cache": true,
+		}
+		// DNS-only direct dialer is pinned to the private loopback resolver.
+		cfg["outbounds"] = append(cfg["outbounds"].([]map[string]any), map[string]any{"type": "direct", "tag": "dns-loopback", "override_address": "127.0.0.1", "override_port": resolverPort})
+	}
+	route := cfg["route"].(map[string]any)
+	rules := route["rules"].([]map[string]any)
+	switch mapping.EffectiveUDPPolicy() {
+	case "allow":
+		rules = append(rules[:1], rules[2:]...)
+	case "reject":
+		delete(rules[1], "port")
+	}
+	route["rules"] = rules
 
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
@@ -135,8 +176,8 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping) ([]byte, 
 }
 
 // WriteConfig writes credentials only inside the private runtime directory.
-func WriteConfig(node model.SocksNode, mapping model.TunnelMapping) (string, error) {
-	data, err := GenerateConfig(node, mapping)
+func WriteConfig(node model.SocksNode, mapping model.TunnelMapping, resolverAddress ...string) (string, error) {
+	data, err := GenerateConfig(node, mapping, resolverAddress...)
 	if err != nil {
 		return "", err
 	}

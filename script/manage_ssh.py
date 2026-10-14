@@ -23,12 +23,12 @@ INCLUDE_LINE = re.compile(r"^\s*Include(?:\s+|=)\s*(.*)$", re.IGNORECASE)
 
 
 def run(*args):
-    result = subprocess.run(args, capture_output=True, text=True, check=True)
+    result = subprocess.run(args, capture_output=True, text=True, check=True, timeout=20)
     return result.stdout
 
 
 def active(unit):
-    return subprocess.run(["systemctl", "is-active", "--quiet", unit]).returncode == 0
+    return subprocess.run(["systemctl", "is-active", "--quiet", unit], timeout=20).returncode == 0
 
 
 def config_files(path, visited=None):
@@ -133,7 +133,7 @@ def change_port(value):
                 return
             time.sleep(0.2)
         raise RuntimeError("新 SSH 端口未正常监听")
-    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         for path, data in originals.items():
             if data is None:
                 path.unlink(missing_ok=True)
@@ -142,7 +142,7 @@ def change_port(value):
         if runtime_changed:
             try:
                 apply_runtime(service, socket_enabled)
-            except (OSError, subprocess.CalledProcessError):
+            except (OSError, subprocess.SubprocessError):
                 raise RuntimeError(f"原配置已恢复，但 SSH 重载失败；请通过服务器控制台检查，备份：{BACKUP}") from error
         raise RuntimeError("修改失败，已恢复原 SSH 配置") from error
 
@@ -150,6 +150,6 @@ def change_port(value):
 if __name__ == "__main__":
     try:
         change_port(sys.stdin.read())
-    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"SSH 端口修改失败：{error}", file=sys.stderr)
         sys.exit(1)

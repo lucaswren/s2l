@@ -33,6 +33,9 @@ func validateSocksNode(n model.SocksNode) error {
 }
 
 func validateMapping(m model.TunnelMapping) error {
+	if err := m.ValidateOptions(); err != nil {
+		return err
+	}
 	if m.ID != "" && (!idPattern.MatchString(m.ID) || m.ID == "." || m.ID == "..") {
 		return fmt.Errorf("mapping id must be 1-128 letters, digits, '.', '_' or '-'")
 	}

@@ -74,6 +74,15 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	if err := AddFirewall(m); err != nil {
 		t.Fatal(err)
 	}
+	for i := 0; i < 2; i++ {
+		if err := addMappingTCPMSS(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mssRules, err := output("iptables", "-t", "mangle", "-S", "FORWARD")
+	if err != nil || strings.Count(mssRules, mappingComment(m)+"-mss") != 2 {
+		t.Fatalf("MSS protection must cover both PPP directions once: %s %v", mssRules, err)
+	}
 	route, err := output("ip", "route", "get", "198.18.0.2", "from", "10.0.101.2", "iif", "ppp0")
 	if err != nil || !strings.Contains(route, "dev tun101") {
 		t.Fatalf("healthy routing: %s %v", route, err)
@@ -102,6 +111,10 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	ping("198.18.0.2", false)
 	if err := DelFirewall(m); err != nil {
 		t.Fatal(err)
+	}
+	mssRules, err = output("iptables", "-t", "mangle", "-S", "FORWARD")
+	if err != nil || strings.Contains(mssRules, mappingComment(m)+"-mss") {
+		t.Fatalf("MSS cleanup failed: %s %v", mssRules, err)
 	}
 	if err := DelPolicyRoute(m); err != nil {
 		t.Fatal(err)

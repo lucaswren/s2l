@@ -20,7 +20,7 @@ import (
 type HealthReport struct{ TCP, UDP, DNS model.ProtocolHealth }
 
 // All target traffic is carried by SOCKS5; UDP goes only to its negotiated relay.
-func ProbeHealth(ctx context.Context, node model.SocksNode) HealthReport {
+func ProbeHealth(ctx context.Context, node model.SocksNode, dnsMode ...string) HealthReport {
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	var report HealthReport
@@ -28,7 +28,7 @@ func ProbeHealth(ctx context.Context, node model.SocksNode) HealthReport {
 	wg.Add(3)
 	go func() { defer wg.Done(); err := CheckHealth(ctx, node); report.TCP = protocolResult("https", err) }()
 	go func() { defer wg.Done(); report.UDP = checkUDPHealth(ctx, node) }()
-	go func() { defer wg.Done(); report.DNS = checkDNSHealth(ctx, node) }()
+	go func() { defer wg.Done(); report.DNS = checkDNSHealth(ctx, node, dnsMode...) }()
 	wg.Wait()
 	return report
 }
@@ -42,14 +42,31 @@ func protocolResult(method string, err error) model.ProtocolHealth {
 	return result
 }
 
-func checkDNSHealth(ctx context.Context, node model.SocksNode) model.ProtocolHealth {
-	return checkDNSHealthTargets(ctx, node, "https://1.1.1.1/dns-query", "8.8.8.8:53")
+func checkDNSHealth(ctx context.Context, node model.SocksNode, dnsMode ...string) model.ProtocolHealth {
+	return checkDNSHealthTargets(ctx, node, "https://1.1.1.1/dns-query", "8.8.8.8:53", dnsMode...)
 }
 
-func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget, tcpTarget string) model.ProtocolHealth {
+func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget, tcpTarget string, dnsMode ...string) model.ProtocolHealth {
+	mode := "auto"
+	if len(dnsMode) > 0 && dnsMode[0] != "" {
+		mode = dnsMode[0]
+	}
+	switch mode {
+	case "auto", "doh", "tcp":
+	default:
+		return protocolResult("dns", fmt.Errorf("invalid DNS mode"))
+	}
 	query, err := dnsQuery()
 	if err != nil {
 		return protocolResult("doh", fmt.Errorf("DNS probe could not be initialized"))
+	}
+	if mode == "tcp" {
+		attempt, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		if err := exchangeTCPDNS(attempt, node, tcpTarget, query); err != nil {
+			return protocolResult("tcp", fmt.Errorf("TCP DNS forwarding or response validation failed"))
+		}
+		return protocolResult("tcp", nil)
 	}
 	attempt, cancel := context.WithTimeout(ctx, 3*time.Second)
 	err = exchangeDoH(attempt, node, dohTarget, query)
@@ -57,11 +74,14 @@ func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget,
 	if err == nil {
 		return protocolResult("doh", nil)
 	}
+	if mode == "doh" {
+		return protocolResult("doh", fmt.Errorf("DoH forwarding or response validation failed"))
+	}
 	attempt, cancel = context.WithTimeout(ctx, 3*time.Second)
 	err = exchangeTCPDNS(attempt, node, tcpTarget, query)
 	cancel()
 	if err == nil {
-		return model.ProtocolHealth{State: "degraded", Method: "tcp-fallback", Error: "Primary DoH failed; TCP DNS probe succeeded; the active resolver is not automatically switched", CheckedAt: time.Now()}
+		return model.ProtocolHealth{State: "degraded", Method: "tcp-fallback", Error: "Primary DoH failed; TCP DNS probe succeeded; inspect the mapping's live resolver status", CheckedAt: time.Now()}
 	}
 	return protocolResult("doh/tcp", fmt.Errorf("DoH and TCP DNS forwarding or response validation failed"))
 }

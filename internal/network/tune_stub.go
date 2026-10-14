@@ -2,4 +2,4 @@
 
 package network
 
-func TuneInterface(name string, mtu int) error { return nil }
+func TuneInterface(name string, mtu int, queueLength ...int) error { return nil }

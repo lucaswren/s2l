@@ -22,8 +22,7 @@ func WaitInterface(name string, timeout time.Duration) error {
 
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(sysPath); err == nil {
-			runAllowFail("ip", "link", "set", "dev", name, "up")
-			return nil
+			return run("ip", "link", "set", "dev", name, "up")
 		}
 		time.Sleep(200 * time.Millisecond)
 	}

@@ -23,8 +23,12 @@ type MappingService struct {
 	startedAt    time.Time
 	shuttingDown bool
 
-	mu     sync.Mutex
-	health map[string]*healthRecord
+	mu             sync.Mutex
+	stateGate      sync.RWMutex // state edits exclude lifecycle work; independent mappings share read access
+	operationLocks sync.Map
+	lifecycleMu    sync.Mutex // xl2tpd configuration and persisted active set form one transaction
+	inflight       map[string]bool
+	health         map[string]*healthRecord
 }
 
 func NewMappingService(
@@ -40,6 +44,7 @@ func NewMappingService(
 		l2tp:      l2tpMgr,
 		startedAt: time.Now(),
 		health:    make(map[string]*healthRecord),
+		inflight:  make(map[string]bool),
 	}
 }
 
@@ -85,10 +90,16 @@ func (s *MappingService) RestoreRunning() {
 }
 
 func (s *MappingService) restoreMapping(id string) (bool, error) {
+	s.stateGate.RLock()
+	defer s.stateGate.RUnlock()
+	unlock := s.lockMapping(id)
+	defer unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	shuttingDown := s.shuttingDown
+	alreadyStarted := s.health[id] != nil
+	s.mu.Unlock()
 	m, ok := s.store.GetMapping(id)
-	if !ok || m.Status != model.StatusRunning || s.shuttingDown {
+	if !ok || m.Status != model.StatusRunning || shuttingDown || alreadyStarted {
 		return false, nil
 	}
 	return true, s.startLocked(id)
@@ -97,41 +108,54 @@ func (s *MappingService) restoreMapping(id string) (bool, error) {
 // SynchronizeState coordinates API state edits with startup and recovery.
 // The callback must not call lifecycle methods, which acquire the same lock.
 func (s *MappingService) SynchronizeState(change func()) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.stateGate.Lock()
+	defer s.stateGate.Unlock()
 	change()
 }
 
 // Start 启动一条映射：L2TP → sing-box → 策略路由/iptables
 func (s *MappingService) Start(id string) error {
+	s.stateGate.RLock()
+	defer s.stateGate.RUnlock()
+	unlock := s.lockMapping(id)
+	defer unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.shuttingDown {
+	shuttingDown := s.shuttingDown
+	s.mu.Unlock()
+	if shuttingDown {
 		return fmt.Errorf("service is shutting down")
 	}
 	return s.startLocked(id)
 }
 
 func (s *MappingService) startLocked(id string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	m, ok := s.store.GetMapping(id)
 	if !ok {
 		return fmt.Errorf("mapping %s not found", id)
 	}
 	if err := network.ValidateMapping(m); err != nil {
-		return fmt.Errorf("invalid mapping: %w", err)
+		cause := fmt.Errorf("invalid mapping: %w", err)
+		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
 	}
 	node, ok := s.store.GetNode(m.NodeID)
 	if !ok {
-		return fmt.Errorf("node %s not found", m.NodeID)
+		cause := fmt.Errorf("node %s not found", m.NodeID)
+		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
 	}
 	if m.L2TPUser == "" || m.L2TPPass == "" {
-		return fmt.Errorf("l2tp_user/l2tp_pass required")
+		cause := fmt.Errorf("l2tp_user/l2tp_pass required")
+		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
 	}
 
+	s.mu.Lock()
 	delete(s.health, id)
+	s.mu.Unlock()
 
 	// 幂等：先清残留（适配开机恢复 / 重复 start）
 	if err := s.cleanupRuntime(m); err != nil {
+		_ = s.store.UpdateMappingStatus(id, model.StatusError, "pre-start cleanup failed; inspect service logs")
 		return fmt.Errorf("pre-start cleanup: %w", err)
 	}
 
@@ -163,21 +187,54 @@ func (s *MappingService) startLocked(id string) error {
 		rollbackErr := s.l2tp.ApplyStop(m.ID, previousActive)
 		return errors.Join(fmt.Errorf("persist running status: %w", err), cleanupErr, rollbackErr)
 	}
-	s.health[id] = &healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking", TunName: m.TunName}}
+	s.mu.Lock()
+	s.health[id] = &healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking", TunName: m.TunName, LocalState: "healthy", LocalCheckedAt: time.Now()}}
+	s.mu.Unlock()
 	return nil
 }
 
 // Stop 停止映射并清理网络 / 进程 / L2TP
 func (s *MappingService) Stop(id string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.stateGate.RLock()
+	defer s.stateGate.RUnlock()
+	unlock := s.lockMapping(id)
+	defer unlock()
+	return s.stopLocked(id)
+}
+
+func (s *MappingService) lockMapping(id string) func() {
+	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+func (s *MappingService) DeleteMapping(id string) error {
+	s.stateGate.Lock()
+	defer s.stateGate.Unlock()
+	unlock := s.lockMapping(id)
+	defer unlock()
+	if _, ok := s.store.GetMapping(id); !ok {
+		return fmt.Errorf("mapping not found")
+	}
+	if err := s.stopLocked(id); err != nil {
+		return err
+	}
+	return s.store.DeleteMapping(id)
+}
+
+func (s *MappingService) stopLocked(id string) error {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 
 	m, ok := s.store.GetMapping(id)
 	if !ok {
 		return fmt.Errorf("mapping %s not found", id)
 	}
 
+	s.mu.Lock()
 	delete(s.health, id)
+	s.mu.Unlock()
 	cleanupErr := s.cleanupRuntime(m)
 	active := s.activeAfter(m, false)
 	l2tpErr := s.l2tp.ApplyStop(m.ID, active)
@@ -192,9 +249,11 @@ func (s *MappingService) Stop(id string) error {
 
 // Shutdown 优雅退出：拆掉运行时资源，但保留 status=running，以便下次开机恢复
 func (s *MappingService) Shutdown() {
+	s.stateGate.Lock()
+	defer s.stateGate.Unlock()
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.shuttingDown = true
+	s.mu.Unlock()
 	for _, m := range s.store.ListMappings() {
 		if m.Status == model.StatusRunning {
 			_ = s.cleanupRuntime(m)
@@ -209,12 +268,18 @@ func (s *MappingService) Shutdown() {
 // Status 汇总运行状态与 TUN 流量
 func (s *MappingService) Status() model.SystemStatus {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	mappings := s.store.ListMappings()
 	health := make(map[string]model.UpstreamHealth)
 	for id, h := range s.health {
 		health[id] = h.UpstreamHealth
+		if h.LocalState != "" && h.LocalState != "healthy" {
+			value := health[id]
+			value.State = h.LocalState
+			value.Error = h.RecoveryError
+			health[id] = value
+		}
 	}
+	s.mu.Unlock()
 	traffic := make([]model.TunTraffic, 0, len(mappings))
 	for _, m := range mappings {
 		if m.Status != model.StatusRunning {
@@ -222,7 +287,12 @@ func (s *MappingService) Status() model.SystemStatus {
 		}
 		t, err := network.ReadTunTraffic(m.TunName)
 		if err != nil {
-			t = model.TunTraffic{TunName: m.TunName}
+			t = model.TunTraffic{TunName: m.TunName, Error: "interface statistics unavailable"}
+		}
+		if h, ok := health[m.ID]; ok {
+			h.Resolver = s.singbox.ResolverStatus(m.TunName)
+			h.Process = s.singbox.ProcessStatus(m.TunName)
+			health[m.ID] = h
 		}
 		traffic = append(traffic, t)
 	}

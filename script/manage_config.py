@@ -104,9 +104,9 @@ def write_atomic(path, data, mode=0o600):
 
 
 def restart_service():
-    subprocess.run(["systemctl", "restart", "s2l"], check=True)
+    subprocess.run(["systemctl", "restart", "s2l"], check=True, timeout=30)
     time.sleep(1)
-    subprocess.run(["systemctl", "is-active", "--quiet", "s2l"], check=True)
+    subprocess.run(["systemctl", "is-active", "--quiet", "s2l"], check=True, timeout=30)
 
 
 def change_https_port(original, value):
@@ -134,9 +134,9 @@ def change_https_port(original, value):
         raise ValueError("Nginx 配置与管理地址不一致，未修改")
     try:
         write_atomic(NGINX_SITE, site.encode(), 0o644)
-        subprocess.run(["nginx", "-t"], check=True, capture_output=True)
+        subprocess.run(["nginx", "-t"], check=True, capture_output=True, timeout=20)
         write_atomic(CONFIG_FILE, (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode())
-        subprocess.run(["systemctl", "reload", "nginx"], check=True, capture_output=True)
+        subprocess.run(["systemctl", "reload", "nginx"], check=True, capture_output=True, timeout=20)
         # Validate the local TLS listener; browser certificate trust is unchanged.
         context = ssl._create_unverified_context()
         for attempt in range(20):
@@ -148,13 +148,13 @@ def change_https_port(original, value):
                 if attempt == 19:
                     raise RuntimeError("新 HTTPS 端口未正常监听")
                 time.sleep(0.25)
-    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         write_atomic(CONFIG_FILE, original)
         write_atomic(NGINX_SITE, site_original, 0o644)
         try:
-            subprocess.run(["nginx", "-t"], check=True, capture_output=True)
-            subprocess.run(["systemctl", "reload", "nginx"], check=True, capture_output=True)
-        except (OSError, subprocess.CalledProcessError):
+            subprocess.run(["nginx", "-t"], check=True, capture_output=True, timeout=20)
+            subprocess.run(["systemctl", "reload", "nginx"], check=True, capture_output=True, timeout=20)
+        except (OSError, subprocess.SubprocessError):
             raise RuntimeError("已恢复原配置，但 Nginx 重载失败，请检查服务日志") from error
         raise RuntimeError("HTTPS 端口修改失败，已恢复原配置") from error
 
@@ -179,11 +179,11 @@ def main():
     write_atomic(CONFIG_FILE, (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode())
     try:
         restart_service()
-    except (OSError, subprocess.CalledProcessError) as error:
+    except (OSError, subprocess.SubprocessError) as error:
         write_atomic(CONFIG_FILE, original)
         try:
             restart_service()
-        except (OSError, subprocess.CalledProcessError):
+        except (OSError, subprocess.SubprocessError):
             raise RuntimeError("已恢复原配置，但服务启动失败；请查看 journalctl -u s2l") from error
         raise RuntimeError("新配置启动失败，已恢复原配置和服务") from error
     print("设置已保存，S2L 已重启")
@@ -192,6 +192,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"修改失败：{error}", file=sys.stderr)
         sys.exit(1)

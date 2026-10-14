@@ -15,19 +15,20 @@ import (
 
 // Server HTTP API + 静态前端
 type Server struct {
-	store      *store.Store
-	svc        *service.MappingService
-	webFS      fs.FS // web/dist 内容；可为 nil（仅 API）
-	settingsMu sync.Mutex
-	mutationMu sync.Mutex
-	authMu     sync.RWMutex
-	configPath string
-	adminUser  string
-	adminPass  string
+	store           *store.Store
+	svc             *service.MappingService
+	webFS           fs.FS // web/dist 内容；可为 nil（仅 API）
+	settingsMu      sync.Mutex
+	mutationMu      sync.Mutex
+	authMu          sync.RWMutex
+	configPath      string
+	adminUser       string
+	adminPass       string
+	diagnosticSlots chan struct{}
 }
 
 func NewServer(st *store.Store, svc *service.MappingService, webFS fs.FS, credentials ...string) *Server {
-	s := &Server{store: st, svc: svc, webFS: webFS}
+	s := &Server{store: st, svc: svc, webFS: webFS, diagnosticSlots: make(chan struct{}, 4)}
 	if len(credentials) >= 2 {
 		s.adminUser, s.adminPass = credentials[0], credentials[1]
 	}
@@ -55,10 +56,13 @@ func (s *Server) Handler() http.Handler {
 	if s.webFS != nil {
 		fileServer := http.FileServer(http.FS(s.webFS))
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/api/") {
+			if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
 				http.NotFound(w, r)
 				return
 			}
+			// Revalidate the entry document after upgrades; missing bundles must
+			// return 404 rather than HTML with a misleading successful response.
+			w.Header().Set("Cache-Control", "no-cache")
 			// SPA fallback：文件不存在时回退 index.html
 			path := strings.TrimPrefix(r.URL.Path, "/")
 			if path == "" {
@@ -67,6 +71,10 @@ func (s *Server) Handler() http.Handler {
 			if f, err := s.webFS.Open(path); err == nil {
 				_ = f.Close()
 				fileServer.ServeHTTP(w, r)
+				return
+			}
+			if strings.HasPrefix(r.URL.Path, "/assets/") || strings.Contains(path, ".") {
+				http.NotFound(w, r)
 				return
 			}
 			r2 := r.Clone(r.Context())
@@ -89,16 +97,21 @@ func (s *Server) Handler() http.Handler {
 // the lifecycle lock so a node/mapping cannot change while Start reads it.
 func (s *Server) withMutations(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimRight(r.URL.Path, "/")
 		resource := r.URL.Path == "/api/nodes" || strings.HasPrefix(r.URL.Path, "/api/nodes/") ||
 			r.URL.Path == "/api/mappings" || strings.HasPrefix(r.URL.Path, "/api/mappings/")
-		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasSuffix(r.URL.Path, "/speedtest") {
+		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasSuffix(path, "/speedtest") || strings.HasSuffix(path, "/diagnose") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		lifecycle := strings.HasPrefix(r.URL.Path, "/api/mappings/") &&
+			(r.Method == http.MethodDelete || strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/action"))
+		if lifecycle {
 			next.ServeHTTP(w, r)
 			return
 		}
 		s.mutationMu.Lock()
 		defer s.mutationMu.Unlock()
-		lifecycle := strings.HasPrefix(r.URL.Path, "/api/mappings/") &&
-			(r.Method == http.MethodDelete || strings.HasSuffix(strings.TrimRight(r.URL.Path, "/"), "/action"))
 		if s.svc != nil && !lifecycle {
 			s.svc.SynchronizeState(func() { next.ServeHTTP(w, r) })
 			return

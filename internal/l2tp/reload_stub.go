@@ -7,3 +7,7 @@ import "fmt"
 func Reload() error {
 	return fmt.Errorf("xl2tpd reload is only supported on linux")
 }
+
+func EnsureDaemon(bool) error { return Reload() }
+
+func AllowStructuralChange() error { return nil }

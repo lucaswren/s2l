@@ -44,7 +44,12 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 	if err := ensureIPForward(); err != nil {
 		return err
 	}
-	_ = TuneInterface(m.TunName, 1400)
+	if len(c.active) == 0 {
+		RemoveTCPMSS()
+	} // retire legacy global rules
+	if err := TuneInterface(m.TunName, m.EffectiveMTU(), m.EffectiveQueueLength()); err != nil {
+		return fmt.Errorf("tune interface: %w", err)
+	}
 	if err := AddPolicyRoute(m); err != nil {
 		return fmt.Errorf("policy route: %w", err)
 	}
@@ -52,7 +57,7 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 		routeErr := DelPolicyRoute(m)
 		return errors.Join(fmt.Errorf("firewall: %w", err), routeErr)
 	}
-	if err := EnsureTCPMSS(); err != nil {
+	if err := addMappingTCPMSS(m); err != nil {
 		return errors.Join(fmt.Errorf("tcpmss: %w", err), DelFirewall(m), DelPolicyRoute(m))
 	}
 
@@ -105,7 +110,10 @@ func ensureIPForward() error {
 	if err := run("sysctl", "-w", "net.ipv4.ip_forward=1"); err != nil {
 		return err
 	}
-	runAllowFail("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
-	runAllowFail("sysctl", "-w", "net.ipv4.conf.default.rp_filter=0")
+	for _, key := range []string{"net.ipv4.conf.all.rp_filter=0", "net.ipv4.conf.default.rp_filter=0"} {
+		if err := run("sysctl", "-w", key); err != nil {
+			return err
+		}
+	}
 	return nil
 }

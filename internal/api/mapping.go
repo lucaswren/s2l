@@ -31,9 +31,17 @@ func (s *Server) handleMappingByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := parts[0]
+	if len(parts) == 2 && parts[1] == "diagnose" {
+		s.handleMappingDiagnose(w, r, id)
+		return
+	}
 
 	// POST /api/mappings/{id}/action  { "action": "start"|"stop" }
 	if len(parts) == 2 && parts[1] == "action" && r.Method == http.MethodPost {
+		if s.svc == nil {
+			writeError(w, http.StatusServiceUnavailable, "mapping service unavailable")
+			return
+		}
 		var body mappingAction
 		if err := decodeJSON(r, &body); err != nil {
 			writeError(w, http.StatusBadRequest, "invalid json")
@@ -72,16 +80,22 @@ func (s *Server) handleMappingByID(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, m)
 	case http.MethodDelete:
+		if s.svc != nil {
+			if err := s.svc.DeleteMapping(id); err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]string{"ok": "deleted"})
+			return
+		}
 		m, ok := s.store.GetMapping(id)
 		if !ok {
 			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
 		if m.Status != model.StatusStopped {
-			if err := s.svc.Stop(id); err != nil {
-				writeError(w, http.StatusBadRequest, err.Error())
-				return
-			}
+			writeError(w, http.StatusServiceUnavailable, "mapping service unavailable; cannot clean up active mapping")
+			return
 		}
 		if err := s.store.DeleteMapping(id); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -128,7 +142,9 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 				changed := existing.NodeID != m.NodeID ||
 					existing.TunName != m.TunName ||
 					existing.TableID != m.TableID ||
-					existing.Subnet != m.Subnet || existing.L2TPUser != m.L2TPUser || existing.L2TPPass != m.L2TPPass
+					existing.Subnet != m.Subnet || existing.L2TPUser != m.L2TPUser || existing.L2TPPass != m.L2TPPass ||
+					existing.EffectiveMTU() != m.EffectiveMTU() || existing.EffectiveMSS() != m.EffectiveMSS() ||
+					existing.EffectiveQueueLength() != m.EffectiveQueueLength() || existing.EffectiveUDPPolicy() != m.EffectiveUDPPolicy() || existing.EffectiveDNSMode() != m.EffectiveDNSMode()
 				if changed {
 					writeError(w, http.StatusBadRequest, "mapping is running; stop it before changing any settings")
 					return

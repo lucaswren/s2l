@@ -16,6 +16,8 @@ type healthRecord struct {
 	model.UpstreamHealth
 	failures, successes int
 	next                time.Time
+	localNext           time.Time
+	generation          uint64
 	recoveryFailures    int
 	baseState           string
 	tcp, udp, dns       protocolRecord
@@ -43,12 +45,15 @@ func (h *healthRecord) observe(err error, now time.Time) {
 		h.failures = 0
 		h.successes++
 		if h.successes >= 2 {
-			if h.State != "healthy" {
+			localHealthy := h.LocalState == "" || h.LocalState == "healthy"
+			if h.State != "healthy" && localHealthy {
 				h.RecoveredAt = now
 			}
 			h.State = "healthy"
 			h.Error = ""
-			h.OutageSince = time.Time{}
+			if localHealthy {
+				h.OutageSince = time.Time{}
+			}
 		}
 		h.next = now.Add(10 * time.Second)
 	}
@@ -69,50 +74,155 @@ func retryDelay(n int) time.Duration {
 	return d
 }
 
-// Monitor is stopped and joined before Shutdown. Probes do not hold the service
-// mutex; a replaced/stopped mapping cannot receive stale probe results.
+// Local liveness and upstream probes have independent worker pools and clocks.
 func (s *MappingService) Monitor(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	localSlots, probeSlots := make(chan struct{}, 4), make(chan struct{}, 4)
+	localBusy := make(map[string]bool)
+	launch := func(m model.TunnelMapping, local bool) {
+		s.mu.Lock()
+		busy := s.inflight
+		if local {
+			busy = localBusy
+		}
+		if busy[m.ID] || s.health[m.ID] == nil {
+			s.mu.Unlock()
+			return
+		}
+		busy[m.ID] = true
+		s.mu.Unlock()
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { s.mu.Lock(); delete(busy, m.ID); s.mu.Unlock() }()
+			slots := probeSlots
+			if local {
+				slots = localSlots
+			}
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			defer func() { <-slots }()
+			if local {
+				s.checkLocalMapping(ctx, m)
+			} else {
+				s.checkMapping(ctx, m)
+			}
+		}()
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		}
-		var wg sync.WaitGroup
-		slots := make(chan struct{}, 4)
 		for _, m := range s.store.ListMappings() {
-			if m.Status != model.StatusRunning {
-				continue
+			if m.Status == model.StatusRunning {
+				launch(m, true)
+				launch(m, false)
 			}
-			select {
-			case slots <- struct{}{}:
-			case <-ctx.Done():
-				wg.Wait()
-				return
-			}
-			wg.Add(1)
-			go func(m model.TunnelMapping) { defer wg.Done(); defer func() { <-slots }(); s.checkMapping(ctx, m) }(m)
 		}
-		wg.Wait()
+	}
+}
+
+func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMapping) {
+	s.stateGate.RLock()
+	defer s.stateGate.RUnlock()
+	unlock := s.lockMapping(m.ID)
+	defer unlock()
+	current, ok := s.store.GetMapping(m.ID)
+	if !ok || current != m || ctx.Err() != nil {
+		return
+	}
+	s.mu.Lock()
+	h := s.health[m.ID]
+	if h == nil || s.shuttingDown {
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Unlock()
+	alive := s.singbox.IsRunning(m.TunName) && network.WaitInterface(m.TunName, 100*time.Millisecond) == nil
+	now := time.Now()
+	if alive {
+		err := network.TunePeers(m)
+		s.mu.Lock()
+		h.LocalCheckedAt = now
+		if err != nil {
+			h.LocalState = "unstable"
+			h.RecoveryError = "PPP interface tuning failed; inspect service logs"
+			log.Printf("mapping %s PPP tune failed: %v", m.ID, err)
+		} else {
+			h.LocalState = "healthy"
+			h.RecoveryError = ""
+		}
+		s.mu.Unlock()
+		return
+	}
+	s.mu.Lock()
+	h.LocalCheckedAt = now
+	if now.Before(h.localNext) {
+		s.mu.Unlock()
+		return
+	}
+	h.LocalState = "recovering"
+	h.State = "recovering"
+	h.baseState = "recovering"
+	h.successes = 0
+	h.invalidateProtocols()
+	if h.OutageSince.IsZero() {
+		h.OutageSince = now
+	}
+	s.mu.Unlock()
+	node, ok := s.store.GetNode(m.NodeID)
+	var err error
+	if !ok {
+		err = fmt.Errorf("upstream node missing")
+	} else {
+		err = s.singbox.Restart(node, m)
+		if err == nil {
+			err = network.WaitInterface(m.TunName, 15*time.Second)
+		}
+		if err == nil {
+			err = s.net.Setup(m)
+		}
+	}
+	if err != nil {
+		_ = s.singbox.Stop(m.TunName)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err != nil {
+		h.recoveryFailures++
+		h.localNext = time.Now().Add(retryDelay(h.recoveryFailures))
+		h.LocalState = "unavailable"
+		h.RecoveryError = "mapping recovery failed; inspect service logs"
+		h.State = "unavailable"
+		h.Error = h.RecoveryError
+		log.Printf("mapping %s recovery failed: %v", m.ID, err)
+	} else {
+		h.recoveryFailures = 0
+		h.localNext = time.Time{}
+		h.LocalState = "healthy"
+		h.RecoveryError = ""
+		h.failures = 0
+		h.successes = 0
+		h.baseState = "checking"
+		h.State = "checking"
+		h.Error = ""
+		h.next = time.Time{}
 	}
 }
 
 func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping) {
 	s.mu.Lock()
 	current, ok := s.store.GetMapping(m.ID)
-	if !ok || current != m || ctx.Err() != nil {
-		s.mu.Unlock()
-		return
-	}
 	h := s.health[m.ID]
-	if h == nil {
-		// Persisted running status alone must not override auto_restore=false.
-		s.mu.Unlock()
-		return
-	}
-	if time.Now().Before(h.next) {
+	if !ok || current != m || ctx.Err() != nil || h == nil || s.shuttingDown || time.Now().Before(h.next) {
 		s.mu.Unlock()
 		return
 	}
@@ -122,41 +232,14 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 		s.mu.Unlock()
 		return
 	}
-	if !s.singbox.IsRunning(m.TunName) || network.WaitInterface(m.TunName, 100*time.Millisecond) != nil {
-		h.invalidateProtocols()
-		h.State = "recovering"
-		h.baseState = "recovering"
-		h.successes = 0
-		if h.OutageSince.IsZero() {
-			h.OutageSince = time.Now()
-		}
-		err := s.singbox.Restart(node, m)
-		if err == nil {
-			err = network.WaitInterface(m.TunName, 15*time.Second)
-		}
-		if err == nil {
-			err = s.net.Setup(m)
-		}
-		if err != nil {
-			// Never tear down the guard while repairing an active PPP session.
-			_ = s.singbox.Stop(m.TunName)
-			h.recoveryFailures++
-			h.observe(fmt.Errorf("mapping process or TUN recovery failed; inspect service logs"), time.Now())
-			h.next = time.Now().Add(retryDelay(h.recoveryFailures))
-			log.Printf("mapping %s recovery failed: %v", m.ID, err)
-			s.mu.Unlock()
-			return
-		}
-		h.recoveryFailures = 0
-		h.failures = 0
-	}
+	generation := h.generation
 	s.mu.Unlock()
-	report := speedtest.ProbeHealth(ctx, node)
+	report := speedtest.ProbeHealth(ctx, node, m.EffectiveDNSMode())
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	current, ok = s.store.GetMapping(m.ID)
 	latestNode, nodeOK := s.store.GetNode(m.NodeID)
-	if !ok || current != m || !nodeOK || latestNode != node || s.health[m.ID] != h || ctx.Err() != nil {
+	if !ok || current != m || !nodeOK || latestNode != node || s.health[m.ID] != h || h.generation != generation || ctx.Err() != nil {
 		return
 	}
 	old := h.State
@@ -227,9 +310,14 @@ func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time)
 		h.Error = "Some upstream checks succeed; inspect the TCP result"
 		h.next = now.Add(10 * time.Second)
 	}
+	if h.LocalState != "" && h.LocalState != "healthy" {
+		h.State = h.LocalState
+		h.Error = h.RecoveryError
+	}
 }
 
 func (h *healthRecord) invalidateProtocols() {
+	h.generation++
 	h.tcp = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "checking"}}
 	h.udp = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "checking"}}
 	h.dns = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "checking"}}

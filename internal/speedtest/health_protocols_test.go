@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -320,6 +321,40 @@ func TestDNSDoHAndTCPFallbackThroughProxy(t *testing.T) {
 			}
 			if result.State != want || result.Method != method {
 				t.Fatalf("got %+v, want %s/%s", result, want, method)
+			}
+		})
+	}
+}
+
+func TestDNSHealthRespectsForcedResolverMode(t *testing.T) {
+	for _, mode := range []string{"tcp", "doh"} {
+		t.Run(mode, func(t *testing.T) {
+			var dohCalls, tcpCalls atomic.Int32
+			doh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { dohCalls.Add(1); w.WriteHeader(503) }))
+			defer doh.Close()
+			tcp := socksFixture(t, func(conn net.Conn) {
+				tcpCalls.Add(1)
+				var size [2]byte
+				if _, err := io.ReadFull(conn, size[:]); err != nil {
+					return
+				}
+				q := make([]byte, binary.BigEndian.Uint16(size[:]))
+				if _, err := io.ReadFull(conn, q); err != nil {
+					return
+				}
+				a := dnsAnswer(q)
+				binary.BigEndian.PutUint16(size[:], uint16(len(a)))
+				conn.Write(append(size[:], a...))
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			result := checkDNSHealthTargets(ctx, model.SocksNode{Addr: connectFixture(t)}, doh.URL, tcp, mode)
+			if mode == "tcp" {
+				if result.State != "healthy" || result.Method != "tcp" || dohCalls.Load() != 0 || tcpCalls.Load() != 1 {
+					t.Fatal("TCP-only mode probed DoH", result)
+				}
+			} else if result.State != "unavailable" || result.Method != "doh" || dohCalls.Load() != 1 || tcpCalls.Load() != 0 {
+				t.Fatal("DoH-only mode silently used TCP fallback", result)
 			}
 		})
 	}

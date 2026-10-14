@@ -49,7 +49,7 @@ class PortTests(unittest.TestCase):
         with patch.object(Path, "is_symlink", return_value=False), patch.object(Path, "resolve", lambda path: path), patch.object(Path, "read_bytes", lambda path: sources[path]), patch.object(manage_ssh.glob, "glob", side_effect=expand):
             self.assertEqual(manage_ssh.config_files(main), sources)
 
-    def transaction(self, socket_enabled=False, fail=False, bad_address=False):
+    def transaction(self, socket_enabled=False, fail=False, bad_address=False, timeout=False):
         writes = {}
         original = b"Port 22\nPasswordAuthentication no\n"
         evaluations = ["port 22\nlistenaddress 0.0.0.0:22\n", "port 40001\nlistenaddress 0.0.0.0:" + ("22" if bad_address else "40001") + "\n"]
@@ -61,7 +61,8 @@ class PortTests(unittest.TestCase):
             return ""
         def write(path, data):
             writes[path] = data
-        effects = [subprocess.CalledProcessError(1, ["systemctl"]), None] if fail else [None]
+        failure = subprocess.TimeoutExpired(["systemctl"], 20) if timeout else subprocess.CalledProcessError(1, ["systemctl"])
+        effects = [failure, None] if fail else [None]
         with patch.object(manage_ssh, "run", side_effect=run), patch.object(manage_ssh, "active", side_effect=lambda unit: socket_enabled if unit == "ssh.socket" else unit == "ssh.service"), patch.object(manage_ssh, "check_available_port"), patch.object(manage_ssh, "config_files", return_value={manage_ssh.SSH_CONFIG: original}), patch.object(manage_ssh, "write_atomic", side_effect=write), patch.object(manage_ssh, "apply_runtime", side_effect=effects) as runtime, patch.object(manage_ssh, "listening", return_value=True), patch.object(Path, "is_symlink", return_value=False), patch.object(Path, "exists", return_value=False), patch.object(Path, "mkdir"), patch.object(Path, "unlink") as unlink:
             if fail or bad_address:
                 with self.assertRaises(RuntimeError):
@@ -85,6 +86,9 @@ class PortTests(unittest.TestCase):
 
     def test_restart_failure_restores_old_config(self):
         self.transaction(fail=True)
+
+    def test_restart_timeout_restores_old_config(self):
+        self.transaction(fail=True, timeout=True)
 
     def test_socket_failure_removes_new_override(self):
         self.transaction(socket_enabled=True, fail=True)

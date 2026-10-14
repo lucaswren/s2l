@@ -3,6 +3,7 @@
 package singbox
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -62,3 +63,10 @@ func (m *Manager) PIDs() map[string]int {
 func (m *Manager) IsRunning(tunName string) bool { return m.PID(tunName) > 0 }
 
 func (m *Manager) StopAll() {}
+
+func (m *Manager) ResolveDNS(context.Context, string, []byte) ([]byte, error) {
+	return nil, fmt.Errorf("mapping DNS resolver requires Linux")
+}
+
+func (m *Manager) ResolverStatus(string) model.ResolverStatus { return model.ResolverStatus{} }
+func (m *Manager) ProcessStatus(string) model.ProcessStatus   { return model.ProcessStatus{} }

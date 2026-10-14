@@ -117,3 +117,23 @@ func TestDNSBackupDoesNotClaimPrimaryRecovery(t *testing.T) {
 		t.Fatal(p)
 	}
 }
+
+func TestUpstreamSuccessCannotHideLocalRecoveryFailure(t *testing.T) {
+	outage := time.Now().Add(-time.Minute)
+	h := healthRecord{UpstreamHealth: model.UpstreamHealth{LocalState: "unavailable", RecoveryError: "recovery failed", OutageSince: outage}}
+	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}}
+	for i := 0; i < 3; i++ {
+		h.applyReport(report, time.Now())
+	}
+	if h.State != "unavailable" || h.Error != "recovery failed" {
+		t.Fatal("upstream probes masked local failure", h)
+	}
+	if h.OutageSince != outage || !h.RecoveredAt.IsZero() {
+		t.Fatal("healthy upstream cleared an ongoing local outage")
+	}
+	before := h.generation
+	h.invalidateProtocols()
+	if h.generation != before+1 {
+		t.Fatal("stale probes were not invalidated")
+	}
+}

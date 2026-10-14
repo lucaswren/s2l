@@ -16,6 +16,11 @@ func dialSOCKS5(ctx context.Context, proxyAddr, username, password, target strin
 	return conn, err
 }
 
+// DialSOCKS5 is also used by the live resolver and on-demand diagnostics.
+func DialSOCKS5(ctx context.Context, proxyAddr, username, password, target string) (net.Conn, error) {
+	return dialSOCKS5(ctx, proxyAddr, username, password, target)
+}
+
 type socksReplyError struct{ code byte }
 
 func (e *socksReplyError) Error() string {

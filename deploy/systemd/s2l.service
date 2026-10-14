@@ -11,6 +11,7 @@ User=root
 WorkingDirectory=/opt/s2l
 RuntimeDirectory=s2l
 RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
 UMask=0077
 ExecStart=/opt/s2l/s2l -config /opt/s2l/config.json
 Restart=on-failure

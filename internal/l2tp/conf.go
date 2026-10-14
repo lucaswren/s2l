@@ -18,10 +18,12 @@ const (
 
 // ConfManager 动态维护 /etc/xl2tpd/xl2tpd.conf
 type ConfManager struct {
-	path        string
-	optionsPath string
-	chapPath    string
-	mu          sync.Mutex
+	path         string
+	optionsPath  string
+	chapPath     string
+	mu           sync.Mutex
+	changed      bool
+	beforeChange func() error
 }
 
 func NewConfManager(path, optionsPath string, chapPath ...string) *ConfManager {
@@ -43,12 +45,21 @@ func (c *ConfManager) Sync(active []model.TunnelMapping) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if err := c.ensureOptions(); err != nil {
-		return err
-	}
-
 	content, err := renderFullConf(active, c.optionsPath, c.chapPath)
 	if err != nil {
+		return err
+	}
+	previous, readErr := os.ReadFile(c.path)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return readErr
+	}
+	c.changed = semanticConf(string(previous)) != semanticConf(content)
+	if c.changed && c.beforeChange != nil {
+		if err := c.beforeChange(); err != nil {
+			return err
+		}
+	}
+	if err := c.ensureOptions(); err != nil {
 		return err
 	}
 
@@ -61,6 +72,19 @@ func (c *ConfManager) Sync(active []model.TunnelMapping) error {
 	}
 	return os.Rename(tmp, c.path)
 }
+
+func semanticConf(content string) string {
+	var lines []string
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, ";") || strings.HasPrefix(line, "#") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+func (c *ConfManager) Changed() bool { c.mu.Lock(); defer c.mu.Unlock(); return c.changed }
 
 func (c *ConfManager) ensureOptions() error {
 	if err := os.MkdirAll(filepath.Dir(c.optionsPath), 0o755); err != nil {
@@ -82,7 +106,19 @@ lcp-echo-interval 30
 lcp-echo-failure 4
 connect-delay 5000
 `
-	return os.WriteFile(c.optionsPath, []byte(content), 0o644)
+	previous, err := os.ReadFile(c.optionsPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if string(previous) == content {
+		return nil
+	}
+	tmp := c.optionsPath + ".s2l.tmp"
+	if err := os.WriteFile(tmp, []byte(content), 0644); err != nil {
+		return err
+	}
+	defer os.Remove(tmp)
+	return os.Rename(tmp, c.optionsPath)
 }
 
 func renderFullConf(active []model.TunnelMapping, optionsPath string, chapPath ...string) (string, error) {

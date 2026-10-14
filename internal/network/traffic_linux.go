@@ -21,21 +21,13 @@ func ReadTunTraffic(tunName string) (model.TunTraffic, error) {
 		}
 		return strconv.ParseUint(strings.TrimSpace(string(b)), 10, 64)
 	}
-	rx, err := read("rx_bytes")
-	if err != nil {
-		return model.TunTraffic{TunName: tunName}, err
+	values := make(map[string]uint64, 8)
+	for _, name := range []string{"rx_bytes", "tx_bytes", "rx_packets", "tx_packets", "rx_dropped", "tx_dropped", "rx_errors", "tx_errors"} {
+		value, err := read(name)
+		if err != nil {
+			return model.TunTraffic{TunName: tunName}, err
+		}
+		values[name] = value
 	}
-	tx, err := read("tx_bytes")
-	if err != nil {
-		return model.TunTraffic{TunName: tunName}, err
-	}
-	rxp, _ := read("rx_packets")
-	txp, _ := read("tx_packets")
-	return model.TunTraffic{
-		TunName:   tunName,
-		RxBytes:   rx,
-		TxBytes:   tx,
-		RxPackets: rxp,
-		TxPackets: txp,
-	}, nil
+	return model.TunTraffic{TunName: tunName, RxBytes: values["rx_bytes"], TxBytes: values["tx_bytes"], RxPackets: values["rx_packets"], TxPackets: values["tx_packets"], RxDropped: values["rx_dropped"], TxDropped: values["tx_dropped"], RxErrors: values["rx_errors"], TxErrors: values["tx_errors"]}, nil
 }

@@ -64,12 +64,37 @@ func AddFirewall(m model.TunnelMapping) error {
 func DelFirewall(m model.TunnelMapping) error {
 	cmt := mappingComment(m)
 	return errors.Join(
+		deleteFirewallRule(mappingMSSDeleteArgs(m, "-i")...),
+		deleteFirewallRule(mappingMSSDeleteArgs(m, "-o")...),
 		deleteFirewallRule("-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-t", "nat", "-D", "POSTROUTING", "-o", m.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-o", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 	)
+}
+
+func mappingMSSArgs(m model.TunnelMapping, direction string) []string {
+	source := "-s"
+	if direction == "-o" {
+		source = "-d"
+	}
+	return []string{direction, "ppp+", source, m.Subnet, "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN", "-j", "TCPMSS", "--set-mss", fmt.Sprint(m.EffectiveMSS()), "-m", "comment", "--comment", mappingComment(m) + "-mss"}
+}
+func mappingMSSDeleteArgs(m model.TunnelMapping, direction string) []string {
+	return append([]string{"-t", "mangle", "-D", "FORWARD"}, mappingMSSArgs(m, direction)...)
+}
+func addMappingTCPMSS(m model.TunnelMapping) error {
+	for _, direction := range []string{"-i", "-o"} {
+		args := mappingMSSArgs(m, direction)
+		if run("iptables", append([]string{"-t", "mangle", "-C", "FORWARD"}, args...)...) == nil {
+			continue
+		}
+		if err := run("iptables", append([]string{"-t", "mangle", "-I", "FORWARD", "1"}, args...)...); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func deleteFirewallRule(args ...string) error {
@@ -85,18 +110,21 @@ func deleteFirewallRule(args ...string) error {
 	return nil
 }
 
-// EnsureTCPMSS 钳位 TCP MSS，减轻 L2TP+SOCKS 分片黑洞（不改客户端 MTU）。
-func EnsureTCPMSS() error {
-	RemoveTCPMSS()
-	return run("iptables", "-I", "FORWARD", "1",
-		"-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
+func tcpMSSArgs(direction string) []string {
+	return []string{direction, "ppp+", "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
 		"-j", "TCPMSS", "--set-mss", "1200",
-		"-m", "comment", "--comment", tcpmssComment,
-	)
+		"-m", "comment", "--comment", tcpmssComment}
 }
 
-// RemoveTCPMSS 删除全局 TCPMSS 规则（无活跃映射时调用）
+// RemoveTCPMSS also removes legacy filter rules when no mappings remain.
 func RemoveTCPMSS() {
+	for _, direction := range []string{"-i", "-o"} {
+		for i := 0; i < 8; i++ {
+			if err := run("iptables", append([]string{"-t", "mangle", "-D", "FORWARD"}, tcpMSSArgs(direction)...)...); err != nil {
+				break
+			}
+		}
+	}
 	for _, mss := range []string{"1200", "1320", "1360"} {
 		for i := 0; i < 4; i++ {
 			if err := run("iptables", "-D", "FORWARD",
@@ -117,14 +145,6 @@ func RemoveTCPMSS() {
 			break
 		}
 	}
-}
-
-func hasTCPMSS() bool {
-	out, err := output("iptables", "-S", "FORWARD")
-	if err != nil {
-		return false
-	}
-	return strings.Contains(out, tcpmssComment)
 }
 
 func mappingComment(m model.TunnelMapping) string {
