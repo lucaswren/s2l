@@ -1,6 +1,7 @@
 <script setup>
 import { reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
+import NetworkTest from "./NetworkTest.vue";
 import NodeActions from "./NodeActions.vue";
 import SpeedResult from "./SpeedResult.vue";
 import { api } from "../api/client";
@@ -8,6 +9,7 @@ import { api } from "../api/client";
 defineProps({ nodes: { type: Array, default: () => [] } });
 const emit = defineEmits(["changed", "toast"]);
 
+const networkNode = ref(null);
 const mode = ref(""); // '' | edit | import
 const editingId = ref("");
 const busy = ref(false);
@@ -189,11 +191,12 @@ async function speedTest(n) {
         ><template #default="{ row }"
           ><SpeedResult
             :result="speedResults[row.id]" /></template></el-table-column
-      ><el-table-column label="操作" width="300" fixed="right"
+      ><el-table-column label="操作" width="410" fixed="right"
         ><template #default="{ row }"
           ><NodeActions
             :node="row"
             :testing-id="testingId"
+            @network="networkNode = $event"
             @speed="speedTest"
             @edit="openEdit"
             @remove="remove" /></template></el-table-column
@@ -212,11 +215,13 @@ async function speedTest(n) {
         <NodeActions
           :node="n"
           :testing-id="testingId"
-          @speed="speedTest"
+          @network="networkNode = $event"
+            @speed="speedTest"
           @edit="openEdit"
           @remove="remove"
       /></el-card>
     </div>
+    <NetworkTest v-if="networkNode" :node="networkNode" @close="networkNode = null" />
     <el-dialog
       :model-value="mode === 'edit'"
       :title="editingId ? '编辑节点' : '新增节点'"

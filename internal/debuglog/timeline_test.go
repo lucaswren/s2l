@@ -127,3 +127,21 @@ func TestUnknownDiskSampleIsNotReportedAsFull(t *testing.T) {
 		t.Fatal("full sampled disk was not reported")
 	}
 }
+
+func TestAnalysisReportsPersistentUDPFailureAndDNSIndependently(t *testing.T) {
+	c := &Collector{}
+	c.Set(true)
+	now := time.Now()
+	c.RecordStatus(model.SystemStatus{UpstreamHealth: map[string]model.UpstreamHealth{"m": {State: "degraded", LocalState: "healthy", TCP: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "unavailable"}, DNS: model.ProtocolHealth{State: "unavailable"}}}}, Resources{}, now)
+	a := c.Analysis()
+	text := string(a.Text())
+	if !strings.Contains(text, "UDP 为 unavailable") || !strings.Contains(text, "DNS 异常") || !strings.Contains(a.Notice, "采样窗口") {
+		t.Fatal(text)
+	}
+	c.Set(false)
+	before := string(c.Analysis().Text())
+	c.RecordStatus(model.SystemStatus{}, Resources{}, now.Add(time.Second))
+	if string(c.Analysis().Text()) != before {
+		t.Fatal("recorded after disable")
+	}
+}

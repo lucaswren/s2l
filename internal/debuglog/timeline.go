@@ -80,6 +80,12 @@ func (c *Collector) RecordSession(session uint64, status model.SystemStatus, res
 	if session == 0 || session != c.generation || !c.active() || (!c.lastSample.IsZero() && !now.After(c.lastSample)) {
 		return
 	}
+	if !c.lastSample.IsZero() {
+		shift := now.Round(0).Sub(c.lastSample.Round(0)) - now.Sub(c.lastSample)
+		if shift > 2*time.Second || shift < -2*time.Second {
+			c.event(Event{At: now, Kind: "clock-adjustment", Detail: fmt.Sprintf("系统墙上时间相对单调时钟调整 %s；请结合采样顺序分析日志。", shift.Round(time.Millisecond))})
+		}
+	}
 	c.lastSample = now
 	// Raw and structured health evidence share one session and one commit.
 	status.Mappings = append([]model.TunnelMapping(nil), status.Mappings...)
@@ -134,6 +140,9 @@ func (c *Collector) RecordSession(session uint64, status model.SystemStatus, res
 				}
 				if n := counterDelta(h.Process.Refused, old.Health.Process.Refused); n > 0 {
 					event("refused", fmt.Sprintf("连接拒绝日志增加 %d", n))
+				}
+				if n := counterDelta(h.Process.ProxyRejections, old.Health.Process.ProxyRejections); n > 0 {
+					event("proxy-rejected", fmt.Sprintf("SOCKS5 请求拒绝日志增加 %d", n))
 				}
 				if n := counterDelta(h.Process.NetworkErrors, old.Health.Process.NetworkErrors); n > 0 {
 					event("network", fmt.Sprintf("网络不可达日志增加 %d", n))
@@ -193,13 +202,16 @@ func (c *Collector) analysisLocked() Analysis {
 		h := c.previous[id].Health
 		if h.LocalState != "" && h.LocalState != "healthy" {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：最近采样本地链路为 %s，应先检查本地进程和恢复状态。", id, h.LocalState))
-		} else if h.TCP.State == "healthy" && h.UDP.State == "unsupported" {
-			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 不支持，不能据此判定整条链路不可用。", id))
-		} else if h.TCP.State == "healthy" && (h.DNS.State == "unavailable" || h.DNS.State == "degraded") {
+		}
+		if h.TCP.State == "healthy" && (h.UDP.State == "unsupported" || h.UDP.State == "unavailable" || h.UDP.State == "unstable") {
+			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 为 %s；UDP 应用可能失败，应核对节点 UDP 支持和防火墙。", id, h.UDP.State))
+		}
+		if h.TCP.State == "healthy" && (h.DNS.State == "unavailable" || h.DNS.State == "degraded") {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常而 DNS 异常或仅备用可用，建议先核对 DNS 时间线。", id))
 		}
 	}
 	if len(a.Resources) > 0 {
+		a.Notice += fmt.Sprintf(" 采样窗口：%s 至 %s；导出时的实时状态可能属于更晚时间。", a.Resources[0].At.UTC().Format(time.RFC3339), a.Resources[len(a.Resources)-1].At.UTC().Format(time.RFC3339))
 		last := a.Resources[len(a.Resources)-1].Resources
 		if last.DiskSampled && last.DiskFreeBytes < 256<<20 {
 			a.Findings = append(a.Findings, "数据目录所在磁盘可用空间低于 256 MiB，请及时检查容量，避免配置写入或系统服务失败。")
@@ -217,6 +229,12 @@ func (c *Collector) analysisLocked() Analysis {
 	}
 	if kinds["drops"] || kinds["interface-error"] {
 		a.Findings = append(a.Findings, "观察到接口丢包或错误增加，需结合吞吐、队列和客户端路径进一步核实。")
+	}
+	if kinds["clock-adjustment"] {
+		a.Findings = append(a.Findings, "采样期间检测到系统时间校正，绝对时间可能跳变；Debug 到期使用单调时钟，不受 NTP 校时影响。")
+	}
+	if kinds["proxy-rejected"] {
+		a.Findings = append(a.Findings, "观察到 SOCKS5 请求被节点拒绝，请核对拒绝码、UDP 支持及节点访问策略。")
 	}
 	if kinds["timeout"] || kinds["tls"] || kinds["refused"] || kinds["network"] {
 		a.Findings = append(a.Findings, "观察到连接错误日志增量；单凭此计数不能确定目标、上游或客户端的责任。")

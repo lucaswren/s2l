@@ -155,6 +155,9 @@ func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHea
 		if errors.As(err, &reply) && reply.code == 7 {
 			return model.ProtocolHealth{State: "unsupported", Method: "udp-associate", Error: "Proxy explicitly rejects UDP ASSOCIATE as unsupported", CheckedAt: time.Now()}
 		}
+		if errors.As(err, &reply) {
+			return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association rejected: code=%d", reply.code))
+		}
 		return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association failed"))
 	}
 	controlDone := make(chan struct{})

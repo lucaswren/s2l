@@ -1,10 +1,13 @@
 <script setup>
-import { onMounted, onUnmounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
 import { api, setCredentials, clearCredentials } from "../api/client";
 import { generatePassword } from "../utils/password";
+import SoftwareUpdate from "./SoftwareUpdate.vue";
+import TimeSettings from "./TimeSettings.vue";
 import Backups from "./Backups.vue";
-import DebugAnalysis from "./DebugAnalysis.vue";
+import DebugSettings from "./DebugSettings.vue";
+defineProps({active:{type:Boolean,default:true}});
 const emit = defineEmits(["toast", "changed"]);
 const settings = ref({
   account_enabled: false,
@@ -18,20 +21,6 @@ const settings = ref({
     protected: false,
   },
 });
-const debug = ref({enabled:false, bytes:0});
-const debugBusy = ref(false);
-async function toggleDebug() {
-  debugBusy.value = true;
-  try { debug.value = await api.setDebug(!debug.value.enabled); }
-  catch(e) { error.value = e.message; }
-  finally { debugBusy.value = false; }
-}
-async function exportDebug() {
-  debugBusy.value = true;
-  try { await api.exportDebug(); debug.value = await api.debug(); }
-  catch(e) { error.value = e.message; }
-  finally { debugBusy.value = false; }
-}
 const loading = ref(false);
 const busy = ref("");
 const error = ref("");
@@ -91,7 +80,6 @@ async function load() {
   loading.value = true;
   try {
     settings.value = await api.settings();
-    debug.value = await api.debug();
     account.username = settings.value.admin_user;
     ssh.port = settings.value.ssh_ports[0] || 22;
     webPort.port = settings.value.web_port || 443;
@@ -257,91 +245,19 @@ async function saveSSHPassword() {
     busy.value = "";
   }
 }
-let debugTimer;
-onMounted(() => {
-  load();
-  debugTimer = setInterval(() => {
-    if (debug.value.enabled && Date.now() >= Date.parse(debug.value.expires)) debug.value.enabled = false;
-  }, 1000);
-});
-onUnmounted(() => clearInterval(debugTimer));
+const activeTab = ref("general");
+onMounted(load);
 </script>
 <template>
-  <el-card class="settings-card">
-    <h3>Debug 日志</h3>
-    <p>默认关闭，不保存排障日志或资源采样。开启后自动收集服务、sing-box 和每 5 秒健康状态日志，30 分钟后停止。最多保留最近 4 MiB 原始日志、512 条时间线事件和 360 次资源采样。关闭后仍可导出，重新开启会清空上次记录；服务重启后清空。</p>
-    <p>现有隧道立即收集当前级别日志；开启后重启映射可获取 debug 级别日志。停止收集不会修改已运行隧道的日志级别，需重启映射恢复 info。</p>
-    <p>导出包含网络地址和访问目标，分享前请检查内容。</p>
-    <el-button :loading="debugBusy" @click="toggleDebug">{{ debug.enabled ? '停止收集' : '开启 Debug' }}</el-button>
-    <el-button :disabled="debugBusy" @click="exportDebug">导出日志 ZIP</el-button>
-    <DebugAnalysis :key="debug.session_id" />
-    <p>{{ debug.enabled ? '收集中' : '未收集' }} · {{ Math.round(debug.bytes / 1024) }} KiB<span v-if="debug.enabled"> · 到期 {{ new Date(debug.expires).toLocaleString() }}</span></p>
-  </el-card>
-  <Backups @changed="emit('changed')" />
+ <section class="system-settings">
   <div class="section-head">
-    <div>
-      <h2>系统设置</h2>
-      <p class="muted">管理 L2TP 接入方式、管理凭据与 HTTPS / SSH 端口</p>
-    </div>
-    <el-button :loading="loading" :disabled="!!busy" @click="load"
-      >刷新设置</el-button
-    >
+   <div><h2>系统设置</h2><p class="muted">管理接入、安全与维护</p></div>
+   <el-button :loading="loading" :disabled="!!busy" @click="load">刷新设置</el-button>
   </div>
-  <el-alert
-    v-if="error"
-    :title="error"
-    type="error"
-    show-icon
-    :closable="false"
-    class="section-gap"
-  />
-  <el-card shadow="never" class="section-gap settings-card">
-    <template #header>HTTPS 管理端口</template>
-    <el-alert
-      :title="
-        settings.web_port_enabled
-          ? '先放行新 TCP 端口；修改后使用新地址登录。'
-          : '此环境未提供 S2L 管理的 Nginx HTTPS 服务，请升级安装文件。'
-      "
-      type="info"
-      show-icon
-      :closable="false"
-      class="section-gap"
-    />
-    <p v-if="settings.public_url" class="muted">
-      管理地址：<el-link
-        :href="settings.public_url"
-        type="primary"
-        class="mono"
-        >{{ settings.public_url }}</el-link
-      >
-    </p>
-    <el-form
-      ref="webPortRef"
-      :model="webPort"
-      label-position="top"
-      :disabled="!!busy || loading || !settings.web_port_enabled"
-      @submit.prevent="saveWebPort"
-    >
-      <div class="form-grid">
-        <el-form-item label="HTTPS 端口" prop="port" :rules="required">
-          <el-input-number
-            v-model="webPort.port"
-            :min="1"
-            :max="65535"
-            :precision="0"
-          />
-        </el-form-item>
-      </div>
-      <el-button
-        type="primary"
-        :loading="busy === 'web-port'"
-        native-type="submit"
-        >修改 HTTPS 端口</el-button
-      >
-    </el-form>
-  </el-card>
-  <el-card shadow="never" class="section-gap settings-card">
+  <el-alert v-if="error" :title="error" type="error" :closable="false" class="section-gap" />
+  <el-tabs v-model="activeTab" class="settings-tabs">
+   <el-tab-pane label="接入与账号" name="general" lazy>
+    <div class="settings-grid"><el-card shadow="never" class="settings-card">
     <template #header
       ><div class="card-heading">
         <span>L2TP 接入</span
@@ -414,18 +330,13 @@ onUnmounted(() => clearInterval(debugTimer));
         /></el-form-item>
       </div>
       <p class="muted">
-        此设置对所有映射生效。客户端填写服务器 IP、L2TP
-        账号密码和相同的预共享密钥；关闭 IPsec
-        时清空客户端预共享密钥。切换接入方式或更换密钥后需重新拨号。
+        对全部映射生效；切换接入方式或密钥后，客户端需重新拨号。
       </p>
       <el-button type="primary" :loading="busy === 'ipsec'" native-type="submit"
         >应用接入设置</el-button
       >
     </el-form>
-  </el-card>
-  <el-row :gutter="20">
-    <el-col :xs="24" :md="12"
-      ><el-card shadow="never" class="section-gap"
+  </el-card><el-card shadow="never" class="settings-card"
         ><template #header>管理账号</template>
         <el-alert
           v-if="!settings.account_enabled"
@@ -475,16 +386,61 @@ onUnmounted(() => clearInterval(debugTimer));
             >保存账号</el-button
           >
         </el-form>
-      </el-card></el-col
+      </el-card></div>
+   </el-tab-pane>
+   <el-tab-pane label="远程管理" name="remote" lazy>
+    <div class="settings-grid"><div class="settings-stack"><el-card shadow="never" class="settings-card">
+    <template #header>HTTPS 管理端口</template>
+    <el-alert
+      :title="
+        settings.web_port_enabled
+          ? '先放行新 TCP 端口；修改后使用新地址登录。'
+          : 'HTTPS 管理组件不可用，请更新安装文件。'
+      "
+      type="info"
+      show-icon
+      :closable="false"
+      class="section-gap"
+    />
+    <p v-if="settings.public_url" class="muted">
+      管理地址：<el-link
+        :href="settings.public_url"
+        type="primary"
+        class="mono"
+        >{{ settings.public_url }}</el-link
+      >
+    </p>
+    <el-form
+      ref="webPortRef"
+      :model="webPort"
+      label-position="top"
+      :disabled="!!busy || loading || !settings.web_port_enabled"
+      @submit.prevent="saveWebPort"
     >
-    <el-col :xs="24" :md="12"
-      ><el-card shadow="never"
+      <div class="form-grid">
+        <el-form-item label="HTTPS 端口" prop="port" :rules="required">
+          <el-input-number
+            v-model="webPort.port"
+            :min="1"
+            :max="65535"
+            :precision="0"
+          />
+        </el-form-item>
+      </div>
+      <el-button
+        type="primary"
+        :loading="busy === 'web-port'"
+        native-type="submit"
+        >修改 HTTPS 端口</el-button
+      >
+    </el-form>
+  </el-card><el-card shadow="never"
         ><template #header>SSH 端口</template>
         <el-alert
           :title="
             settings.ssh_enabled
-              ? '修改前放行新端口，修改后保留当前连接并验证新端口登录。'
-              : '此环境未提供可用的 OpenSSH 管理脚本。'
+              ? '先放行新端口，并保留当前连接验证登录。'
+              : 'SSH 管理组件不可用。'
           "
           type="info"
           show-icon
@@ -516,10 +472,7 @@ onUnmounted(() => clearInterval(debugTimer));
             >修改 SSH 端口</el-button
           >
         </el-form>
-      </el-card></el-col
-    >
-    <el-col :xs="24" :md="12"
-      ><el-card shadow="never" class="section-gap ssh-password-card">
+      </el-card></div><el-card shadow="never" class="settings-card ssh-password-card">
         <template #header>SSH 登录密码</template>
         <el-alert
           :title="
@@ -527,7 +480,7 @@ onUnmounted(() => clearInterval(debugTimer));
               ? '请通过 HTTPS 打开管理页面后修改密码。'
               : !settings.ssh_password_enabled
                 ? '当前环境不支持修改 Linux 登录密码。'
-                : '修改 root 的 Linux 登录密码；请保留当前连接，并使用新密码验证登录。'
+                : '修改 root 密码；请保留当前连接验证新密码。'
           "
           type="info"
           show-icon
@@ -579,8 +532,7 @@ onUnmounted(() => clearInterval(debugTimer));
               maxlength="128"
           /></el-form-item>
           <p class="muted">
-            此操作不会启用 SSH 密码登录或解除账号锁定。若仅允许 SSH
-            密钥登录，仍需使用密钥。
+            仅修改密码；密钥登录策略与账号锁定状态保持不变。
           </p>
           <el-button
             type="primary"
@@ -589,7 +541,21 @@ onUnmounted(() => clearInterval(debugTimer));
             >修改 SSH 密码</el-button
           >
         </el-form>
-      </el-card></el-col
-    >
-  </el-row>
+      </el-card></div>
+   </el-tab-pane>
+   <el-tab-pane label="时间同步" name="time" lazy><TimeSettings /></el-tab-pane>
+   <el-tab-pane label="备份与排障" name="support" lazy>
+    <div class="settings-stack"><DebugSettings :active="active && activeTab === 'support'" /><Backups @changed="emit('changed')" /></div>
+   </el-tab-pane>
+   <el-tab-pane label="软件更新" name="update" lazy><SoftwareUpdate :active="active && activeTab === 'update'" /></el-tab-pane>
+  </el-tabs>
+ </section>
 </template>
+<style scoped>
+.settings-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
+.settings-stack { display:grid; gap:20px; min-width:0; }
+.settings-grid :deep(.el-card) { min-width:0; margin-bottom:0; }
+.settings-grid :deep(.form-grid) { grid-template-columns:1fr; }
+.settings-tabs :deep(.el-tabs__content) { overflow:visible; }
+@media(max-width:900px) { .settings-grid { grid-template-columns:1fr; } }
+</style>

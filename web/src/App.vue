@@ -209,7 +209,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
             ></el-collapse>
           </el-tab-pane>
           <el-tab-pane label="系统设置" name="settings" lazy
-            ><Settings @toast="pushToast" @changed="refresh"
+            ><Settings :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"
           /></el-tab-pane>
         </el-tabs>
       </el-card>

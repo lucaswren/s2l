@@ -71,8 +71,16 @@ wait_for_apt
 IPSEC_PREINSTALLED=0
 dpkg-query -W -f='${Status}' strongswan-starter 2>/dev/null | grep -q "install ok installed" && IPSEC_PREINSTALLED=1
 apt-get install -y --no-install-recommends \
-  ca-certificates curl wget tar iptables iproute2 psmisc \
+  ca-certificates curl wget tar iptables iproute2 psmisc iputils-ping mtr-tiny \
   xl2tpd ppp openssl python3 build-essential strongswan strongswan-starter
+
+# Enable system-managed clock synchronization without replacing an existing NTP provider.
+if command -v timedatectl >/dev/null 2>&1; then
+  if [[ "$(timedatectl show --property=CanNTP --value 2>/dev/null || true)" == "no" ]]; then
+    apt-get install -y --no-install-recommends systemd-timesyncd
+  fi
+  timedatectl set-ntp true || warn "时间自动同步未能开启，请在设置中检查系统时间服务。"
+fi
 
 if [[ "${IPSEC_PREINSTALLED}" == "0" ]]; then
   systemctl disable --now strongswan-starter.service >/dev/null 2>&1 || true
@@ -148,7 +156,12 @@ if [[ ! -f web/dist/index.html ]]; then
   fi
 fi
 mkdir -p bin
-go build -o "bin/${APP_NAME}" ./cmd/s2l
+S2L_BUILD_VERSION="${S2L_VERSION:-${S2L_REF:-source}}"
+S2L_BUILD_COMMIT="${S2L_COMMIT:-}"
+[[ "$S2L_BUILD_VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]] || { echo "[ERROR] 无效的构建版本" >&2; exit 1; }
+[[ -z "$S2L_BUILD_COMMIT" || "$S2L_BUILD_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "[ERROR] 无效的构建提交" >&2; exit 1; }
+S2L_BUILD_FLAGS="-X github.com/lucaswren/s2l/internal/buildinfo.Version=$S2L_BUILD_VERSION -X github.com/lucaswren/s2l/internal/buildinfo.Revision=$S2L_BUILD_COMMIT"
+go build -ldflags "$S2L_BUILD_FLAGS" -o "bin/${APP_NAME}" ./cmd/s2l
 info "编译完成: ${ROOT_DIR}/bin/${APP_NAME}"
 
 info "5/7 安装到 ${INSTALL_DIR}..."
@@ -174,6 +187,9 @@ install -m 700 "${SCRIPT_DIR}/remote_update.sh" "${INSTALL_DIR}/remote_update.sh
 install -m 600 "${SCRIPT_DIR}/manage_config.py" "${INSTALL_DIR}/manage_config.py"
 install -m 600 "${SCRIPT_DIR}/manage_ssh.py" "${INSTALL_DIR}/manage_ssh.py"
 install -m 600 "${SCRIPT_DIR}/manage_ipsec.py" "${INSTALL_DIR}/manage_ipsec.py"
+install -m 600 "${SCRIPT_DIR}/manage_time.py" "${INSTALL_DIR}/manage_time.py"
+install -m 600 "${SCRIPT_DIR}/manage_update.py" "${INSTALL_DIR}/manage_update.py"
+install -m 600 "${SCRIPT_DIR}/verify_update.py" "${INSTALL_DIR}/verify_update.py"
 install -m 644 "${ROOT_DIR}/deploy/systemd/s2l-ipsec.service" /etc/systemd/system/s2l-ipsec.service
 
 # Install fail-closed guards before allowing any PPP client to connect.

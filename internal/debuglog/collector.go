@@ -14,7 +14,11 @@ var Default = &Collector{}
 type Collector struct {
 	mu            sync.Mutex
 	until         time.Time
+	started       time.Time
+	stopped       time.Time
+	stopReason    string
 	data          []byte
+	head          int
 	dropped       int
 	events        []Event
 	droppedEvents int
@@ -24,11 +28,15 @@ type Collector struct {
 	lastSample    time.Time
 }
 type State struct {
-	Enabled bool      `json:"enabled"`
-	Expires time.Time `json:"expires"`
-	Bytes   int       `json:"bytes"`
-	Dropped int       `json:"dropped_bytes"`
-	Session uint64    `json:"session_id"`
+	Started         time.Time `json:"started_at"`
+	Stopped         time.Time `json:"stopped_at"`
+	StopReason      string    `json:"stop_reason,omitempty"`
+	DurationSeconds int       `json:"duration_seconds"`
+	Enabled         bool      `json:"enabled"`
+	Expires         time.Time `json:"expires"`
+	Bytes           int       `json:"bytes"`
+	Dropped         int       `json:"dropped_bytes"`
+	Session         uint64    `json:"session_id"`
 }
 
 func (c *Collector) active() bool { return time.Now().Before(c.until) }
@@ -39,15 +47,27 @@ func (c *Collector) Set(enabled bool) State {
 		if !c.active() {
 			c.generation++
 			c.data = nil
+			c.head = 0
 			c.dropped = 0
 			c.events = nil
 			c.samples = nil
 			c.previous = nil
 			c.droppedEvents = 0
 			c.lastSample = time.Time{}
-			c.until = time.Now().Add(30 * time.Minute)
+			c.started = time.Now()
+			c.stopped = time.Time{}
+			c.stopReason = ""
+			c.until = c.started.Add(30 * time.Minute)
 		}
 	} else {
+		if c.generation > 0 && c.stopped.IsZero() {
+			c.stopped = time.Now()
+			c.stopReason = "manual"
+			if !c.active() {
+				c.stopped = c.until
+				c.stopReason = "expired"
+			}
+		}
 		c.until = time.Time{}
 	}
 	return c.stateLocked()
@@ -58,7 +78,13 @@ func (c *Collector) State() State {
 	return c.stateLocked()
 }
 func (c *Collector) stateLocked() State {
-	return State{Enabled: c.active(), Expires: c.until, Bytes: len(c.data), Dropped: c.dropped, Session: c.generation}
+	enabled := c.active()
+	stopped, reason := c.stopped, c.stopReason
+	if !enabled && stopped.IsZero() && c.generation > 0 {
+		stopped = c.until
+		reason = "expired"
+	}
+	return State{Started: c.started, Stopped: stopped, StopReason: reason, DurationSeconds: 1800, Enabled: enabled, Expires: c.until, Bytes: len(c.data), Dropped: c.dropped, Session: c.generation}
 }
 
 // Capture the session before beginning asynchronous sampling; stale producers
@@ -95,21 +121,44 @@ func (c *Collector) addLocked(source string, p []byte) {
 	if len(b) == 0 || b[len(b)-1] != '\n' {
 		b = append(b, '\n')
 	}
+	c.appendBytesLocked(b)
+}
+
+// Keep a circular buffer: a full collector only copies the incoming bytes,
+// rather than shifting up to 4 MiB for every sing-box write.
+func (c *Collector) appendBytesLocked(b []byte) {
 	if len(b) > Limit {
 		c.dropped += len(b) - Limit
 		b = b[len(b)-Limit:]
 	}
-	if n := len(c.data) + len(b) - Limit; n > 0 {
-		c.dropped += n
-		copy(c.data, c.data[n:])
-		c.data = c.data[:len(c.data)-n]
+	if len(c.data) < Limit {
+		n := min(len(b), Limit-len(c.data))
+		c.data = append(c.data, b[:n]...)
+		b = b[n:]
 	}
-	c.data = append(c.data, b...)
+	if len(b) == 0 {
+		return
+	}
+	c.dropped += len(b)
+	n := copy(c.data[c.head:], b)
+	copy(c.data, b[n:])
+	c.head = (c.head + len(b)) % Limit
 }
+
+func (c *Collector) snapshotLocked() []byte {
+	if len(c.data) == 0 {
+		return nil
+	}
+	b := make([]byte, len(c.data))
+	n := copy(b, c.data[c.head:])
+	copy(b[n:], c.data[:c.head])
+	return b
+}
+
 func (c *Collector) Snapshot() []byte {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return append([]byte(nil), c.data...)
+	return c.snapshotLocked()
 }
 
 type Capture struct {
@@ -121,5 +170,5 @@ type Capture struct {
 func (c *Collector) Capture() Capture {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return Capture{State: c.stateLocked(), Logs: append([]byte(nil), c.data...), Analysis: c.analysisLocked()}
+	return Capture{State: c.stateLocked(), Logs: c.snapshotLocked(), Analysis: c.analysisLocked()}
 }

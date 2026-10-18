@@ -153,9 +153,9 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 			m.ID = newID("map_")
 			m.Status = model.StatusStopped
 		} else if existing, ok := s.store.GetMapping(m.ID); ok {
-			if existing.Status == model.StatusRunning {
+			if existing.Status != model.StatusStopped {
 				res.Skipped++
-				res.Errors = append(res.Errors, fmt.Sprintf("row %d: mapping %s is running, stop first", i+1, m.ID))
+				res.Errors = append(res.Errors, fmt.Sprintf("row %d: mapping %s is not stopped, clean up and stop first", i+1, m.ID))
 				continue
 			}
 			// The documented text format has no network tuning columns.

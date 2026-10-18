@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/validation"
 )
 
 type mappingAction struct {
@@ -136,15 +137,10 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 	} else {
 		existing, ok := s.store.GetMapping(m.ID)
 		if ok {
-			if existing.Status == model.StatusRunning {
-				changed := existing.NodeID != m.NodeID ||
-					existing.TunName != m.TunName ||
-					existing.TableID != m.TableID ||
-					existing.Subnet != m.Subnet || existing.L2TPUser != m.L2TPUser || existing.L2TPPass != m.L2TPPass ||
-					existing.EffectiveMTU() != m.EffectiveMTU() || existing.EffectiveMSS() != m.EffectiveMSS() ||
-					existing.EffectiveQueueLength() != m.EffectiveQueueLength() || existing.EffectiveUDPPolicy() != m.EffectiveUDPPolicy() || existing.EffectiveDNSMode() != m.EffectiveDNSMode()
+			if existing.Status != model.StatusStopped {
+				changed := !validation.SameMappingSettings(existing, m)
 				if changed {
-					writeError(w, http.StatusBadRequest, "mapping is running; stop it before changing any settings")
+					writeError(w, http.StatusBadRequest, "mapping is not stopped; cleanly stop it before changing settings")
 					return
 				}
 			}

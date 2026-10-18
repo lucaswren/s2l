@@ -37,10 +37,10 @@ async function restore() {
 onMounted(() => perform(load));
 </script>
 <template>
-  <el-card shadow="never" class="section-gap">
+  <el-card shadow="never" class="settings-card">
     <template #header>配置备份与回滚</template>
-    <p>节点或映射配置修改前自动备份，保留最近 10 份；运行状态变化不产生备份。备份包含凭据，仅在服务器私有目录保存，不进入日志包。</p>
-    <p>范围：节点与映射。管理账号、监听端口、SSH、IPsec 和系统文件不在此回滚范围。恢复前请停止全部映射，包括操作失败的映射。</p>
+    <p>节点与映射修改前自动备份，保留最近 10 份。恢复前需停止全部映射。</p>
+    <details class="muted"><summary>备份范围</summary><p>包含节点、映射及其凭据；不含管理账号、端口、SSH、IPsec 和系统时间。备份仅存于服务器，不进入日志包。</p></details>
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
     <el-alert v-if="message" :title="message" type="success" :closable="false" />
     <div class="actions section-gap">

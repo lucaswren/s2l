@@ -12,9 +12,14 @@ exec 9>/run/s2l-update.lock
 flock -n 9 || { echo "[ERROR] 另一个 S2L 升级正在运行。" >&2; exit 1; }
 python3 "$ROOT_DIR/script/verify_update.py" preflight /opt/s2l/config.json
 [[ -x /opt/s2l/s2l && -f "$ROOT_DIR/web/dist/index.html" ]] || { echo "[ERROR] 缺少已安装程序或内嵌前端。" >&2; exit 1; }
-for file in deploy/systemd/{s2l,s2l-guard,s2l-ipsec}.service deploy/systemd/xl2tpd-s2l.conf script/{s2l.sh,remote_update.sh,manage_config.py,manage_ssh.py,manage_ipsec.py}; do
+for file in deploy/systemd/{s2l,s2l-guard,s2l-ipsec}.service deploy/systemd/xl2tpd-s2l.conf script/{s2l.sh,remote_update.sh,manage_config.py,manage_ssh.py,manage_ipsec.py,manage_time.py,manage_update.py,verify_update.py}; do
   [[ -f "$ROOT_DIR/$file" ]] || { echo "[ERROR] 源码不完整：$file" >&2; exit 1; }
 done
+report_web_update() {
+  if [[ -n "${S2L_WEB_UPDATE_ID:-}" && -f /opt/s2l/manage_update.py ]]; then
+    python3 /opt/s2l/manage_update.py phase "$S2L_WEB_UPDATE_ID" "$1" >/dev/null 2>&1 || true
+  fi
+}
 work="$(mktemp -d /tmp/s2l-build.XXXXXXXX)"
 backup=""
 changed=0
@@ -27,6 +32,7 @@ finish() {
   local result=$?
   trap - EXIT INT TERM
   if (( changed && !complete )); then
+    report_web_update rolling_back
     echo "[ERROR] 升级未完成，停止拨号服务并尝试恢复备份..." >&2
     systemctl stop xl2tpd s2l || true
     if (( snapshot )); then
@@ -52,9 +58,16 @@ trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+report_web_update building
 echo "[INFO] 编译 S2L，现有服务继续运行..."
-(cd "$ROOT_DIR" && go build -o "$work/s2l" ./cmd/s2l)
+S2L_BUILD_VERSION="${S2L_VERSION:-${S2L_REF:-source}}"
+S2L_BUILD_COMMIT="${S2L_COMMIT:-}"
+[[ "$S2L_BUILD_VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]] || { echo "[ERROR] 无效的构建版本" >&2; exit 1; }
+[[ -z "$S2L_BUILD_COMMIT" || "$S2L_BUILD_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "[ERROR] 无效的构建提交" >&2; exit 1; }
+S2L_BUILD_FLAGS="-X github.com/lucaswren/s2l/internal/buildinfo.Version=$S2L_BUILD_VERSION -X github.com/lucaswren/s2l/internal/buildinfo.Revision=$S2L_BUILD_COMMIT"
+(cd "$ROOT_DIR" && go build -ldflags "$S2L_BUILD_FLAGS" -o "$work/s2l" ./cmd/s2l)
 backup="$(mktemp -d /root/s2l-backup.XXXXXXXX)"
+report_web_update backup
 echo "[INFO] 构建完成；短暂停止拨号并备份到 $backup ..."
 systemctl is-active --quiet s2l && was_s2l=1 || true
 systemctl is-active --quiet xl2tpd && was_l2tp=1 || true
@@ -77,19 +90,22 @@ iptables-save > "$backup/iptables.v4"
 ip6tables-save > "$backup/iptables.v6"
 printf '%s\n' "${S2L_REF:-reviewed-checkout}" > "$backup/requested-ref.txt"
 
+report_web_update installing
 install -m 755 "$work/s2l" /opt/s2l/s2l
 install -m 755 "$ROOT_DIR/script/s2l.sh" /usr/local/bin/s2l
 install -m 700 "$ROOT_DIR/script/remote_update.sh" /opt/s2l/remote_update.sh
-for file in manage_config.py manage_ssh.py manage_ipsec.py; do install -m 600 "$ROOT_DIR/script/$file" "/opt/s2l/$file"; done
+for file in manage_config.py manage_ssh.py manage_ipsec.py manage_time.py manage_update.py verify_update.py; do install -m 600 "$ROOT_DIR/script/$file" "/opt/s2l/$file"; done
 for unit in s2l s2l-guard s2l-ipsec; do install -m 644 "$ROOT_DIR/deploy/systemd/$unit.service" "/etc/systemd/system/$unit.service"; done
 mkdir -p /etc/systemd/system/xl2tpd.service.d
 install -m 644 "$ROOT_DIR/deploy/systemd/xl2tpd-s2l.conf" /etc/systemd/system/xl2tpd.service.d/s2l.conf
+report_web_update restarting
 systemctl daemon-reload
 systemctl enable s2l-guard.service
 systemctl restart s2l-guard.service
 if (( was_l2tp )); then systemctl start xl2tpd; fi
 if (( was_s2l )); then
   systemctl start s2l
+  report_web_update verifying
   python3 "$ROOT_DIR/script/verify_update.py" health /opt/s2l/config.json
   systemctl is-active --quiet s2l
 fi

@@ -102,3 +102,19 @@ func TestDebugWriterDoesNotCreateFilesOrCollectWhenDisabled(t *testing.T) {
 		t.Fatal("collected after stop")
 	}
 }
+
+func TestProxyRejectionsAcrossChunks(t *testing.T) {
+	writer, err := openDebugLog("unused")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer writer.Close()
+	for _, fragment := range []string{"socks5: request re", "jected, code=9\n", "socks5: request rejected, code=2\n"} {
+		if _, err := writer.Write([]byte(fragment)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if writer.Status().ProxyRejections != 2 {
+		t.Fatal(writer.Status())
+	}
+}

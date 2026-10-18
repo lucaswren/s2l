@@ -30,12 +30,13 @@ def main():
             tools.mkdir()
             mocks = {
                 "go": r'''[[ "${FAIL_BUILD:-0}" != 1 ]] || exit 1
-cat > "$3" <<'BINARY'
+for ((i=1; i<=$#; i++)); do if [[ "${!i}" == -o ]]; then j=$((i+1)); target="${!j}"; break; fi; done
+cat > "$target" <<'BINARY'
 #!/bin/bash
 echo guard-only >> "$S2L_TEST_LOG"
 exit 0
 BINARY
-chmod 755 "$3"''',
+chmod 755 "$target"''',
                 "systemctl": r'''echo "$*" >> "$S2L_TEST_LOG"
 case "$1" in
 is-active) [[ -f "$S2L_TEST_STATE/${@: -1}" ]] ;;

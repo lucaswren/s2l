@@ -77,12 +77,13 @@ type ResolverStatus struct {
 }
 
 type ProcessStatus struct {
-	LogBytes      uint64 `json:"log_bytes"`
-	Timeouts      uint64 `json:"timeouts"`
-	Refused       uint64 `json:"refused"`
-	TLSFailures   uint64 `json:"tls_failures"`
-	NetworkErrors uint64 `json:"network_errors"`
-	Exits         uint64 `json:"exits"`
+	ProxyRejections uint64 `json:"proxy_rejections"`
+	LogBytes        uint64 `json:"log_bytes"`
+	Timeouts        uint64 `json:"timeouts"`
+	Refused         uint64 `json:"refused"`
+	TLSFailures     uint64 `json:"tls_failures"`
+	NetworkErrors   uint64 `json:"network_errors"`
+	Exits           uint64 `json:"exits"`
 }
 
 // TunTraffic 单个 TUN 网卡流量快照（供 /api/status 使用）

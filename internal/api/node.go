@@ -27,6 +27,10 @@ func (s *Server) handleNodeByID(w http.ResponseWriter, r *http.Request) {
 	}
 	id := parts[0]
 
+	if len(parts) == 2 && parts[1] == "network-test" {
+		s.handleNodeNetworkTest(w, r, id)
+		return
+	}
 	// POST /api/nodes/{id}/speedtest
 	if len(parts) == 2 && parts[1] == "speedtest" {
 		s.handleNodeSpeedTest(w, r, id)

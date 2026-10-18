@@ -42,6 +42,7 @@ jobs:
       - name: Check all shell scripts
         run: for script in script/*.sh; do bash -n "$script"; done
       - run: npm --prefix web ci
+      - run: npm --prefix web test
       - run: npm --prefix web run build
       - run: python3 script/collect_frontend_licenses.py
       - run: git diff --exit-code -- web/dist

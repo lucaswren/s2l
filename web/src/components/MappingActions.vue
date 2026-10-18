@@ -13,12 +13,12 @@ defineEmits(["edit", "action", "remove"]);
       @click="$emit('action', mapping.id, 'start')"
       >启动</el-button
     ><el-button
-      v-else
+      v-if="mapping.status !== 'stopped'"
       type="warning"
       :loading="actionId === mapping.id + 'stop'"
       :disabled="!!actionId"
       @click="$emit('action', mapping.id, 'stop')"
-      >停止</el-button
+      >{{ mapping.status === 'error' ? '清理并停止' : '停止' }}</el-button
     ><el-button
       type="danger"
       plain

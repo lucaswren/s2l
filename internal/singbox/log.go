@@ -146,6 +146,9 @@ func (l *rotatingLog) observe(p []byte) {
 			if f[6] || f[7] {
 				l.status.NetworkErrors++
 			}
+			if f[8] {
+				l.status.ProxyRejections++
+			}
 			l.classifier = lineClassifier{}
 			continue
 		}
@@ -172,12 +175,12 @@ func (l *rotatingLog) observe(p []byte) {
 }
 
 type lineClassifier struct {
-	matched [8]int
-	found   [8]bool
+	matched [9]int
+	found   [9]bool
 }
 
-var logKeywords = [8]string{"timeout", "deadline exceeded", "connection refused", "tls", "error", "failed", "network is unreachable", "no route to host"}
-var logKeywordPrefixes = func() (out [8][]int) {
+var logKeywords = [9]string{"timeout", "deadline exceeded", "connection refused", "tls", "error", "failed", "network is unreachable", "no route to host", "socks5: request rejected"}
+var logKeywordPrefixes = func() (out [9][]int) {
 	for k, word := range logKeywords {
 		out[k] = make([]int, len(word))
 		for i, j := 1, 0; i < len(word); i++ {

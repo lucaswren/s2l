@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/validation"
 )
 
 // Store 线程安全的 JSON 持久化存储
@@ -59,12 +60,15 @@ func (s *Store) load() error {
 		}
 		return nil
 	}
-	if s.state.Nodes == nil {
-		s.state.Nodes = []model.SocksNode{}
+	if s.state.Nodes == nil || s.state.Mappings == nil {
+		return s.recoverCorruptState(data)
 	}
-	if s.state.Mappings == nil {
-		s.state.Mappings = []model.TunnelMapping{}
+	if err := validation.State(s.state); err != nil {
+		if recoveryErr := s.recoverCorruptState(data); recoveryErr != nil {
+			return fmt.Errorf("invalid state: %w; backup recovery: %v", err, recoveryErr)
+		}
 	}
+
 	return nil
 }
 
@@ -195,8 +199,8 @@ func (s *Store) UpsertNode(n model.SocksNode) error {
 		if existing.ID == n.ID {
 			if existing.Addr != n.Addr || existing.Username != n.Username || existing.Password != n.Password {
 				for _, m := range s.state.Mappings {
-					if m.NodeID == n.ID && m.Status == model.StatusRunning {
-						return fmt.Errorf("node is used by a running mapping; stop it before changing connection settings")
+					if m.NodeID == n.ID && m.Status != model.StatusStopped {
+						return fmt.Errorf("node is used by a mapping that is not stopped; cleanly stop it before changing connection settings")
 					}
 				}
 			}
@@ -256,6 +260,9 @@ func (s *Store) UpsertMapping(m model.TunnelMapping) error {
 	previous := cloneState(s.state)
 	for i, existing := range s.state.Mappings {
 		if existing.ID == m.ID {
+			if existing.Status != model.StatusStopped && (!validation.SameMappingSettings(existing, m) || m.Status != existing.Status) {
+				return fmt.Errorf("mapping is not stopped; cleanly stop it before changing settings")
+			}
 			s.state.Mappings[i] = m
 			return s.saveOrRestoreLocked(previous)
 		}

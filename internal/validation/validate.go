@@ -84,3 +84,19 @@ func SubnetsOverlap(a, b string) bool {
 	}
 	return an.Contains(bn.IP) || bn.Contains(an.IP)
 }
+
+// SameMappingSettings compares the effective runtime configuration, excluding
+// lifecycle status and diagnostics. Defaults and their explicit values agree.
+func SameMappingSettings(a, b model.TunnelMapping) bool {
+	normalize := func(m model.TunnelMapping) model.TunnelMapping {
+		m.Status = ""
+		m.ErrorMsg = ""
+		m.MTU = m.EffectiveMTU()
+		m.MSS = m.EffectiveMSS()
+		m.QueueLength = m.EffectiveQueueLength()
+		m.UDPPolicy = m.EffectiveUDPPolicy()
+		m.DNSMode = m.EffectiveDNSMode()
+		return m
+	}
+	return normalize(a) == normalize(b)
+}

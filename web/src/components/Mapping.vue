@@ -240,10 +240,10 @@ async function remove(id) {
   }
 }
 
-const editingRunning = computed(() => {
+const editingActive = computed(() => {
   if (!editingId.value) return false;
   const m = props.allMappings.find((x) => x.id === editingId.value);
-  return m?.status === "running";
+  return m && m.status !== "stopped";
 });
 </script>
 <template>
@@ -381,8 +381,8 @@ const editingRunning = computed(() => {
       :show-close="!busy"
       @close="close"
       ><el-alert
-        v-if="editingRunning"
-        title="停止映射后才能修改设置与凭据。"
+        v-if="editingActive"
+        title="请先停止映射；异常映射需清理成功后再修改配置。"
         type="warning"
         :closable="false"
         class="section-gap"
@@ -390,7 +390,7 @@ const editingRunning = computed(() => {
         ref="formRef"
         :model="form"
         label-position="top"
-        :disabled="busy"
+        :disabled="busy || editingActive"
         @submit.prevent="save"
         ><div class="form-grid">
           <el-form-item
@@ -401,7 +401,7 @@ const editingRunning = computed(() => {
             ><el-select
               v-model="form.node_id"
               filterable
-              :disabled="editingRunning"
+              :disabled="editingActive"
               ><el-option
                 v-for="n in nodes"
                 :key="n.id"
@@ -415,11 +415,11 @@ const editingRunning = computed(() => {
               v-model="form.table_id"
               :min="1"
               :max="252"
-              :disabled="editingRunning" /></el-form-item
+              :disabled="editingActive" /></el-form-item
           ><el-form-item label="TUN 接口" prop="tun_name" :rules="required"
             ><el-input
               v-model="form.tun_name"
-              :disabled="editingRunning" /></el-form-item
+              :disabled="editingActive" /></el-form-item
           ><el-form-item
             label="IPv4 子网"
             prop="subnet"
@@ -427,25 +427,25 @@ const editingRunning = computed(() => {
             class="form-wide"
             ><el-input
               v-model="form.subnet"
-              :disabled="editingRunning"
+              :disabled="editingActive"
               placeholder="10.0.101.0/24" /></el-form-item
           ><el-form-item label="L2TP 账号" prop="l2tp_user" :rules="required"
             ><el-input
               v-model="form.l2tp_user"
-              :disabled="editingRunning" /></el-form-item
+              :disabled="editingActive" /></el-form-item
           ><el-form-item label="L2TP 密码" prop="l2tp_pass" :rules="required"
             ><el-input
               v-model="form.l2tp_pass"
               type="password"
               show-password
-              :readonly="editingRunning"
+              :readonly="editingActive"
               autocomplete="new-password"
           /></el-form-item>
-          <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingRunning" /></el-form-item>
-          <el-form-item label="TCP MSS"><el-input-number v-model="form.mss" :min="536" :max="form.mtu - 40" :disabled="editingRunning" /></el-form-item>
-          <el-form-item label="接口队列长度"><el-input-number v-model="form.queue_length" :min="100" :max="10000" :disabled="editingRunning" /></el-form-item>
-          <el-form-item label="UDP 策略"><el-select v-model="form.udp_policy" :disabled="editingRunning"><el-option value="reject-quic" label="拒绝 UDP/443，支持时回退 TCP" /><el-option value="allow" label="允许 UDP（需上游支持）" /><el-option value="reject" label="拒绝其他 UDP（保留 53 端口 DNS）" /></el-select></el-form-item>
-          <el-form-item label="DNS 模式" class="form-wide"><el-select v-model="form.dns_mode" :disabled="editingRunning"><el-option value="auto" label="自动：DoH 故障时切换 TCP DNS" /><el-option value="doh" label="仅 DoH" /><el-option value="tcp" label="仅 TCP DNS" /></el-select></el-form-item>
+          <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingActive" /></el-form-item>
+          <el-form-item label="TCP MSS"><el-input-number v-model="form.mss" :min="536" :max="form.mtu - 40" :disabled="editingActive" /></el-form-item>
+          <el-form-item label="接口队列长度"><el-input-number v-model="form.queue_length" :min="100" :max="10000" :disabled="editingActive" /></el-form-item>
+          <el-form-item label="UDP 策略"><el-select v-model="form.udp_policy" :disabled="editingActive"><el-option value="reject-quic" label="拒绝 UDP/443，支持时回退 TCP" /><el-option value="allow" label="允许 UDP（需上游支持）" /><el-option value="reject" label="拒绝其他 UDP（保留 53 端口 DNS）" /></el-select></el-form-item>
+          <el-form-item label="DNS 模式" class="form-wide"><el-select v-model="form.dns_mode" :disabled="editingActive"><el-option value="auto" label="自动：DoH 故障时切换 TCP DNS" /><el-option value="doh" label="仅 DoH" /><el-option value="tcp" label="仅 TCP DNS" /></el-select></el-form-item>
           <p class="muted form-wide">默认 MTU 1400、MSS 1200。减小 MTU 时请同步调整 MSS；允许 UDP 无法为不支持 UDP 的节点增加能力。</p>
           </div></el-form
       ><template #footer
@@ -455,7 +455,7 @@ const editingRunning = computed(() => {
         ><el-button
           type="primary"
           :loading="busy"
-          :disabled="editingRunning"
+          :disabled="editingActive"
           @click="save"
           >保存</el-button
         ></template

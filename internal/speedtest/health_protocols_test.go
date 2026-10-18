@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -146,7 +147,7 @@ func fixtureGreeting(conn net.Conn, auth bool) bool {
 }
 
 func TestUDPHealthThroughAuthenticatedSOCKSRelay(t *testing.T) {
-	for _, mode := range []string{"valid", "unsupported", "refused", "wrong-id", "fragment", "wrong-source", "timeout"} {
+	for _, mode := range []string{"valid", "unsupported", "refused", "reserved-code", "wrong-id", "fragment", "wrong-source", "timeout"} {
 		t.Run(mode, func(t *testing.T) {
 			relay, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
 			if err != nil {
@@ -205,10 +206,13 @@ func TestUDPHealthThroughAuthenticatedSOCKSRelay(t *testing.T) {
 					t.Error("expected UDP ASSOCIATE")
 					return
 				}
-				if mode == "unsupported" || mode == "refused" {
+				if mode == "unsupported" || mode == "refused" || mode == "reserved-code" {
 					code := byte(7)
 					if mode == "refused" {
 						code = 2
+					}
+					if mode == "reserved-code" {
+						code = 9
 					}
 					conn.Write([]byte{5, code, 0, 1, 0, 0, 0, 0, 0, 0})
 					return
@@ -231,6 +235,9 @@ func TestUDPHealthThroughAuthenticatedSOCKSRelay(t *testing.T) {
 			}
 			if mode == "unsupported" {
 				want = "unsupported"
+			}
+			if mode == "reserved-code" && !strings.Contains(result.Error, "code=9") {
+				t.Fatal(result)
 			}
 			if result.State != want {
 				t.Fatalf("got %+v, want %s", result, want)

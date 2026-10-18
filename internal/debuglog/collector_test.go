@@ -123,3 +123,59 @@ func TestSlowFormattingCannotCrossDebugSessions(t *testing.T) {
 		t.Fatal("old formatted message entered new session")
 	}
 }
+
+func TestSessionStopMetadata(t *testing.T) {
+	c := &Collector{}
+	state := c.Set(true)
+	if state.Started.IsZero() || state.DurationSeconds != 1800 || !state.Stopped.IsZero() {
+		t.Fatal(state)
+	}
+	c.until = time.Now().Add(-time.Second)
+	state = c.State()
+	if state.Enabled || state.StopReason != "expired" || !state.Stopped.Equal(c.until) {
+		t.Fatal(state)
+	}
+	c.Set(false)
+	if c.State().StopReason != "expired" {
+		t.Fatal(c.State())
+	}
+	c.Set(true)
+	state = c.Set(false)
+	if state.StopReason != "manual" || state.Stopped.IsZero() {
+		t.Fatal(state)
+	}
+	c.Set(true)
+	if c.State().StopReason != "" || !c.State().Stopped.IsZero() {
+		t.Fatal(c.State())
+	}
+}
+
+func TestCircularLogBufferOrderAndOverwriteCount(t *testing.T) {
+	c := &Collector{}
+	var expected []byte
+	total := 0
+	for i, n := range []int{0, 23, Limit / 2, Limit / 2, 7, Limit / 3, Limit, Limit + 41, 997} {
+		p := bytes.Repeat([]byte{byte('a' + i)}, n)
+		c.appendBytesLocked(p)
+		expected = append(expected, p...)
+		total += len(p)
+		if len(expected) > Limit {
+			expected = expected[len(expected)-Limit:]
+		}
+		if !bytes.Equal(c.Snapshot(), expected) {
+			t.Fatalf("write %d reordered bytes", i)
+		}
+		if c.State().Dropped != total-len(expected) {
+			t.Fatalf("write %d: dropped=%d", i, c.State().Dropped)
+		}
+	}
+	snapshot := c.Snapshot()
+	snapshot[0] ^= 1
+	if bytes.Equal(snapshot, c.Snapshot()) {
+		t.Fatal("snapshot aliases internal storage")
+	}
+	c.Set(true)
+	if c.head != 0 || len(c.Snapshot()) != 0 {
+		t.Fatal("new session retained circular buffer state")
+	}
+}

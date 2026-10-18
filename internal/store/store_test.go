@@ -14,7 +14,7 @@ func TestFailedReplaceRestoresMemoryAndCleansTemporaryFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertNode(model.SocksNode{ID: "n", Name: "original"}); err != nil {
+	if err := s.UpsertNode(model.SocksNode{ID: "n", Name: "original", Addr: "127.0.0.1:1080"}); err != nil {
 		t.Fatal(err)
 	}
 	reloaded, err := New(path)
@@ -67,5 +67,56 @@ func TestActiveNodeConnectionSettingsCannotChange(t *testing.T) {
 	n.Password = "changed"
 	if err := s.UpsertNode(n); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFailedCleanupProtectsMappingAndNodeUntilStopped(t *testing.T) {
+	s, err := New(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := model.SocksNode{ID: "n", Addr: "127.0.0.1:1080", Password: "original"}
+	if err = s.UpsertNode(node); err != nil {
+		t.Fatal(err)
+	}
+	m := model.TunnelMapping{ID: "m", NodeID: "n", TunName: "tun101", TableID: 101, Subnet: "10.0.101.0/24", L2TPUser: "u", L2TPPass: "p", Status: model.StatusError, ErrorMsg: "cleanup failed"}
+	if err = s.UpsertMapping(m); err != nil {
+		t.Fatal(err)
+	}
+	changed := m
+	changed.TunName = "tun102"
+	if err = s.UpsertMapping(changed); err == nil {
+		t.Fatal("lost old TUN identity after failed cleanup")
+	}
+	changed = m
+	changed.Status = model.StatusStopped
+	if err = s.UpsertMapping(changed); err == nil {
+		t.Fatal("upsert bypassed lifecycle cleanup")
+	}
+	node.Password = "changed"
+	if err = s.UpsertNode(node); err == nil {
+		t.Fatal("changed credentials still owned by failed mapping")
+	}
+	saved, _ := s.GetMapping("m")
+	if saved != m {
+		t.Fatal("rejected mutation changed state")
+	}
+	// Explicit defaults don't change the effective runtime configuration.
+	equivalent := m
+	equivalent.MTU = m.EffectiveMTU()
+	equivalent.DNSMode = m.EffectiveDNSMode()
+	if err = s.UpsertMapping(equivalent); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.UpdateMappingStatus("m", model.StatusStopped, ""); err != nil {
+		t.Fatal(err)
+	}
+	changed.Status = model.StatusStopped
+	changed.TunName = "tun102"
+	if err = s.UpsertMapping(changed); err != nil {
+		t.Fatal("stopped mapping cannot be edited", err)
+	}
+	if err = s.UpsertNode(node); err != nil {
+		t.Fatal("stopped node cannot be edited", err)
 	}
 }

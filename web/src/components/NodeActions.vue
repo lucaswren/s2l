@@ -1,9 +1,10 @@
 <script setup>
 defineProps({ node: Object, testingId: String });
-defineEmits(["speed", "edit", "remove"]);
+defineEmits(["speed", "network", "edit", "remove"]);
 </script>
 <template>
   <div class="actions">
+    <el-button @click="$emit('network', node)">网络测试</el-button>
     <el-button
       type="primary"
       plain

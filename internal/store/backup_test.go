@@ -195,3 +195,48 @@ func TestCorruptPrimaryWithoutValidBackupFailsClosed(t *testing.T) {
 		t.Fatal("destroyed invalid primary")
 	}
 }
+
+func TestIncompleteOrSemanticallyInvalidPrimaryRecoversStopped(t *testing.T) {
+	for name, original := range map[string]string{
+		"missing fields": `{}`,
+		"null list":      `{"nodes":[],"mappings":null}`,
+		"duplicate IDs":  `{"nodes":[{"id":"n","addr":"127.0.0.1:1080"},{"id":"n","addr":"127.0.0.1:1081"}],"mappings":[]}`,
+		"invalid node":   `{"nodes":[{"id":"n","addr":"not-an-endpoint"}],"mappings":[]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "state.json")
+			s, err := New(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = s.UpsertNode(model.SocksNode{ID: "n", Name: "known-good", Addr: "127.0.0.1:1080"}); err != nil {
+				t.Fatal(err)
+			}
+			if err = s.UpsertMapping(model.TunnelMapping{ID: "m", NodeID: "n", TunName: "tun101", TableID: 101, Subnet: "10.0.101.0/24", L2TPUser: "u", L2TPPass: "p", Status: model.StatusRunning}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.CreateBackup(); err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(path, []byte(original), 0600); err != nil {
+				t.Fatal(err)
+			}
+			recovered, err := New(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := recovered.Snapshot()
+			if recovered.RecoveryNotice() == "" || len(state.Nodes) != 1 || state.Nodes[0].Name != "known-good" || len(state.Mappings) != 1 || state.Mappings[0].Status != model.StatusStopped {
+				t.Fatal("unsafe semantic recovery", state)
+			}
+			evidence, _ := filepath.Glob(filepath.Join(s.DataDir(), "backups", "corrupt-*.json"))
+			if len(evidence) != 1 {
+				t.Fatal("missing original evidence")
+			}
+			saved, err := os.ReadFile(evidence[0])
+			if err != nil || string(saved) != original {
+				t.Fatal("original was changed", err)
+			}
+		})
+	}
+}

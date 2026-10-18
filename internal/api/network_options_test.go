@@ -52,3 +52,46 @@ func TestMappingNetworkOptionsRoundTripAndRunningProtection(t *testing.T) {
 		}
 	}
 }
+
+func TestErrorMappingCannotBeEditedOrImportedUntilStopped(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = st.UpsertNode(model.SocksNode{ID: "n", Addr: "127.0.0.1:1080"}); err != nil {
+		t.Fatal(err)
+	}
+	m := model.TunnelMapping{ID: "m", NodeID: "n", TunName: "tun101", TableID: 101, Subnet: "10.0.101.0/24", L2TPUser: "u", L2TPPass: "p", Status: model.StatusError, ErrorMsg: "cleanup failed"}
+	if err = st.UpsertMapping(m); err != nil {
+		t.Fatal(err)
+	}
+	handler := NewServer(st, nil, nil).Handler()
+	change := m
+	change.TunName = "tun102"
+	for _, path := range []string{"/api/mappings", "/api/mappings/import"} {
+		var body []byte
+		if path == "/api/mappings" {
+			body, _ = json.Marshal(change)
+		} else {
+			body, _ = json.Marshal(importMappingsReq{Mappings: []model.TunnelMapping{change}})
+		}
+		r := httptest.NewRequest("POST", path, bytes.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if path == "/api/mappings" && w.Code != 400 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+		if path == "/api/mappings/import" {
+			var result importResult
+			json.Unmarshal(w.Body.Bytes(), &result)
+			if result.Skipped != 1 || result.Updated != 0 {
+				t.Fatal(w.Body.String())
+			}
+		}
+		saved, _ := st.GetMapping("m")
+		if saved != m {
+			t.Fatal("lost failed cleanup configuration", saved)
+		}
+	}
+}
