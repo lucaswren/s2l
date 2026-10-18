@@ -92,7 +92,8 @@ async function refresh() {
       uptime_sec: st?.uptime_sec || 0,
       tun_traffic: Array.isArray(st?.tun_traffic) ? st.tun_traffic : [],
       singbox_pids: st?.singbox_pids || {},
- upstream_health: st?.upstream_health || {},
+      upstream_health: st?.upstream_health || {},
+      configuration_recovery: st?.configuration_recovery || '',
     };
     error.value = "";
   } catch (e) {
@@ -184,6 +185,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
         :closable="false"
         class="section-gap"
       />
+      <el-alert v-if="status.configuration_recovery" :title="status.configuration_recovery" type="warning" :closable="false" class="section-gap" />
       <el-card shadow="never" class="workspace">
         <el-tabs v-model="activeTab">
           <el-tab-pane label="线路管理" name="lines">
@@ -191,6 +193,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
               :nodes="nodes"
               :mappings="filteredMappings"
               :all-mappings="mappings"
+              :health="status.upstream_health"
               @changed="refresh"
               @toast="pushToast"
             />
@@ -202,16 +205,16 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
             />
             <el-collapse class="monitor-collapse"
               ><el-collapse-item title="运行监控" name="monitor"
-                ><Status :status="status" /></el-collapse-item
+                ><Status :status="status" @changed="refresh" @toast="pushToast" /></el-collapse-item
             ></el-collapse>
           </el-tab-pane>
           <el-tab-pane label="系统设置" name="settings" lazy
-            ><Settings @toast="pushToast"
+            ><Settings @toast="pushToast" @changed="refresh"
           /></el-tab-pane>
         </el-tabs>
       </el-card>
-      <el-drawer v-model="helpVisible" title="使用说明" size="min(540px, 100vw)"
-        ><Guide
+      <el-drawer v-model="helpVisible" title="使用说明" size="min(540px, 100vw)" destroy-on-close
+        ><Guide :mappings="mappings" :health="status.upstream_health"
       /></el-drawer>
       <footer class="muted">
         运行 {{ formatUptime(status.uptime_sec) }} · 状态每 5 秒刷新

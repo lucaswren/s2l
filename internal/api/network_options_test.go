@@ -7,10 +7,8 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/lucaswren/s2l/internal/model"
-	"github.com/lucaswren/s2l/internal/service"
 	"github.com/lucaswren/s2l/internal/store"
 )
 
@@ -52,32 +50,5 @@ func TestMappingNetworkOptionsRoundTripAndRunningProtection(t *testing.T) {
 		if code := post(change); code != http.StatusBadRequest {
 			t.Fatalf("running mapping accepted options change: %+v, code=%d", change, code)
 		}
-	}
-}
-
-func TestDiagnosticTrailingSlashDoesNotAcquireMutationLock(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "state.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := NewServer(st, service.NewMappingService(st, nil, nil, nil), nil)
-	handler := s.Handler()
-	s.mutationMu.Lock()
-	defer s.mutationMu.Unlock()
-	done := make(chan int, 1)
-	go func() {
-		r := httptest.NewRequest(http.MethodPost, "/api/mappings/m/diagnose/", bytes.NewBufferString(`{"url":"https://example.com/image"}`))
-		r.Header.Set("Content-Type", "application/json")
-		w := httptest.NewRecorder()
-		handler.ServeHTTP(w, r)
-		done <- w.Code
-	}()
-	select {
-	case code := <-done:
-		if code != http.StatusBadRequest {
-			t.Fatal(code)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("diagnostic acquired global mutation lock")
 	}
 }

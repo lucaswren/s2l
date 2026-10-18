@@ -3,6 +3,7 @@ package singbox
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/lucaswren/s2l/internal/debuglog"
 	"net"
 	"os"
 	"path/filepath"
@@ -65,9 +66,13 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 		return nil, fmt.Errorf("tun_name is required")
 	}
 
+	level := "info"
+	if debuglog.Default.State().Enabled {
+		level = "debug"
+	}
 	cfg := map[string]any{
 		"log": map[string]any{
-			"level":     "info",
+			"level":     level,
 			"timestamp": true,
 		},
 		"dns": map[string]any{

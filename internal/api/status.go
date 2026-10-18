@@ -30,10 +30,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		pids = map[string]int{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"upstream_health": st.UpstreamHealth,
-		"uptime_sec":      int64(st.Uptime / time.Second),
-		"mappings":        mappings,
-		"tun_traffic":     traffic,
-		"singbox_pids":    pids,
+		"configuration_recovery": s.store.RecoveryNotice(),
+		"upstream_health":        st.UpstreamHealth,
+		"uptime_sec":             int64(st.Uptime / time.Second),
+		"mappings":               mappings,
+		"tun_traffic":            traffic,
+		"singbox_pids":           pids,
 	})
 }

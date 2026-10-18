@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"flag"
+	"github.com/lucaswren/s2l/internal/debuglog"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -21,6 +23,7 @@ import (
 )
 
 func main() {
+	log.SetOutput(io.MultiWriter(os.Stderr, debuglog.Default))
 	cfgPath := flag.String("config", "", "path to config JSON (optional)")
 	guardOnly := flag.Bool("guard-only", false, "install PPP traffic guards and exit (Linux root only)")
 	flag.Parse()

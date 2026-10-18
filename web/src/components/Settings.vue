@@ -1,9 +1,11 @@
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
 import { api, setCredentials, clearCredentials } from "../api/client";
 import { generatePassword } from "../utils/password";
-const emit = defineEmits(["toast"]);
+import Backups from "./Backups.vue";
+import DebugAnalysis from "./DebugAnalysis.vue";
+const emit = defineEmits(["toast", "changed"]);
 const settings = ref({
   account_enabled: false,
   ssh_enabled: false,
@@ -16,6 +18,20 @@ const settings = ref({
     protected: false,
   },
 });
+const debug = ref({enabled:false, bytes:0});
+const debugBusy = ref(false);
+async function toggleDebug() {
+  debugBusy.value = true;
+  try { debug.value = await api.setDebug(!debug.value.enabled); }
+  catch(e) { error.value = e.message; }
+  finally { debugBusy.value = false; }
+}
+async function exportDebug() {
+  debugBusy.value = true;
+  try { await api.exportDebug(); debug.value = await api.debug(); }
+  catch(e) { error.value = e.message; }
+  finally { debugBusy.value = false; }
+}
 const loading = ref(false);
 const busy = ref("");
 const error = ref("");
@@ -75,6 +91,7 @@ async function load() {
   loading.value = true;
   try {
     settings.value = await api.settings();
+    debug.value = await api.debug();
     account.username = settings.value.admin_user;
     ssh.port = settings.value.ssh_ports[0] || 22;
     webPort.port = settings.value.web_port || 443;
@@ -240,9 +257,27 @@ async function saveSSHPassword() {
     busy.value = "";
   }
 }
-onMounted(load);
+let debugTimer;
+onMounted(() => {
+  load();
+  debugTimer = setInterval(() => {
+    if (debug.value.enabled && Date.now() >= Date.parse(debug.value.expires)) debug.value.enabled = false;
+  }, 1000);
+});
+onUnmounted(() => clearInterval(debugTimer));
 </script>
 <template>
+  <el-card class="settings-card">
+    <h3>Debug 日志</h3>
+    <p>默认关闭，不保存排障日志或资源采样。开启后自动收集服务、sing-box 和每 5 秒健康状态日志，30 分钟后停止。最多保留最近 4 MiB 原始日志、512 条时间线事件和 360 次资源采样。关闭后仍可导出，重新开启会清空上次记录；服务重启后清空。</p>
+    <p>现有隧道立即收集当前级别日志；开启后重启映射可获取 debug 级别日志。停止收集不会修改已运行隧道的日志级别，需重启映射恢复 info。</p>
+    <p>导出包含网络地址和访问目标，分享前请检查内容。</p>
+    <el-button :loading="debugBusy" @click="toggleDebug">{{ debug.enabled ? '停止收集' : '开启 Debug' }}</el-button>
+    <el-button :disabled="debugBusy" @click="exportDebug">导出日志 ZIP</el-button>
+    <DebugAnalysis :key="debug.session_id" />
+    <p>{{ debug.enabled ? '收集中' : '未收集' }} · {{ Math.round(debug.bytes / 1024) }} KiB<span v-if="debug.enabled"> · 到期 {{ new Date(debug.expires).toLocaleString() }}</span></p>
+  </el-card>
+  <Backups @changed="emit('changed')" />
   <div class="section-head">
     <div>
       <h2>系统设置</h2>

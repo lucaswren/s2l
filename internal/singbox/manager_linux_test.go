@@ -3,8 +3,10 @@
 package singbox
 
 import (
+	"github.com/lucaswren/s2l/internal/model"
 	"os"
 	"os/exec"
+	"sync"
 	"testing"
 	"time"
 )
@@ -17,6 +19,34 @@ func TestExitedProcessDoesNotUseLiveReusedPID(t *testing.T) {
 	if m.PID("tun101") != 0 || len(m.PIDs()) != 0 {
 		t.Fatal("exited child was reported alive using a live PID")
 	}
+}
+
+func TestRuntimeSnapshotNeverMixesProcessGenerations(t *testing.T) {
+	m := NewManager("")
+	a := &managedProc{pid: 100, done: make(chan struct{}), exits: 7, log: &rotatingLog{status: model.ProcessStatus{LogBytes: 100}}}
+	b := &managedProc{pid: 200, done: make(chan struct{}), exits: 20, log: &rotatingLog{status: model.ProcessStatus{LogBytes: 200}}}
+	m.procs["tun101"] = a
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 10000; i++ {
+			m.mu.Lock()
+			if i%2 == 0 {
+				m.procs["tun101"] = a
+			} else {
+				m.procs["tun101"] = b
+			}
+			m.mu.Unlock()
+		}
+	}()
+	for i := 0; i < 10000; i++ {
+		stats := m.RuntimeSnapshot()["tun101"]
+		if (stats.PID == 100 && (stats.Process.LogBytes != 100 || stats.Process.Exits != 7)) || (stats.PID == 200 && (stats.Process.LogBytes != 200 || stats.Process.Exits != 20)) {
+			t.Error("snapshot mixed process generations")
+		}
+	}
+	wg.Wait()
 }
 
 func TestReapSignalsExitBeforeTakingManagerLock(t *testing.T) {

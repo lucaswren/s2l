@@ -15,20 +15,20 @@ import (
 
 // Server HTTP API + 静态前端
 type Server struct {
-	store           *store.Store
-	svc             *service.MappingService
-	webFS           fs.FS // web/dist 内容；可为 nil（仅 API）
-	settingsMu      sync.Mutex
-	mutationMu      sync.Mutex
-	authMu          sync.RWMutex
-	configPath      string
-	adminUser       string
-	adminPass       string
-	diagnosticSlots chan struct{}
+	store        *store.Store
+	svc          *service.MappingService
+	webFS        fs.FS // web/dist 内容；可为 nil（仅 API）
+	settingsMu   sync.Mutex
+	mutationMu   sync.Mutex
+	authMu       sync.RWMutex
+	configPath   string
+	adminUser    string
+	adminPass    string
+	debugExports chan struct{}
 }
 
 func NewServer(st *store.Store, svc *service.MappingService, webFS fs.FS, credentials ...string) *Server {
-	s := &Server{store: st, svc: svc, webFS: webFS, diagnosticSlots: make(chan struct{}, 4)}
+	s := &Server{store: st, svc: svc, webFS: webFS, debugExports: make(chan struct{}, 2)}
 	if len(credentials) >= 2 {
 		s.adminUser, s.adminPass = credentials[0], credentials[1]
 	}
@@ -38,6 +38,12 @@ func NewServer(st *store.Store, svc *service.MappingService, webFS fs.FS, creden
 // Handler 返回根 http.Handler
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/backups", s.handleBackups)
+	mux.HandleFunc("/api/backups/preview", s.handleBackupRestore)
+	mux.HandleFunc("/api/backups/restore", s.handleBackupRestore)
+	mux.HandleFunc("/api/debug", s.handleDebug)
+	mux.HandleFunc("/api/debug/analysis", s.handleDebugAnalysis)
+	mux.HandleFunc("/api/debug/export", s.handleDebugExport)
 
 	mux.HandleFunc("/api/nodes", s.handleNodes)
 	mux.HandleFunc("/api/nodes/import", s.handleImportNodes)
@@ -100,7 +106,7 @@ func (s *Server) withMutations(next http.Handler) http.Handler {
 		path := strings.TrimRight(r.URL.Path, "/")
 		resource := r.URL.Path == "/api/nodes" || strings.HasPrefix(r.URL.Path, "/api/nodes/") ||
 			r.URL.Path == "/api/mappings" || strings.HasPrefix(r.URL.Path, "/api/mappings/")
-		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasSuffix(path, "/speedtest") || strings.HasSuffix(path, "/diagnose") {
+		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasSuffix(path, "/speedtest") {
 			next.ServeHTTP(w, r)
 			return
 		}

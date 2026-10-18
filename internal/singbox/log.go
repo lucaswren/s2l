@@ -2,8 +2,8 @@ package singbox
 
 import (
 	"fmt"
+	"github.com/lucaswren/s2l/internal/debuglog"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/lucaswren/s2l/internal/model"
@@ -12,13 +12,15 @@ import (
 const logLimit int64 = 5 * 1024 * 1024
 
 type rotatingLog struct {
-	mu      sync.Mutex
-	path    string
-	file    *os.File
-	size    int64
-	limit   int64
-	status  model.ProcessStatus
-	pending string
+	sessionOnly bool
+	mu          sync.Mutex
+	path        string
+	file        *os.File
+	size        int64
+	limit       int64
+	status      model.ProcessStatus
+	classifier  lineClassifier
+	closed      bool
 }
 
 func openRotatingLog(path string) (*rotatingLog, error) {
@@ -73,6 +75,14 @@ func (l *rotatingLog) rotate() error {
 func (l *rotatingLog) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.closed {
+		return 0, os.ErrClosed
+	}
+	if l.sessionOnly {
+		debuglog.Default.Add("sing-box/"+l.path, p)
+		l.observe(p)
+		return len(p), nil
+	}
 	total := 0
 	for len(p) > 0 {
 		if l.file == nil {
@@ -88,33 +98,10 @@ func (l *rotatingLog) Write(p []byte) (int, error) {
 			n = int(l.limit - l.size)
 		}
 		written, err := l.file.Write(p[:n])
+		debuglog.Default.Add("sing-box/"+l.path, p[:written])
 		l.size += int64(written)
 		total += written
-		l.status.LogBytes += uint64(written)
-		l.pending += string(p[:written])
-		for {
-			i := strings.IndexByte(l.pending, '\n')
-			if i < 0 {
-				break
-			}
-			line := strings.ToLower(l.pending[:i])
-			l.pending = l.pending[i+1:]
-			if strings.Contains(line, "timeout") || strings.Contains(line, "deadline exceeded") {
-				l.status.Timeouts++
-			}
-			if strings.Contains(line, "connection refused") {
-				l.status.Refused++
-			}
-			if strings.Contains(line, "tls") && (strings.Contains(line, "error") || strings.Contains(line, "failed")) {
-				l.status.TLSFailures++
-			}
-			if strings.Contains(line, "network is unreachable") || strings.Contains(line, "no route to host") {
-				l.status.NetworkErrors++
-			}
-		}
-		if len(l.pending) > 4096 {
-			l.pending = l.pending[len(l.pending)-4096:]
-		}
+		l.observe(p[:written])
 		p = p[written:]
 		if err != nil {
 			return total, err
@@ -128,6 +115,8 @@ func (l *rotatingLog) Write(p []byte) (int, error) {
 func (l *rotatingLog) Close() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	l.closed = true
+	l.classifier = lineClassifier{}
 	if l.file == nil {
 		return nil
 	}
@@ -136,3 +125,74 @@ func (l *rotatingLog) Close() error {
 	return err
 }
 func (l *rotatingLog) Status() model.ProcessStatus { l.mu.Lock(); defer l.mu.Unlock(); return l.status }
+
+// Classification retains only keyword-match positions and flags, never raw
+// partial lines. Disabled Debug therefore keeps counters without retaining log
+// fragments, and arbitrary stdout/stderr chunk boundaries don't lose errors.
+func (l *rotatingLog) observe(p []byte) {
+	l.status.LogBytes += uint64(len(p))
+	for _, ch := range p {
+		if ch == '\n' {
+			f := l.classifier.found
+			if f[0] || f[1] {
+				l.status.Timeouts++
+			}
+			if f[2] {
+				l.status.Refused++
+			}
+			if f[3] && (f[4] || f[5]) {
+				l.status.TLSFailures++
+			}
+			if f[6] || f[7] {
+				l.status.NetworkErrors++
+			}
+			l.classifier = lineClassifier{}
+			continue
+		}
+		if ch >= 'A' && ch <= 'Z' {
+			ch += 'a' - 'A'
+		}
+		for i, word := range logKeywords {
+			if l.classifier.found[i] {
+				continue
+			}
+			j := l.classifier.matched[i]
+			for j > 0 && word[j] != ch {
+				j = logKeywordPrefixes[i][j-1]
+			}
+			if word[j] == ch {
+				j++
+			}
+			if j == len(word) {
+				l.classifier.found[i] = true
+			}
+			l.classifier.matched[i] = j
+		}
+	}
+}
+
+type lineClassifier struct {
+	matched [8]int
+	found   [8]bool
+}
+
+var logKeywords = [8]string{"timeout", "deadline exceeded", "connection refused", "tls", "error", "failed", "network is unreachable", "no route to host"}
+var logKeywordPrefixes = func() (out [8][]int) {
+	for k, word := range logKeywords {
+		out[k] = make([]int, len(word))
+		for i, j := 1, 0; i < len(word); i++ {
+			for j > 0 && word[i] != word[j] {
+				j = out[k][j-1]
+			}
+			if word[i] == word[j] {
+				j++
+			}
+			out[k][i] = j
+		}
+	}
+	return
+}()
+
+func openDebugLog(path string) (*rotatingLog, error) {
+	return &rotatingLog{path: path, sessionOnly: true}, nil
+}

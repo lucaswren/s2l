@@ -1,5 +1,30 @@
 <script setup>
+import {computed,onMounted,ref,watch} from 'vue';
+import {api} from '../api/client';
+const props=defineProps({mappings:{type:Array,default:()=>[]},health:{type:Object,default:()=>({})}});
 const host = location.hostname;
+const selected=ref('');
+const settings=ref(null);
+const error=ref('');
+const copied=ref(false);
+const mapping=computed(()=>props.mappings.find(m=>m.id===selected.value));
+const local=computed(()=>props.health[selected.value]);
+watch(()=>props.mappings,list=>{if(!list.some(m=>m.id===selected.value)) selected.value=(list.find(m=>m.status==='running')||list[0])?.id||'';},{immediate:true});
+const readiness=computed(()=>{
+  if(!mapping.value)return '请先选择映射';
+  if(mapping.value.status!=='running')return '映射未运行，请先启动';
+  if(!local.value)return '等待服务端链路检查';
+  if(local.value.local_state!=='healthy')return '本地链路异常或恢复中，请查看运行监控';
+  if(local.value.tcp?.state!=='healthy')return '本地链路已启动，上游 TCP 尚未验证正常';
+  return '本地链路和上游 TCP 检查正常；仍需客户端实际拨号验证';
+});
+onMounted(async()=>{try{settings.value=await api.settings();}catch(e){error.value=e.message;}});
+async function copy(){
+  if(!mapping.value)return;
+  const ipsec=settings.value?.ipsec;
+  const text=`服务器：${host}（请确认是客户端可达的服务器地址）\n映射：${mapping.value.tun_name}\n用户名：${mapping.value.l2tp_user}\n接入方式：${ipsec ? (ipsec.enabled?'L2TP/IPsec':'普通 L2TP') : '请在系统设置确认'}\n密码和预共享密钥请另行填写。`;
+  try{await navigator.clipboard.writeText(text);copied.value=true;error.value='';}catch{error.value='浏览器不允许复制，请手动选中连接参数';}
+}
 </script>
 <template>
   <div class="section-head">
@@ -8,6 +33,18 @@ const host = location.hostname;
       <p class="muted">导入节点 → 创建映射 → 启动 → 客户端拨号</p>
     </div>
   </div>
+  <el-card shadow="never" class="section-gap">
+    <template #header>连接准备检查</template>
+    <el-select v-model="selected" placeholder="选择映射" aria-label="接入映射" @change="copied=false">
+      <el-option v-for="m in mappings" :key="m.id" :value="m.id" :label="m.tun_name + ' · ' + m.l2tp_user" />
+    </el-select>
+    <p>{{ readiness }}</p>
+    <p v-if="settings?.ipsec">IPsec：{{ settings.ipsec.enabled ? (settings.ipsec.active ? '已启用，服务活动' : '已启用，服务未活动') : '未启用' }}</p>
+    <p v-else>IPsec 状态尚未获取，请在系统设置中确认。</p>
+    <el-alert v-if="error" :title="error" type="warning" :closable="false" />
+    <el-button :disabled="!mapping" @click="copy">{{ copied ? '连接参数已复制' : '复制连接参数（不含密码）' }}</el-button>
+    <p class="muted">此检查不代表客户端已经连接，不检测客户端防火墙和运营商网络。</p>
+  </el-card>
   <el-descriptions :column="1" border>
     <el-descriptions-item label="服务器">{{ host }}</el-descriptions-item>
     <el-descriptions-item label="协议"

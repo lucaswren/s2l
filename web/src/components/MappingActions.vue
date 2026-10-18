@@ -1,11 +1,10 @@
 <script setup>
 defineProps({ mapping: Object, actionId: String });
-defineEmits(["edit", "action", "remove", "diagnose"]);
+defineEmits(["edit", "action", "remove"]);
 </script>
 <template>
   <div class="actions">
-	<el-button v-if="mapping.status === 'running'" @click="$emit('diagnose', mapping)">诊断</el-button>
-    <el-button @click="$emit('edit', mapping)">编辑</el-button
+    <el-button :disabled="!!actionId" @click="$emit('edit', mapping)">编辑</el-button
     ><el-button
       v-if="mapping.status !== 'running'"
       type="success"

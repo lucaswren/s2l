@@ -1,21 +1,31 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/lucaswren/s2l/internal/model"
 )
 
 // Store 线程安全的 JSON 持久化存储
 type Store struct {
-	path  string
-	mu    sync.RWMutex
-	state model.AppState
+	path           string
+	mu             sync.RWMutex
+	state          model.AppState
+	recoveryNotice string
+	now            func() time.Time   // optional deterministic clock for persistence tests
+	syncDir        func(string) error // optional I/O fault injection; nil uses OS fsync
 }
+
+func (s *Store) DataDir() string        { return filepath.Dir(s.path) }
+func (s *Store) RecoveryNotice() string { s.mu.RLock(); defer s.mu.RUnlock(); return s.recoveryNotice }
 
 func New(path string) (*Store, error) {
 	s := &Store{path: path}
@@ -29,7 +39,7 @@ func New(path string) (*Store, error) {
 }
 
 func (s *Store) load() error {
-	data, err := os.ReadFile(s.path)
+	data, err := readPrimary(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			s.state = model.AppState{
@@ -40,8 +50,14 @@ func (s *Store) load() error {
 		}
 		return err
 	}
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return s.recoverCorruptState(data)
+	}
 	if err := json.Unmarshal(data, &s.state); err != nil {
-		return fmt.Errorf("parse state: %w", err)
+		if recoveryErr := s.recoverCorruptState(data); recoveryErr != nil {
+			return fmt.Errorf("parse state: %w; backup recovery: %v", err, recoveryErr)
+		}
+		return nil
 	}
 	if s.state.Nodes == nil {
 		s.state.Nodes = []model.SocksNode{}
@@ -56,6 +72,12 @@ func (s *Store) saveLocked() error {
 	data, err := json.MarshalIndent(s.state, "", "  ")
 	if err != nil {
 		return err
+	}
+	// Keep every committed configuration small enough for its versioned backup
+	// envelope, including indentation. Reject growth before it can block all
+	// subsequent edits (including attempts to shrink an oversized state).
+	if len(data) > 4<<20 {
+		return fmt.Errorf("configuration exceeds the supported 4 MiB size limit")
 	}
 	f, err := os.CreateTemp(filepath.Dir(s.path), ".s2l-state-*")
 	if err != nil {
@@ -75,7 +97,39 @@ func (s *Store) saveLocked() error {
 	if closeErr != nil {
 		return closeErr
 	}
-	return os.Rename(f.Name(), s.path)
+	if err := os.Rename(f.Name(), s.path); err != nil {
+		return err
+	}
+	if err := s.syncDirectory(filepath.Dir(s.path)); err != nil {
+		return &committedError{err}
+	}
+	return nil
+}
+
+func (s *Store) syncDirectory(path string) error {
+	if s.syncDir != nil {
+		return s.syncDir(path)
+	}
+	return syncDirectory(path)
+}
+func readPrimary(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	i, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !i.Mode().IsRegular() || i.Size() > maxBackupBytes {
+		return nil, fmt.Errorf("state file must be regular and at most 8 MiB")
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxBackupBytes+1))
+	if err == nil && len(data) > maxBackupBytes {
+		err = fmt.Errorf("state file grew beyond 8 MiB")
+	}
+	return data, err
 }
 
 func cloneState(in model.AppState) model.AppState {
@@ -89,8 +143,17 @@ func cloneState(in model.AppState) model.AppState {
 }
 
 func (s *Store) saveOrRestoreLocked(previous model.AppState) error {
+	if configurationChanged(previous, s.state) {
+		if _, err := s.createBackupLocked(previous); err != nil {
+			s.state = previous
+			return fmt.Errorf("backup configuration: %w", err)
+		}
+	}
 	if err := s.saveLocked(); err != nil {
-		s.state = previous
+		var committed *committedError
+		if !errors.As(err, &committed) {
+			s.state = previous
+		}
 		return err
 	}
 	return nil

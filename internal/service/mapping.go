@@ -3,10 +3,10 @@ package service
 import (
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/debuglog"
 	"github.com/lucaswren/s2l/internal/l2tp"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/network"
@@ -57,10 +57,10 @@ func (s *MappingService) EnsureL2TP() {
 		}
 	}
 	if err := s.l2tp.SyncConfOnly(active); err != nil {
-		log.Printf("l2tp ensure warning: %v", err)
+		debuglog.Default.Printf("l2tp ensure warning: %v", err)
 		return
 	}
-	log.Println("l2tp: xl2tpd.conf synced")
+	debuglog.Default.Printf("l2tp: xl2tpd.conf synced")
 }
 
 // RestoreRunning 开机/进程重启后，按 state.json 中 status=running 的映射自动拉起
@@ -72,20 +72,20 @@ func (s *MappingService) RestoreRunning() {
 		}
 	}
 	if len(ids) == 0 {
-		log.Println("restore: no running mappings to restore")
+		debuglog.Default.Printf("restore: no running mappings to restore")
 		return
 	}
-	log.Printf("restore: bringing up %d mapping(s)...", len(ids))
+	debuglog.Default.Printf("restore: bringing up %d mapping(s)...", len(ids))
 	for _, id := range ids {
 		restored, err := s.restoreMapping(id)
 		if !restored {
 			continue
 		}
 		if err != nil {
-			log.Printf("restore: mapping %s failed: %v", id, err)
+			debuglog.Default.Printf("restore: mapping %s failed: %v", id, err)
 			continue
 		}
-		log.Printf("restore: mapping %s ok", id)
+		debuglog.Default.Printf("restore: mapping %s ok", id)
 	}
 }
 
@@ -148,6 +148,12 @@ func (s *MappingService) startLocked(id string) error {
 		cause := fmt.Errorf("l2tp_user/l2tp_pass required")
 		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
 	}
+	s.mu.Lock()
+	knownHealthy := s.health[id] != nil && s.health[id].LocalState == "healthy"
+	s.mu.Unlock()
+	if m.Status == model.StatusRunning && knownHealthy && s.singbox.IsRunning(m.TunName) && network.WaitInterface(m.TunName, 100*time.Millisecond) == nil {
+		return nil
+	}
 
 	s.mu.Lock()
 	delete(s.health, id)
@@ -155,7 +161,7 @@ func (s *MappingService) startLocked(id string) error {
 
 	// 幂等：先清残留（适配开机恢复 / 重复 start）
 	if err := s.cleanupRuntime(m); err != nil {
-		_ = s.store.UpdateMappingStatus(id, model.StatusError, "pre-start cleanup failed; inspect service logs")
+		_ = s.store.UpdateMappingStatus(id, model.StatusError, "pre-start cleanup failed; enable Debug, reproduce and export logs")
 		return fmt.Errorf("pre-start cleanup: %w", err)
 	}
 
@@ -174,7 +180,7 @@ func (s *MappingService) startLocked(id string) error {
 	// TUN 由 sing-box 异步创建，必须等网卡就绪再加策略路由
 	if err := network.WaitInterface(m.TunName, 15*time.Second); err != nil {
 		_ = s.singbox.Stop(m.TunName)
-		msg := fmt.Sprintf("%v; check %s/s2l-%s.log", err, singbox.RuntimeDir(), m.TunName)
+		msg := fmt.Sprintf("%v; enable Debug and export logs from settings", err)
 		return s.failStart(m, previousActive, fmt.Errorf("tun: %s", msg))
 	}
 	if err := s.net.Setup(m); err != nil {
@@ -260,7 +266,7 @@ func (s *MappingService) Shutdown() {
 		}
 	}
 	if err := s.net.TeardownAll(); err != nil {
-		log.Printf("network shutdown cleanup warning: %v", err)
+		debuglog.Default.Printf("network shutdown cleanup warning: %v", err)
 	}
 	s.singbox.StopAll()
 }
@@ -272,6 +278,9 @@ func (s *MappingService) Status() model.SystemStatus {
 	health := make(map[string]model.UpstreamHealth)
 	for id, h := range s.health {
 		health[id] = h.UpstreamHealth
+		value := health[id]
+		value.Recovery = h.recovery.status(h.localNext, h.recoveryFailures)
+		health[id] = value
 		if h.LocalState != "" && h.LocalState != "healthy" {
 			value := health[id]
 			value.State = h.LocalState
@@ -280,18 +289,25 @@ func (s *MappingService) Status() model.SystemStatus {
 		}
 	}
 	s.mu.Unlock()
+	runtime := s.singbox.RuntimeSnapshot()
+	pids := make(map[string]int)
+	for name, stats := range runtime {
+		if stats.PID > 0 {
+			pids[name] = stats.PID
+		}
+	}
 	traffic := make([]model.TunTraffic, 0, len(mappings))
 	for _, m := range mappings {
 		if m.Status != model.StatusRunning {
 			continue
 		}
 		t, err := network.ReadTunTraffic(m.TunName)
-		if err != nil {
+		if err != nil || s.singbox.PID(m.TunName) != runtime[m.TunName].PID {
 			t = model.TunTraffic{TunName: m.TunName, Error: "interface statistics unavailable"}
 		}
 		if h, ok := health[m.ID]; ok {
-			h.Resolver = s.singbox.ResolverStatus(m.TunName)
-			h.Process = s.singbox.ProcessStatus(m.TunName)
+			h.Resolver = runtime[m.TunName].Resolver
+			h.Process = runtime[m.TunName].Process
 			health[m.ID] = h
 		}
 		traffic = append(traffic, t)
@@ -300,7 +316,7 @@ func (s *MappingService) Status() model.SystemStatus {
 		Uptime:         time.Since(s.startedAt),
 		Mappings:       mappings,
 		TunTraffic:     traffic,
-		SingboxPIDs:    s.singbox.PIDs(),
+		SingboxPIDs:    pids,
 		UpstreamHealth: health,
 	}
 }

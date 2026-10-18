@@ -23,6 +23,20 @@ async function request(path, options = {}) {
 }
 
 export const api = {
+  backups: () => request("/api/backups"),
+  createBackup: () => request("/api/backups", {method:"POST",body:"{}"}),
+  previewBackup: (id) => request("/api/backups/preview", {method:"POST",body:JSON.stringify({id})}),
+  restoreBackup: (body) => request("/api/backups/restore", {method:"POST",body:JSON.stringify(body)}),
+  debugAnalysis: () => request("/api/debug/analysis"),
+  debug: () => request("/api/debug"),
+  setDebug: (enabled) => request("/api/debug", {method:"POST", body:JSON.stringify({enabled})}),
+  exportDebug: async () => {
+    const res = await fetch("/api/debug/export", {headers: authorization ? {Authorization: authorization} : {}});
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Export failed");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a"); a.href = url; a.download = "s2l-debug.zip"; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
   listNodes: () => request("/api/nodes"),
   getNode: (id) => request(`/api/nodes/${id}`),
   saveNode: (body) =>
@@ -41,7 +55,6 @@ export const api = {
 
   listMappings: () => request("/api/mappings"),
   getMapping: (id) => request(`/api/mappings/${id}`),
-	 diagnoseMapping: (id, url) => request(`/api/mappings/${id}/diagnose`, {method:"POST",body:JSON.stringify({url})}),
   saveMapping: (body) =>
     request("/api/mappings", { method: "POST", body: JSON.stringify(body) }),
   deleteMapping: (id) => request(`/api/mappings/${id}`, { method: "DELETE" }),

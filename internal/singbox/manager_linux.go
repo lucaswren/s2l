@@ -82,7 +82,7 @@ func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error
 		return err
 	}
 	logPath := filepath.Join(RuntimeDir(), fmt.Sprintf("s2l-%s.log", mapping.TunName))
-	writer, err := openRotatingLog(logPath)
+	writer, err := openDebugLog(logPath)
 	if err != nil {
 		_ = RemoveConfig(mapping.TunName)
 		return fmt.Errorf("open sing-box log: %w", err)
@@ -214,6 +214,37 @@ func (m *Manager) ProcessStatus(name string) model.ProcessStatus {
 		s.Exits++
 	}
 	return s
+}
+
+// Snapshot binds PID, resolver and counters to the same managed process.
+// Reading those through separate lookups can mix generations during Restart.
+func (m *Manager) RuntimeSnapshot() map[string]RuntimeStats {
+	m.mu.Lock()
+	procs := make(map[string]*managedProc, len(m.procs))
+	for name, p := range m.procs {
+		procs[name] = p
+	}
+	m.mu.Unlock()
+	out := make(map[string]RuntimeStats, len(procs))
+	for name, p := range procs {
+		stats := RuntimeStats{}
+		alive := p.running()
+		if alive {
+			stats.PID = p.pid
+		}
+		if p.resolver != nil {
+			stats.Resolver = p.resolver.Resolver.Status()
+		}
+		if p.log != nil {
+			stats.Process = p.log.Status()
+		}
+		stats.Process.Exits = p.exits
+		if !alive {
+			stats.Process.Exits++
+		}
+		out[name] = stats
+	}
+	return out
 }
 func (m *Manager) reap(_ string, p *managedProc) {
 	_ = p.cmd.Wait()

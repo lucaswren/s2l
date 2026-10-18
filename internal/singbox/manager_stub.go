@@ -70,3 +70,12 @@ func (m *Manager) ResolveDNS(context.Context, string, []byte) ([]byte, error) {
 
 func (m *Manager) ResolverStatus(string) model.ResolverStatus { return model.ResolverStatus{} }
 func (m *Manager) ProcessStatus(string) model.ProcessStatus   { return model.ProcessStatus{} }
+func (m *Manager) RuntimeSnapshot() map[string]RuntimeStats {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]RuntimeStats{}
+	for name, pid := range m.pids {
+		out[name] = RuntimeStats{PID: pid}
+	}
+	return out
+}

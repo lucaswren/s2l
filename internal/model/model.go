@@ -107,7 +107,16 @@ type ProtocolHealth struct {
 	CheckedAt time.Time `json:"checked_at"`
 }
 
+type RecoveryStatus struct {
+	Circuit      string    `json:"circuit"`
+	Attempts     int       `json:"attempts"`
+	Failures     int       `json:"failures"`
+	NextRetry    time.Time `json:"next_retry"`
+	HealthySince time.Time `json:"healthy_since"`
+}
+
 type UpstreamHealth struct {
+	Recovery       RecoveryStatus `json:"recovery"`
 	TCP            ProtocolHealth `json:"tcp"`
 	UDP            ProtocolHealth `json:"udp"`
 	DNS            ProtocolHealth `json:"dns"`

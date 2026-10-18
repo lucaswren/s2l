@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
+	"github.com/lucaswren/s2l/internal/debuglog"
 	"sync"
 	"time"
 
@@ -19,6 +19,7 @@ type healthRecord struct {
 	localNext           time.Time
 	generation          uint64
 	recoveryFailures    int
+	recovery            recoveryBudget
 	baseState           string
 	tcp, udp, dns       protocolRecord
 }
@@ -121,6 +122,11 @@ func (s *MappingService) Monitor(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
+		if session := debuglog.Default.Session(); session != 0 {
+			sampledAt := time.Now()
+			status := s.Status()
+			debuglog.Default.RecordSession(session, status, debuglog.SampleResources(s.store.DataDir()), sampledAt)
+		}
 		for _, m := range s.store.ListMappings() {
 			if m.Status == model.StatusRunning {
 				launch(m, true)
@@ -153,19 +159,33 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		s.mu.Lock()
 		h.LocalCheckedAt = now
 		if err != nil {
+			h.recovery.healthySince = time.Time{}
 			h.LocalState = "unstable"
-			h.RecoveryError = "PPP interface tuning failed; inspect service logs"
-			log.Printf("mapping %s PPP tune failed: %v", m.ID, err)
+			h.RecoveryError = "PPP interface tuning failed; enable Debug, reproduce and export logs"
+			debuglog.Default.Printf("mapping %s PPP tune failed: %v", m.ID, err)
 		} else {
 			h.LocalState = "healthy"
 			h.RecoveryError = ""
+			if h.recovery.healthy(now) {
+				h.recoveryFailures = 0
+				h.localNext = time.Time{}
+			}
 		}
 		s.mu.Unlock()
 		return
 	}
 	s.mu.Lock()
 	h.LocalCheckedAt = now
+	h.recovery.healthySince = time.Time{}
 	if now.Before(h.localNext) {
+		s.mu.Unlock()
+		return
+	}
+	if !h.recovery.allow(now) {
+		h.LocalState = "circuit-open"
+		h.State = "circuit-open"
+		h.RecoveryError = "自动恢复已熔断，冷却 5 分钟后试探；也可手动重试"
+		h.Error = h.RecoveryError
 		s.mu.Unlock()
 		return
 	}
@@ -196,25 +216,9 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	h.finishRecovery(err, time.Now())
 	if err != nil {
-		h.recoveryFailures++
-		h.localNext = time.Now().Add(retryDelay(h.recoveryFailures))
-		h.LocalState = "unavailable"
-		h.RecoveryError = "mapping recovery failed; inspect service logs"
-		h.State = "unavailable"
-		h.Error = h.RecoveryError
-		log.Printf("mapping %s recovery failed: %v", m.ID, err)
-	} else {
-		h.recoveryFailures = 0
-		h.localNext = time.Time{}
-		h.LocalState = "healthy"
-		h.RecoveryError = ""
-		h.failures = 0
-		h.successes = 0
-		h.baseState = "checking"
-		h.State = "checking"
-		h.Error = ""
-		h.next = time.Time{}
+		debuglog.Default.Printf("mapping %s recovery failed: %v", m.ID, err)
 	}
 }
 
@@ -235,17 +239,21 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 	generation := h.generation
 	s.mu.Unlock()
 	report := speedtest.ProbeHealth(ctx, node, m.EffectiveDNSMode())
+	s.finishProbe(ctx, m, node, h, generation, report)
+}
+
+func (s *MappingService) finishProbe(ctx context.Context, m model.TunnelMapping, node model.SocksNode, h *healthRecord, generation uint64, report speedtest.HealthReport) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	current, ok = s.store.GetMapping(m.ID)
+	current, ok := s.store.GetMapping(m.ID)
 	latestNode, nodeOK := s.store.GetNode(m.NodeID)
-	if !ok || current != m || !nodeOK || latestNode != node || s.health[m.ID] != h || h.generation != generation || ctx.Err() != nil {
+	if !ok || current != m || !nodeOK || latestNode != node || s.health[m.ID] != h || h.generation != generation || ctx.Err() != nil || s.shuttingDown {
 		return
 	}
 	old := h.State
 	h.applyReport(report, time.Now())
 	if old != h.State {
-		log.Printf("mapping %s upstream health: %s", m.ID, h.State)
+		debuglog.Default.Printf("mapping %s upstream health: %s", m.ID, h.State)
 	}
 }
 
@@ -324,4 +332,35 @@ func (h *healthRecord) invalidateProtocols() {
 	h.TCP = h.tcp.ProtocolHealth
 	h.UDP = h.udp.ProtocolHealth
 	h.DNS = h.dns.ProtocolHealth
+}
+
+// Called with the service mutex after recovery I/O completes.
+func (h *healthRecord) finishRecovery(err error, now time.Time) {
+	// Probes may have started while Restart/Setup was in progress. Reject them
+	// as well as probes from before recovery; only post-recovery results count.
+	h.invalidateProtocols()
+	if err != nil {
+		h.recoveryFailures++
+		h.localNext = now.Add(recoveryDelay(h.recoveryFailures))
+		h.recovery.failed(now)
+		h.LocalState = "unavailable"
+		if !h.recovery.openUntil.IsZero() {
+			h.LocalState = "circuit-open"
+			h.localNext = h.recovery.openUntil
+		}
+		h.RecoveryError = "mapping recovery failed; enable Debug, reproduce and export logs"
+		h.State = h.LocalState
+		h.Error = h.RecoveryError
+	} else {
+		h.localNext = time.Time{}
+		h.recovery.healthy(now)
+		h.LocalState = "healthy"
+		h.RecoveryError = ""
+		h.failures = 0
+		h.successes = 0
+		h.baseState = "checking"
+		h.State = "checking"
+		h.Error = ""
+		h.next = time.Time{}
+	}
 }

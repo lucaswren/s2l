@@ -31,10 +31,6 @@ func (s *Server) handleMappingByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := parts[0]
-	if len(parts) == 2 && parts[1] == "diagnose" {
-		s.handleMappingDiagnose(w, r, id)
-		return
-	}
 
 	// POST /api/mappings/{id}/action  { "action": "start"|"stop" }
 	if len(parts) == 2 && parts[1] == "action" && r.Method == http.MethodPost {
@@ -53,8 +49,10 @@ func (s *Server) handleMappingByID(w http.ResponseWriter, r *http.Request) {
 			err = s.svc.Start(id)
 		case "stop":
 			err = s.svc.Stop(id)
+		case "retry-recovery":
+			err = s.svc.RetryRecovery(id)
 		default:
-			writeError(w, http.StatusBadRequest, "action must be start or stop")
+			writeError(w, http.StatusBadRequest, "action must be start, stop or retry-recovery")
 			return
 		}
 		if err != nil {

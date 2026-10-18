@@ -1,24 +1,60 @@
 <script setup>
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onUnmounted, reactive, ref, watch } from "vue";
 import { ElMessageBox } from "element-plus";
 import MappingActions from "./MappingActions.vue";
-import Diagnostics from "./Diagnostics.vue";
 import { api } from "../api/client";
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
   mappings: { type: Array, default: () => [] },
   allMappings: { type: Array, default: () => [] },
+  health: {type:Object,default:() => ({})},
 });
 const emit = defineEmits(["changed", "toast"]);
 
-const diagnosticMapping = ref(null);
 const mode = ref(""); // '' | edit | import
 const editingId = ref("");
 const busy = ref(false);
 const formRef = ref();
 const required = { required: true, message: "请填写此项", trigger: "blur" };
 const actionId = ref("");
+const filter = ref("all");
+const shownMappings = computed(() => props.mappings.filter(m => {
+  if (filter.value === 'all') return true;
+  if (filter.value === 'abnormal') return m.status === 'error' || (m.status === 'running' && props.health[m.id] && !['healthy','checking'].includes(props.health[m.id].state));
+  return m.status === filter.value;
+}));
+const batchBusy = ref(false);
+const batchResults = ref([]);
+let cancelBatch = false;
+let unmounted = false;
+const actionsBusy = computed(() => batchBusy.value ? 'batch' : actionId.value);
+onUnmounted(() => {unmounted = true; cancelBatch = true;});
+async function batch(act) {
+  if (batchBusy.value || actionId.value) return;
+  const targets = shownMappings.value.filter(m => act === 'start' ? m.status !== 'running' : m.status !== 'stopped');
+  if (!targets.length) return;
+  try { await ElMessageBox.confirm(`将依次${act === 'start' ? '启动' : '停止'}当前筛选列表中的 ${targets.length} 条映射。可取消尚未执行的任务。`, '批量操作', {confirmButtonText:'执行',cancelButtonText:'取消',type:'warning'}); }
+  catch { return; }
+  if (unmounted || batchBusy.value || actionId.value) return;
+  batchBusy.value = true; cancelBatch = false;
+  batchResults.value = targets.map(m => ({id:m.id,tun:m.tun_name,state:'排队',error:''}));
+  try {
+    for (const row of batchResults.value) {
+      if (cancelBatch) {row.state = '已取消'; continue;}
+      row.state = '执行中';
+      try {await api.mappingAction(row.id,act); row.state = '成功';}
+      catch(e) {row.state = '失败';row.error = e.message;}
+      if (!unmounted) emit('changed');
+    }
+  } finally {batchBusy.value = false;}
+}
+async function copyErrors() {
+  const rows = batchResults.value.filter(r => r.error).map(r => `${r.tun} (${r.id}): ${r.error}`);
+  if (!rows.length) rows.push(...shownMappings.value.filter(m => m.error_msg).map(m => `${m.tun_name}: ${m.error_msg}`));
+  try {await navigator.clipboard.writeText(rows.join('\n'));emit('toast',{type:'ok',message:'错误详情已复制'});}
+  catch {emit('toast',{type:'err',message:'浏览器不允许复制，请手动选中错误详情'});}
+}
 const form = reactive({
   node_id: "",
   tun_name: "tun101",
@@ -168,6 +204,7 @@ async function doImport() {
 }
 
 async function action(id, act) {
+  if (actionsBusy.value) return;
   actionId.value = id + act;
   try {
     await api.mappingAction(id, act);
@@ -184,6 +221,7 @@ async function action(id, act) {
 }
 
 async function remove(id) {
+  if (actionsBusy.value) return;
   try {
     await ElMessageBox.confirm("删除该映射及其拨号账号？", "删除映射", {
       type: "warning",
@@ -210,20 +248,31 @@ const editingRunning = computed(() => {
 </script>
 <template>
   <section>
-    <Diagnostics :mapping="diagnosticMapping" @close="diagnosticMapping = null" />
     <div class="section-head">
       <div>
         <h2>隧道映射</h2>
         <p class="muted">配置出口节点、路由子网与 L2TP 接入凭据</p>
       </div>
       <div class="actions">
-        <el-button :disabled="!nodes.length" @click="openImport"
+        <el-button :disabled="!nodes.length || !!actionsBusy" @click="openImport"
           >批量导入</el-button
-        ><el-button type="primary" :disabled="!nodes.length" @click="openCreate"
+        ><el-button type="primary" :disabled="!nodes.length || !!actionsBusy" @click="openCreate"
           >新建映射</el-button
         >
       </div>
     </div>
+    <div class="actions section-gap">
+      <el-select v-model="filter" style="width: 150px" aria-label="映射状态筛选">
+        <el-option label="全部状态" value="all" /><el-option label="运行中" value="running" /><el-option label="已停止" value="stopped" /><el-option label="异常链路" value="abnormal" />
+      </el-select>
+      <el-button :disabled="!!actionsBusy" @click="batch('start')">批量启动当前列表</el-button>
+      <el-button :disabled="!!actionsBusy" @click="batch('stop')">批量停止当前列表</el-button>
+      <el-button v-if="batchBusy" @click="cancelBatch = true">取消排队任务</el-button>
+      <el-button @click="copyErrors">复制错误详情</el-button>
+    </div>
+    <el-table v-if="batchResults.length" :data="batchResults" max-height="260" class="section-gap">
+      <el-table-column prop="tun" label="接口" /><el-table-column prop="state" label="任务状态" /><el-table-column prop="error" label="失败详情" min-width="250" />
+    </el-table>
     <el-alert
       v-if="!nodes.length"
       title="请先在下方添加或导入 SOCKS5 节点。"
@@ -232,7 +281,7 @@ const editingRunning = computed(() => {
       :closable="false"
       class="section-gap"
     />
-    <el-table :data="mappings" class="desktop-list" empty-text="暂无映射"
+    <el-table :data="shownMappings" class="desktop-list" empty-text="暂无映射"
       ><el-table-column prop="tun_name" label="TUN / 路由表" min-width="130"
         ><template #default="{ row }"
           ><strong>{{ row.tun_name }}</strong>
@@ -274,15 +323,14 @@ const editingRunning = computed(() => {
         ><template #default="{ row }"
           ><MappingActions
             :mapping="row"
-            :action-id="actionId"
-            @diagnose="diagnosticMapping = $event"
+            :action-id="actionsBusy"
             @edit="openEdit"
             @action="action"
             @remove="remove" /></template></el-table-column
     ></el-table>
     <div class="mobile-list">
-      <el-empty v-if="!mappings.length" description="暂无映射" /><el-card
-        v-for="m in mappings"
+      <el-empty v-if="!shownMappings.length" description="暂无映射" /><el-card
+        v-for="m in shownMappings"
         :key="m.id"
         shadow="never"
         ><div class="item-title">
@@ -317,8 +365,7 @@ const editingRunning = computed(() => {
           :closable="false"
           class="section-gap" /><MappingActions
           :mapping="m"
-          :action-id="actionId"
-          @diagnose="diagnosticMapping = $event"
+          :action-id="actionsBusy"
             @edit="openEdit"
           @action="action"
           @remove="remove"
