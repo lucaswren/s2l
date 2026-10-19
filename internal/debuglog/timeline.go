@@ -202,7 +202,7 @@ func (c *Collector) Analysis() Analysis {
 	return c.analysisLocked()
 }
 func (c *Collector) analysisLocked() Analysis {
-	a := Analysis{Events: append([]Event{}, c.events...), Resources: append([]Sample{}, c.samples...), Findings: []string{}, DroppedEvents: c.droppedEvents, Notice: "基于 Debug 期间采样的观察，不能证明因果或客户端完整链路；5 秒内的短暂变化可能未被采样。"}
+	a := Analysis{Events: append([]Event{}, c.events...), Resources: append([]Sample{}, c.samples...), Findings: []string{}, DroppedEvents: c.droppedEvents, Notice: "基于 Debug 采样记录；5 秒内的短暂变化可能未被采样。"}
 	a.Connections, a.FailedTargets = c.connectionSummaryLocked()
 	a.DroppedConnections = c.droppedConnections
 	sort.SliceStable(a.Events, func(i, j int) bool {
@@ -222,7 +222,7 @@ func (c *Collector) analysisLocked() Analysis {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：最近采样本地链路为 %s，应先检查本地进程和恢复状态。", id, h.LocalState))
 		}
 		if h.TCP.State == "healthy" && (h.UDP.State == "unsupported" || h.UDP.State == "unavailable" || h.UDP.State == "unstable") {
-			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 为 %s；UDP 应用可能失败；请核对拒绝码和节点策略，不能据此认定图片或文件下载故障。", id, h.UDP.State))
+			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 为 %s；请核对拒绝码和节点 UDP 支持情况。", id, h.UDP.State))
 		}
 		if h.TCP.State == "healthy" && (h.DNS.State == "unavailable" || h.DNS.State == "degraded") {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常而 DNS 异常或仅备用可用，建议先核对 DNS 时间线。", id))

@@ -1,19 +1,21 @@
 <script setup>
 import { computed, onMounted, ref, reactive } from 'vue';
 import { api } from '../api/client';
+import { mergeSettingsDraft } from '../utils/settings-draft';
 import { timezoneGroups } from '../api/timezones';
 const info = ref(null), busy = ref(false), error = ref(''), message = ref('');
 const form = reactive({timezone:'Asia/Shanghai', auto_sync:true, mode:'system'});
 const servers = ref('');
 const zoneGroups = computed(() => timezoneGroups(info.value?.timezones, info.value?.timezone, info.value?.server_time));
-async function load() {
+function draft(value) { return value ? {timezone:value.timezone, auto_sync:value.auto_sync, mode:value.mode, servers:(value.servers || []).join('\n')} : null; }
+async function load(reset = false) {
  busy.value=true; error.value='';
- try { info.value=await api.timeSettings(); Object.assign(form,{timezone:info.value.timezone,auto_sync:info.value.auto_sync,mode:info.value.mode}); servers.value=info.value.servers.join('\n'); }
+ try { const next=await api.timeSettings();const merged=mergeSettingsDraft({...form,servers:servers.value},reset === true ? null : draft(info.value),draft(next));Object.assign(form,{timezone:merged.timezone,auto_sync:merged.auto_sync,mode:merged.mode});servers.value=merged.servers;info.value=next; }
  catch(e) { error.value=e.message; } finally { busy.value=false; }
 }
 async function save() {
  busy.value=true; error.value=''; message.value='';
- try {const result=await api.saveTimeSettings({...form,servers:form.mode==='custom'?servers.value.split(/[\s,]+/).filter(Boolean):[]}); message.value=result.message; await load();}
+ try {const result=await api.saveTimeSettings({...form,servers:form.mode==='custom'?servers.value.split(/[\s,]+/).filter(Boolean):[]}); message.value=result.message; await load(true);}
  catch(e) {error.value=e.message;} finally {busy.value=false;}
 }
 function serverTime() {
@@ -40,7 +42,7 @@ onMounted(load);
     <el-button type="primary" native-type="submit" :loading="busy">保存时间设置</el-button>
    </el-form>
   </template>
-  <el-button :disabled="busy" style="margin-top:12px" @click="load">刷新同步状态</el-button>
+  <el-button :disabled="busy" style="margin-top:12px" @click="load(false)">刷新同步状态</el-button>
  </el-card>
 </template>
 

@@ -30,6 +30,52 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function streamNetworkTest(id, body, signal, onEvent) {
+ const res = await fetch(`/api/nodes/${id}/network-test`, {
+  method: 'POST', signal, body: JSON.stringify({...body, stream:true}),
+  headers: {'Content-Type':'application/json', ...(authorization ? {Authorization:authorization} : {})},
+ });
+ if (!res.ok) {
+  const data = await res.json().catch(e => { if (e.name === 'AbortError') throw e; return {}; });
+  throw new Error(data.error || res.statusText || `HTTP ${res.status}`);
+ }
+ if (res.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/x-ndjson' || !res.body) throw new Error('服务器不支持实时追踪，请更新服务后重试');
+ const reader = res.body.getReader(), decoder = new TextDecoder();
+ let pending = '', total = 0, finalResult = null, started = false;
+ const consume = line => {
+  if (!line.trim()) return;
+  let event;
+  try { event = JSON.parse(line); } catch { throw new Error('追踪数据格式无效'); }
+  if (!event || !['start','output','result'].includes(event.type) || (event.type === 'output' ? typeof event.data !== 'string' : !event.data || typeof event.data !== 'object' || Array.isArray(event.data))) throw new Error('追踪数据格式无效');
+  if (finalResult || (event.type !== 'start' && !started) || (event.type === 'start' && started)) throw new Error('追踪数据顺序无效');
+  if (event.type === 'start') {
+   if (event.data.kind !== 'mtr') throw new Error('追踪数据格式无效');
+   started = true;
+  }
+  if (event.type === 'result' && (event.data.kind !== 'mtr' || typeof event.data.ok !== 'boolean' || typeof event.data.output !== 'string')) throw new Error('追踪结束结果无效');
+  onEvent?.(event);
+  if (event.type === 'result') finalResult = event.data;
+ };
+ try {
+  while (true) {
+   const {value, done} = await reader.read();
+   if (done) break;
+   total += value.byteLength;
+   if (total > 512 * 1024) throw new Error('追踪输出超过限制');
+   pending += decoder.decode(value, {stream:true});
+   let end;
+   while ((end = pending.indexOf('\n')) !== -1) { consume(pending.slice(0,end)); pending = pending.slice(end+1); }
+  }
+  pending += decoder.decode();
+  if (pending.trim()) consume(pending);
+  if (!finalResult) throw new Error('追踪连接中断，已保留收到的结果');
+  return finalResult;
+ } finally {
+  await reader.cancel().catch(() => {});
+  reader.releaseLock();
+ }
+}
+
 export const api = {
   updateStatus: (signal) => request("/api/settings/update", {signal}),
   updateSoftware: (body) => request("/api/settings/update", {method:"POST", body:JSON.stringify(body)}),
@@ -57,6 +103,7 @@ export const api = {
     const a = document.createElement("a"); a.href = url; a.download = "s2l-debug.zip"; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
+  streamNetworkTest,
   networkTestNode: (id, body, signal) => request(`/api/nodes/${id}/network-test`, {method:"POST", body:JSON.stringify(body), signal}),
   listNodes: () => request("/api/nodes"),
   getNode: (id) => request(`/api/nodes/${id}`),

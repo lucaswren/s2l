@@ -4,6 +4,7 @@ import { api } from "../api/client";
 const emit = defineEmits(["changed", "toast"]);
 const retrying = ref("");
 async function retry(id) {
+  if (retrying.value) return;
   retrying.value = id;
   try { await api.mappingAction(id, "retry-recovery"); emit("changed"); }
   catch(e) { emit("toast", {type:"err",message:e.message}); }
@@ -57,7 +58,7 @@ function formatBytes(n) {
   </div>
   <el-card shadow="never" class="section-gap">
     <template #header>上游健康状态</template>
-    <el-table :data="health" empty-text="暂无活动映射">
+    <el-table class="desktop-list" :data="health" empty-text="暂无活动映射">
       <el-table-column prop="tun_name" label="接口" />
       <el-table-column label="链路状态"><template #default="{ row }">{{ healthLabels[row.state] || row.state }}</template></el-table-column>
       <el-table-column v-for="protocol in ['tcp', 'udp', 'dns']" :key="protocol" :label="protocol.toUpperCase()" min-width="100">
@@ -74,7 +75,18 @@ function formatBytes(n) {
         <el-button v-if="row.local_state !== 'healthy'" size="small" :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">手动重试恢复</el-button>
       </template></el-table-column>
     </el-table>
-    <p class="muted">上游探测不覆盖客户端分流与 L2TP；错误数为当前进程累计值。</p>
+    <div class="mobile-list health-mobile">
+     <el-empty v-if="!health.length" description="暂无活动映射" />
+     <article v-for="row in health" :key="row.id" class="monitor-item">
+      <div class="item-title"><span>{{ row.tun_name }}</span><el-tag :type="row.local_state === 'healthy' ? 'success' : 'warning'">本地{{ healthLabels[row.local_state] || '检测中' }}</el-tag></div>
+      <div class="monitor-protocols"><details v-for="protocol in ['tcp','udp','dns']" :key="protocol"><summary><strong>{{ protocol.toUpperCase() }}</strong><span>{{ protocolLabel(row[protocol]) }}</span></summary><p>{{ protocolDetail(row[protocol]) }}</p></details></div>
+      <p v-if="row.error || row.recovery_error" class="error-text">{{ row.recovery_error || row.error }}</p>
+      <details><summary>解析器与错误计数</summary><p>实际 DNS：{{ row.resolver?.active || '等待启动' }} · 备用 {{ row.resolver?.fallbacks || 0 }} · 失败 {{ row.resolver?.failures || 0 }}</p><p>超时 {{ row.process?.timeouts || 0 }} · 代理拒绝 {{ row.process?.proxy_rejections || 0 }} · DNS 报文 {{ row.process?.dns_parse_errors || 0 }} · TLS {{ row.process?.tls_failures || 0 }} · 拒绝 {{ row.process?.refused || 0 }} · 网络不可达 {{ row.process?.network_errors || 0 }}</p></details>
+      <p class="muted">最近检测 {{ date(row.checked_at) }}</p>
+      <template v-if="row.local_state !== 'healthy'"><p class="muted">恢复尝试 {{ row.recovery?.attempts || 0 }} · 失败 {{ row.recovery?.failures || 0 }} · 下次 {{ date(row.recovery?.next_retry) }}</p><el-button :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">重试恢复</el-button></template>
+     </article>
+    </div>
+    <p class="muted">错误数为当前进程累计值。</p>
     <details class="muted"><summary>检测与恢复说明</summary>
      <p>DNS 为独立探测，“实际 DNS”为映射当前解析器。UDP 不可用时 TCP 仍可能正常。UDP 确认不支持或不可用后每 10 分钟复测；节点网络测试可立即复测。</p>
      <p>本地恢复在 10 分钟内最多尝试 3 次，冷却 5 分钟；稳定 2 分钟后重置。上游异常不会触发隧道重启，手动重试会重置预算。</p>
@@ -91,7 +103,7 @@ function formatBytes(n) {
     ><el-col :xs="24" :md="16"
       ><el-card shadow="never"
         ><template #header>接口流量</template
-        ><el-table :data="status.tun_traffic" empty-text="暂无流量"
+        ><el-table class="desktop-list" :data="status.tun_traffic" empty-text="暂无流量"
           ><el-table-column
             prop="tun_name"
             label="接口"
@@ -105,8 +117,21 @@ function formatBytes(n) {
               formatBytes(row.tx_bytes)
             }}</template></el-table-column
           ><el-table-column label="丢包 / 错误" min-width="160"><template #default="{row}">{{ (row.rx_dropped || 0) + (row.tx_dropped || 0) }} / {{ (row.rx_errors || 0) + (row.tx_errors || 0) }}<div v-if="row.error" class="error-text">{{ row.error }}</div></template></el-table-column></el-table
-        ></el-card
+        >
+        <div class="mobile-list"><el-empty v-if="!status.tun_traffic?.length" description="暂无流量" /><article v-for="row in status.tun_traffic" :key="row.tun_name" class="monitor-item"><strong>{{ row.tun_name }}</strong><div class="item-details"><span>接收</span><span>{{ formatBytes(row.rx_bytes) }}</span><span>发送</span><span>{{ formatBytes(row.tx_bytes) }}</span><span>丢包 / 错误</span><span>{{ (row.rx_dropped || 0) + (row.tx_dropped || 0) }} / {{ (row.rx_errors || 0) + (row.tx_errors || 0) }}</span></div><p v-if="row.error" class="error-text">{{ row.error }}</p></article></div>
+        </el-card
       ></el-col
     ></el-row
   >
 </template>
+
+<style scoped>
+.monitor-item{padding:16px 0;border-bottom:1px solid var(--el-border-color-lighter);min-width:0;overflow-wrap:anywhere;}
+.monitor-item:last-child{border-bottom:0;}
+.monitor-item summary{cursor:pointer;font-size:13px;}
+.monitor-item p{font-size:13px;}
+.monitor-protocols{display:grid;gap:10px;margin:12px 0;}
+.monitor-protocols summary strong{display:inline-block;width:48px;}
+.monitor-protocols details p{color:var(--el-text-color-secondary);}
+.monitor-item>.item-details{margin-top:12px;margin-bottom:0;}
+</style>

@@ -15,9 +15,13 @@ import (
 	"github.com/lucaswren/s2l/internal/speedtest"
 )
 
+const networkProbeAttempts = 8
+
 type networkTestRequest struct {
-	Kind   string `json:"kind"`
-	Target string `json:"target"`
+	Kind        string `json:"kind"`
+	Target      string `json:"target"`
+	Stream      bool   `json:"stream"`
+	MTRProtocol string `json:"mtr_protocol"`
 }
 type tcpSample struct {
 	Milliseconds float64 `json:"milliseconds"`
@@ -88,6 +92,10 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		writeError(w, 400, "kind must be protocols, ping, tcping or mtr")
 		return
 	}
+	if body.MTRProtocol != "" && body.MTRProtocol != "tcp" && body.MTRProtocol != "icmp" {
+		writeError(w, 400, "mtr_protocol must be tcp or icmp")
+		return
+	}
 	if body.Kind == "tcping" && !validProbeTarget(body.Target) {
 		writeError(w, 400, "target must be host:port (IPv6: [address]:port)")
 		return
@@ -99,8 +107,9 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		writeError(w, 429, "network tests busy; retry later")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 55*time.Second)
 	defer cancel()
+	var stream *networkStream
 	result := map[string]any{"started_at": time.Now().UTC(), "node_id": node.ID, "kind": body.Kind, "target": body.Target, "path": "S2L → SOCKS5 节点 → 目标（TCP 建连，包含代理握手耗时）"}
 	if body.Kind == "protocols" {
 		report := speedtest.HealthReport{}
@@ -109,14 +118,14 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		} else {
 			report = speedtest.ProbeHealth(ctx, node)
 		}
-		result["path"] = "S2L → SOCKS5 节点 → 探测目标（不经过客户端和 L2TP）"
+		result["path"] = "S2L → SOCKS5 节点 → 探测目标"
 		result["target"] = "HTTPS / UDP 中继 / DNS"
 		result["protocols"] = map[string]any{"tcp": report.TCP, "udp": report.UDP, "dns": report.DNS}
 		result["ok"] = report.TCP.State == "healthy" && report.UDP.State == "healthy" && report.DNS.State == "healthy"
 	} else if body.Kind == "tcping" {
 		samples := []tcpSample{}
 		successes := 0
-		for i := 0; i < 3 && ctx.Err() == nil; i++ {
+		for i := 0; i < networkProbeAttempts && ctx.Err() == nil; i++ {
 			attempt, stop := context.WithTimeout(ctx, 6*time.Second)
 			started := time.Now()
 			conn, err := speedtest.DialSOCKS5(attempt, node.Addr, node.Username, node.Password, body.Target)
@@ -134,10 +143,10 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		result["samples"] = samples
 		result["successes"] = successes
 		result["attempts"] = len(samples)
-		result["ok"] = successes == 3
+		result["ok"] = successes == networkProbeAttempts
 	} else {
 		result["path"] = "S2L 服务器 → 节点地址（不经过 SOCKS5 转发）"
-		host, _, err := net.SplitHostPort(node.Addr)
+		host, port, err := net.SplitHostPort(node.Addr)
 		if err != nil {
 			writeError(w, 400, "invalid node address")
 			return
@@ -149,14 +158,24 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 			return
 		}
 		target := addresses[0].String()
+		for _, address := range addresses {
+			if address.IP.To4() != nil {
+				target = address.String()
+				break
+			}
+		}
 		result["target"] = target
 		if runtime.GOOS != "linux" {
 			writeError(w, 501, "Ping/MTR require a Linux server")
 			return
 		}
-		args := []string{"-n", "-c", "3", "-W", "2", "-w", "12", target}
+		args := []string{"-n", "-c", strconv.Itoa(networkProbeAttempts), "-W", "2", "-w", "25", target}
 		if body.Kind == "mtr" {
-			args = []string{"--report", "--no-dns", "--report-cycles", "3", "--max-ttl", "16", target}
+			args = mtrArguments(target, port, body.MTRProtocol, body.Stream)
+			result["mtr_protocol"] = "tcp"
+			if body.MTRProtocol == "icmp" {
+				result["mtr_protocol"] = "icmp"
+			}
 		}
 		binary, err := exec.LookPath(body.Kind)
 		if err != nil {
@@ -169,6 +188,15 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		output := &boundedOutput{}
 		cmd.Stdout = output
 		cmd.Stderr = output
+		if body.Kind == "mtr" && body.Stream {
+			stream = &networkStream{w: w, cancel: cancel}
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			w.Header().Set("X-Accel-Buffering", "no")
+			stream.send("start", result)
+			live := &liveProbeOutput{capture: output, stream: stream}
+			cmd.Stdout = live
+			cmd.Stderr = live
+		}
 		err = cmd.Run()
 		output.mu.Lock()
 		result["output"] = string(output.data)
@@ -176,13 +204,20 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		result["output_truncated"] = output.total > uint64(len(output.data))
 		output.mu.Unlock()
 		result["ok"] = err == nil
+		if body.Kind == "mtr" && body.Stream {
+			result["reached"] = mtrReached(fmt.Sprint(result["output"]), target)
+		}
 		if ctx.Err() != nil {
-			result["error"] = "测试已取消或达到 25 秒时限，输出可能不完整"
+			result["error"] = "测试已取消或达到 55 秒时限，输出可能不完整"
 		} else if err != nil {
-			result["error"] = "测试失败；请检查输出、原始套接字权限及目标是否响应"
+			result["error"] = "测试执行失败，请检查输出及服务器探测权限"
 		}
 	}
 	result["finished_at"] = time.Now().UTC()
 	// Explicit results are returned only to this caller, never persisted or logged.
+	if stream != nil {
+		stream.send("result", result)
+		return
+	}
 	writeJSON(w, 200, result)
 }

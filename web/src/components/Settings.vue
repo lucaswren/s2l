@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
 import { api, setCredentials, clearCredentials } from "../api/client";
+import { mergeSettingsDraft } from "../utils/settings-draft";
 import { generatePassword } from "../utils/password";
 import SoftwareUpdate from "./SoftwareUpdate.vue";
 import TimeSettings from "./TimeSettings.vue";
@@ -76,14 +77,19 @@ const confirmRule = {
     v === account.password ? cb() : cb(new Error("两次输入的密码不一致")),
   trigger: "blur",
 };
+let loaded = false;
 async function load() {
+ if (loading.value) return;
+ const previous = loaded ? settings.value : null;
   loading.value = true;
   try {
-    settings.value = await api.settings();
-    account.username = settings.value.admin_user;
-    ssh.port = settings.value.ssh_ports[0] || 22;
-    webPort.port = settings.value.web_port || 443;
-    ipsec.enabled = !!settings.value.ipsec?.enabled;
+    const next = await api.settings();
+    Object.assign(account, mergeSettingsDraft(account, previous && {username:previous.admin_user}, {username:next.admin_user}));
+    Object.assign(ssh, mergeSettingsDraft(ssh, previous && {port:previous.ssh_ports?.[0] || 22}, {port:next.ssh_ports?.[0] || 22}));
+    Object.assign(webPort, mergeSettingsDraft(webPort, previous && {port:previous.web_port || 443}, {port:next.web_port || 443}));
+    Object.assign(ipsec, mergeSettingsDraft(ipsec, previous && {enabled:!!previous.ipsec?.enabled}, {enabled:!!next.ipsec?.enabled}));
+    settings.value = next;
+    loaded = true;
     error.value = "";
   } catch (e) {
     error.value = e.message;
@@ -245,18 +251,17 @@ async function saveSSHPassword() {
     busy.value = "";
   }
 }
-const activeTab = ref("general");
 onMounted(load);
 </script>
 <template>
  <section class="system-settings">
   <div class="section-head">
-   <div><h2>系统设置</h2><p class="muted">管理接入、安全与维护</p></div>
+   <h2>系统设置</h2>
    <el-button :loading="loading" :disabled="!!busy" @click="load">刷新设置</el-button>
   </div>
   <el-alert v-if="error" :title="error" type="error" :closable="false" class="section-gap" />
-  <el-tabs v-model="activeTab" class="settings-tabs">
-   <el-tab-pane label="接入与账号" name="general" lazy>
+  <div class="settings-stack">
+   <section class="settings-group" aria-label="接入与账号">
     <div class="settings-grid"><el-card shadow="never" class="settings-card">
     <template #header
       ><div class="card-heading">
@@ -387,8 +392,8 @@ onMounted(load);
           >
         </el-form>
       </el-card></div>
-   </el-tab-pane>
-   <el-tab-pane label="远程管理" name="remote" lazy>
+   </section>
+   <section class="settings-group" aria-label="远程管理">
     <div class="settings-grid"><div class="settings-stack"><el-card shadow="never" class="settings-card">
     <template #header>HTTPS 管理端口</template>
     <el-alert
@@ -542,13 +547,16 @@ onMounted(load);
           >
         </el-form>
       </el-card></div>
-   </el-tab-pane>
-   <el-tab-pane label="时间同步" name="time" lazy><TimeSettings /></el-tab-pane>
-   <el-tab-pane label="备份与排障" name="support" lazy>
-    <div class="settings-stack"><DebugSettings :active="active && activeTab === 'support'" /><Backups @changed="emit('changed')" /></div>
-   </el-tab-pane>
-   <el-tab-pane label="软件更新" name="update" lazy><SoftwareUpdate :active="active && activeTab === 'update'" /></el-tab-pane>
-  </el-tabs>
+   </section>
+   <section class="settings-grid" aria-label="时间与更新">
+    <TimeSettings />
+    <SoftwareUpdate :active="active" />
+   </section>
+   <section class="settings-grid" aria-label="备份与排障">
+    <DebugSettings :active="active" />
+    <Backups @changed="emit('changed')" />
+   </section>
+  </div>
  </section>
 </template>
 <style scoped>
@@ -556,6 +564,6 @@ onMounted(load);
 .settings-stack { display:grid; gap:20px; min-width:0; }
 .settings-grid :deep(.el-card) { min-width:0; margin-bottom:0; }
 .settings-grid :deep(.form-grid) { grid-template-columns:1fr; }
-.settings-tabs :deep(.el-tabs__content) { overflow:visible; }
+.settings-group { min-width:0; }
 @media(max-width:900px) { .settings-grid { grid-template-columns:1fr; } }
 </style>

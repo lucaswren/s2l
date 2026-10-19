@@ -1,7 +1,7 @@
 <script setup>
-import { reactive, ref } from "vue";
+import { defineAsyncComponent, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
-import NetworkTest from "./NetworkTest.vue";
+const NetworkTest = defineAsyncComponent(() => import("./NetworkTest.vue"));
 import NodeActions from "./NodeActions.vue";
 import SpeedResult from "./SpeedResult.vue";
 import { api } from "../api/client";

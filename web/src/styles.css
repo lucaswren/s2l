@@ -288,6 +288,24 @@ footer {
   }
 }
 
-.ssh-password-card {
-  margin-top: 20px;
+
+
+/* Keep nested cards and long values inside their own responsive containers. */
+.el-card__body, .el-drawer__body, .settings-grid > *, .item-details > * { min-width: 0; }
+.item-title, .item-details, .settings-card p, .settings-card details { overflow-wrap: anywhere; }
+.settings-card details > summary { cursor: pointer; }
+@media (max-width: 767px) {
+ .page { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
+ .el-dialog { max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); margin: 12px auto; display: flex; flex-direction: column; }
+ .el-dialog__header, .el-dialog__footer { flex: none; }
+ .el-dialog__body { flex: 1; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
+ .el-button:not(.is-circle) { min-height: 40px; }
+ .el-input__inner, .el-textarea__inner { font-size: 16px; }
+ .el-input__wrapper, .el-select__wrapper { min-height: 40px; }
+ .el-dialog__headerbtn, .el-drawer__close-btn { min-width: 40px; min-height: 40px; }
+ .card-heading { flex-wrap: wrap; }
+ .settings-card > .el-card__body { padding: 16px; }
+ .settings-card .el-radio-group { flex-wrap: wrap; row-gap: 8px; }
+ .settings-card .el-radio { margin-right: 16px; }
+ .settings-card .actions { gap: 10px; }
 }

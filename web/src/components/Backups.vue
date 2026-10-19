@@ -47,16 +47,17 @@ onMounted(() => perform(load));
       <el-button :loading="busy" @click="perform(async () => { await api.createBackup(); await load(); message = '备份已创建'; })">立即备份</el-button>
       <el-button :disabled="busy" @click="perform(load)">刷新备份</el-button>
     </div>
-    <el-table :data="items" empty-text="暂无备份">
+    <el-table class="desktop-list" :data="items" empty-text="暂无备份">
       <el-table-column label="时间" min-width="180"><template #default="{row}">{{ new Date(row.created_at).toLocaleString() }}</template></el-table-column>
       <el-table-column prop="nodes" label="节点" />
       <el-table-column prop="mappings" label="映射" />
       <el-table-column label="操作"><template #default="{row}"><el-button :disabled="busy" @click="inspect(row.id)">预览回滚</el-button></template></el-table-column>
     </el-table>
+    <div class="mobile-list backup-mobile"><el-empty v-if="!items.length" description="暂无备份" /><article v-for="row in items" :key="row.id" class="backup-item"><div><strong>{{ new Date(row.created_at).toLocaleString() }}</strong><p class="muted">节点 {{ row.nodes }} · 映射 {{ row.mappings }}</p></div><el-button :disabled="busy" @click="inspect(row.id)">预览</el-button></article></div>
     <template v-if="preview">
       <h4>回滚差异</h4>
       <el-alert v-if="!preview.can_restore" title="请先停止全部映射，再重新预览。" type="warning" :closable="false" />
-      <el-table :data="preview.changes" empty-text="配置没有差异（运行状态除外）">
+      <el-table class="desktop-list" :data="preview.changes" empty-text="配置没有差异（运行状态除外）">
         <el-table-column type="expand"><template #default="{row}">
           <p v-if="row.credentials_changed">凭据有变化，密码内容已隐藏。</p>
           <div style="display:flex;gap:16px;flex-wrap:wrap;padding:12px">
@@ -68,8 +69,20 @@ onMounted(() => perform(load));
         <el-table-column prop="id" label="ID" min-width="160" />
         <el-table-column label="变化"><template #default="{row}">{{ labels[row.change] }}</template></el-table-column>
       </el-table>
+      <div class="mobile-list backup-mobile"><el-empty v-if="!preview.changes.length" description="配置没有差异" /><details v-for="row in preview.changes" :key="row.kind + '/' + row.id"><summary>{{ row.kind === 'node' ? '节点' : '映射' }} · {{ labels[row.change] }} · {{ row.id }}</summary><p v-if="row.credentials_changed">凭据有变化，密码已隐藏。</p><strong>当前配置</strong><pre>{{ JSON.stringify(row.before || {}, null, 2) }}</pre><strong>回滚后配置</strong><pre>{{ JSON.stringify(row.after || {}, null, 2) }}</pre></details></div>
+      <div class="actions">
       <el-button type="warning" :disabled="busy || !preview.can_restore" @click="restore">确认恢复此配置</el-button>
       <el-button :disabled="busy" @click="preview = null">关闭预览</el-button>
+      </div>
     </template>
   </el-card>
 </template>
+
+<style scoped>
+.backup-mobile{margin:12px 0;}
+.backup-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter);}
+.backup-item p{margin:6px 0 0;}
+.backup-mobile details{min-width:0;overflow-wrap:anywhere;}
+.backup-mobile summary{cursor:pointer;font-size:13px;line-height:1.7;}
+.backup-mobile pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:var(--el-fill-color-light);padding:12px;border-radius:6px;}
+</style>

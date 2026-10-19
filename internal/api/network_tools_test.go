@@ -57,7 +57,7 @@ func TestNetworkTCPingUsesProxyAndDoesNotRecordWithDebugOff(t *testing.T) {
 	defer listener.Close()
 	failures := make(chan error, 1)
 	go func() {
-		for i := 0; i < 3; i++ {
+		for i := 0; i < 8; i++ {
 			conn, err := listener.Accept()
 			if err != nil {
 				failures <- err
@@ -121,7 +121,7 @@ func TestNetworkTCPingUsesProxyAndDoesNotRecordWithDebugOff(t *testing.T) {
 		OK        bool `json:"ok"`
 		Successes int  `json:"successes"`
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || !result.OK || result.Successes != 3 {
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || !result.OK || result.Successes != 8 {
 		t.Fatal(w.Body.String(), err)
 	}
 	if err := <-failures; err != nil {

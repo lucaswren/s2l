@@ -3,3 +3,5 @@
 *.service text eol=lf
 Makefile text eol=lf
 *.vue text eol=lf
+*.html text eol=lf
+*.css text eol=lf
