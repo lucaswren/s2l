@@ -43,7 +43,7 @@ class UpdateVerificationTests(unittest.TestCase):
                     return
                 self.send_response(200)
                 self.end_headers()
-                payload = {"mappings": []}
+                payload = {"mappings": [], "startup_complete": True, "singbox_pids": {}}
                 if self.modern:
                     payload["upstream_health"] = {}
                 self.wfile.write(json.dumps(payload).encode())
@@ -71,3 +71,18 @@ class UpdateVerificationTests(unittest.TestCase):
             server.shutdown()
             thread.join()
             server.server_close()
+
+
+class LocalReadinessTests(unittest.TestCase):
+    def test_expected_mapping_must_be_locally_ready_but_proxy_may_be_offline(self):
+        status = {"startup_complete": False, "mappings": [{"id": "m", "status": "running", "tun_name": "tun101"}], "upstream_health": {"m": {"local_state": "healthy", "state": "unavailable"}}, "singbox_pids": {"tun101": 123}}
+        self.assertFalse(verify_update.locally_ready(status, ["m"]))
+        status["startup_complete"] = True
+        self.assertTrue(verify_update.locally_ready(status, ["m"]))
+        self.assertFalse(verify_update.locally_ready(status, ["missing"]))
+        status["singbox_pids"] = {}
+        self.assertFalse(verify_update.locally_ready(status, ["m"]))
+        self.assertTrue(verify_update.locally_ready(status, ["m"], auto_restore=False))
+        status["singbox_pids"] = {"tun101": 123}
+        status["upstream_health"]["m"]["local_state"] = "recovering"
+        self.assertFalse(verify_update.locally_ready(status, ["m"]))

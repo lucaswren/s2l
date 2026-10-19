@@ -1,8 +1,10 @@
 package service
 
 import (
+	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/store"
@@ -74,5 +76,36 @@ func TestRestoreDoesNotRestartAnAlreadyTrackedMapping(t *testing.T) {
 	s.health[m.ID] = &healthRecord{}
 	if restored, err := s.restoreMapping(m.ID); restored || err != nil {
 		t.Fatal("restore restarted a mapping already started by the API", restored, err)
+	}
+}
+
+func TestStartupFailureRetainsIntentAndUsesRecoveryBudget(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := model.TunnelMapping{ID: "pending", Status: model.StatusError, TunName: "tun101"}
+	if err := st.UpsertMapping(m); err != nil {
+		t.Fatal(err)
+	}
+	s := NewMappingService(st, nil, nil, nil)
+	if err := s.scheduleStartupRetry(m, errors.New("transient failure")); err != nil {
+		t.Fatal(err)
+	}
+	saved, _ := st.GetMapping(m.ID)
+	h := s.health[m.ID]
+	if saved.Status != model.StatusRunning || !h.startupPending || h.LocalState == "healthy" || len(h.recovery.attempts) != 1 {
+		t.Fatal(saved, h)
+	}
+	h.localNext = time.Now().Add(time.Hour)
+	s.retryStartup(saved, h)
+	if len(h.recovery.attempts) != 1 {
+		t.Fatal("retry bypassed backoff")
+	}
+	if err := st.UpdateMappingStatus(m.ID, model.StatusStopped, ""); err != nil {
+		t.Fatal(err)
+	}
+	if restored, err := s.restoreMapping(m.ID); restored || err != nil {
+		t.Fatal("stop did not cancel desired startup", restored, err)
 	}
 }

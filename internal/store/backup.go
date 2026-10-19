@@ -294,6 +294,10 @@ func (s *Store) RestoreContext(ctx context.Context, state model.AppState, expect
 		return err
 	}
 	s.state = stoppedState(state)
+	// Restoring business configuration must not roll back installed migrations.
+	if s.state.NetworkPolicyVersion < previous.NetworkPolicyVersion {
+		s.state.NetworkPolicyVersion = previous.NetworkPolicyVersion
+	}
 	if err := s.saveLocked(); err != nil {
 		var committed *committedError
 		if !errors.As(err, &committed) {

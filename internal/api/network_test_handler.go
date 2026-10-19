@@ -84,8 +84,8 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		writeError(w, 400, "invalid json")
 		return
 	}
-	if body.Kind != "ping" && body.Kind != "tcping" && body.Kind != "mtr" {
-		writeError(w, 400, "kind must be ping, tcping or mtr")
+	if body.Kind != "ping" && body.Kind != "tcping" && body.Kind != "mtr" && body.Kind != "protocols" {
+		writeError(w, 400, "kind must be protocols, ping, tcping or mtr")
 		return
 	}
 	if body.Kind == "tcping" && !validProbeTarget(body.Target) {
@@ -102,7 +102,18 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	result := map[string]any{"started_at": time.Now().UTC(), "node_id": node.ID, "kind": body.Kind, "target": body.Target, "path": "S2L → SOCKS5 节点 → 目标（TCP 建连，包含代理握手耗时）"}
-	if body.Kind == "tcping" {
+	if body.Kind == "protocols" {
+		report := speedtest.HealthReport{}
+		if s.svc != nil {
+			report = s.svc.ProbeNode(ctx, node)
+		} else {
+			report = speedtest.ProbeHealth(ctx, node)
+		}
+		result["path"] = "S2L → SOCKS5 节点 → 探测目标（不经过客户端和 L2TP）"
+		result["target"] = "HTTPS / UDP 中继 / DNS"
+		result["protocols"] = map[string]any{"tcp": report.TCP, "udp": report.UDP, "dns": report.DNS}
+		result["ok"] = report.TCP.State == "healthy" && report.UDP.State == "healthy" && report.DNS.State == "healthy"
+	} else if body.Kind == "tcping" {
 		samples := []tcpSample{}
 		successes := 0
 		for i := 0; i < 3 && ctx.Err() == nil; i++ {

@@ -45,7 +45,24 @@ def preflight(path):
     return config
 
 
-def check_health(config, attempts=30, delay=1):
+def locally_ready(status, expected_ids=None, auto_restore=True):
+    if not isinstance(status, dict) or status.get("startup_complete") is not True:
+        return False
+    health, mappings, pids = status.get("upstream_health"), status.get("mappings"), status.get("singbox_pids")
+    if not isinstance(health, dict) or not isinstance(mappings, list) or not isinstance(pids, dict):
+        return False
+    if not auto_restore:
+        return True
+    current = {m.get("id"): m for m in mappings if isinstance(m, dict)}
+    required = expected_ids if expected_ids is not None else [m.get("id") for m in mappings if isinstance(m, dict) and m.get("status") == "running"]
+    for mapping_id in required:
+        m, h = current.get(mapping_id, {}), health.get(mapping_id, {})
+        if m.get("status") != "running" or not isinstance(h, dict) or h.get("local_state") != "healthy" or not isinstance(pids.get(m.get("tun_name")), int) or pids.get(m.get("tun_name"), 0) <= 0:
+            return False
+    return True
+
+
+def check_health(config, attempts=120, delay=1, expected_ids=None):
     listen = config.get("listen", "127.0.0.1:8080")
     host, port = listen.rsplit(":", 1)
     host = host.strip("[]")
@@ -65,7 +82,7 @@ def check_health(config, attempts=30, delay=1):
         try:
             with opener.open(request, timeout=2) as response:
                 status = json.loads(response.read(1024 * 1024))
-            if isinstance(status, dict) and isinstance(status.get("upstream_health"), dict) and isinstance(status.get("mappings"), list):
+            if locally_ready(status, expected_ids, config.get("auto_restore", True) is not False):
                 return
         except HTTPError as error:
             error.close()
@@ -80,7 +97,12 @@ if __name__ == "__main__":
     try:
         config = preflight(sys.argv[2])
         if sys.argv[1] == "health":
-            check_health(config)
+            expected = None
+            if len(sys.argv) > 3:
+                state_path = Path(sys.argv[3])
+                old_state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {"mappings": []}
+                expected = [m["id"] for m in old_state["mappings"] if m.get("status") == "running"]
+            check_health(config, expected_ids=expected)
         elif sys.argv[1] != "preflight":
             raise ValueError("未知验证模式")
     except (OSError, ValueError, TypeError, IndexError):

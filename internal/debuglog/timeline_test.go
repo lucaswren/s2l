@@ -145,3 +145,22 @@ func TestAnalysisReportsPersistentUDPFailureAndDNSIndependently(t *testing.T) {
 		t.Fatal("recorded after disable")
 	}
 }
+
+func TestDNSParseErrorsUseSessionDelta(t *testing.T) {
+	c := &Collector{}
+	c.Set(true)
+	now := time.Now()
+	h := model.UpstreamHealth{Process: model.ProcessStatus{DNSParseErrors: 84}}
+	status := model.SystemStatus{UpstreamHealth: map[string]model.UpstreamHealth{"m": h}}
+	c.RecordStatus(status, Resources{}, now)
+	if len(c.Analysis().Events) != 1 {
+		t.Fatal("reported historical errors")
+	}
+	h.Process.DNSParseErrors += 2
+	status.UpstreamHealth["m"] = h
+	c.RecordStatus(status, Resources{}, now.Add(time.Second))
+	a := c.Analysis()
+	if len(a.Events) != 2 || a.Events[1].Kind != "dns-parse" || !strings.Contains(a.Events[1].Detail, "增加 2") || !strings.Contains(string(a.Text()), "DNS 请求报文解析失败") {
+		t.Fatal(a)
+	}
+}

@@ -32,11 +32,14 @@ type Sample struct {
 	Resources Resources `json:"resources"`
 }
 type Analysis struct {
-	Events        []Event  `json:"events"`
-	Resources     []Sample `json:"resources"`
-	Findings      []string `json:"findings"`
-	DroppedEvents int      `json:"dropped_events"`
-	Notice        string   `json:"notice"`
+	Connections        []Connection   `json:"connections"`
+	FailedTargets      []FailedTarget `json:"failed_targets"`
+	DroppedConnections int            `json:"dropped_connections"`
+	Events             []Event        `json:"events"`
+	Resources          []Sample       `json:"resources"`
+	Findings           []string       `json:"findings"`
+	DroppedEvents      int            `json:"dropped_events"`
+	Notice             string         `json:"notice"`
 }
 type observation struct {
 	Health  model.UpstreamHealth
@@ -113,6 +116,16 @@ func (c *Collector) RecordSession(session uint64, status model.SystemStatus, res
 		if !exists {
 			event("baseline", fmt.Sprintf("首次采样：链路 %s，本地 %s，DNS %s；累计计数不作为本次新增故障", h.State, h.LocalState, h.Resolver.Active))
 		} else {
+			for _, protocol := range []struct {
+				name              string
+				current, previous model.ProtocolHealth
+			}{
+				{"tcp", h.TCP, old.Health.TCP}, {"udp", h.UDP, old.Health.UDP}, {"dns", h.DNS, old.Health.DNS},
+			} {
+				if protocol.current.State != protocol.previous.State || protocol.current.Method != protocol.previous.Method || protocol.current.Error != protocol.previous.Error {
+					event("protocol-"+protocol.name, fmt.Sprintf("%s：%s → %s；%s；%s；检测时间 %s", protocol.name, protocol.previous.State, protocol.current.State, protocol.current.Method, protocol.current.Error, protocol.current.CheckedAt.UTC().Format(time.RFC3339)))
+				}
+			}
 			if h.State != old.Health.State {
 				event("health", old.Health.State+" → "+h.State)
 			}
@@ -140,6 +153,9 @@ func (c *Collector) RecordSession(session uint64, status model.SystemStatus, res
 				}
 				if n := counterDelta(h.Process.Refused, old.Health.Process.Refused); n > 0 {
 					event("refused", fmt.Sprintf("连接拒绝日志增加 %d", n))
+				}
+				if n := counterDelta(h.Process.DNSParseErrors, old.Health.Process.DNSParseErrors); n > 0 {
+					event("dns-parse", fmt.Sprintf("DNS 请求解析错误增加 %d", n))
 				}
 				if n := counterDelta(h.Process.ProxyRejections, old.Health.Process.ProxyRejections); n > 0 {
 					event("proxy-rejected", fmt.Sprintf("SOCKS5 请求拒绝日志增加 %d", n))
@@ -187,6 +203,8 @@ func (c *Collector) Analysis() Analysis {
 }
 func (c *Collector) analysisLocked() Analysis {
 	a := Analysis{Events: append([]Event{}, c.events...), Resources: append([]Sample{}, c.samples...), Findings: []string{}, DroppedEvents: c.droppedEvents, Notice: "基于 Debug 期间采样的观察，不能证明因果或客户端完整链路；5 秒内的短暂变化可能未被采样。"}
+	a.Connections, a.FailedTargets = c.connectionSummaryLocked()
+	a.DroppedConnections = c.droppedConnections
 	sort.SliceStable(a.Events, func(i, j int) bool {
 		if a.Events[i].At.Equal(a.Events[j].At) {
 			return a.Events[i].MappingID < a.Events[j].MappingID
@@ -204,7 +222,7 @@ func (c *Collector) analysisLocked() Analysis {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：最近采样本地链路为 %s，应先检查本地进程和恢复状态。", id, h.LocalState))
 		}
 		if h.TCP.State == "healthy" && (h.UDP.State == "unsupported" || h.UDP.State == "unavailable" || h.UDP.State == "unstable") {
-			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 为 %s；UDP 应用可能失败，应核对节点 UDP 支持和防火墙。", id, h.UDP.State))
+			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 为 %s；UDP 应用可能失败；请核对拒绝码和节点策略，不能据此认定图片或文件下载故障。", id, h.UDP.State))
 		}
 		if h.TCP.State == "healthy" && (h.DNS.State == "unavailable" || h.DNS.State == "degraded") {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常而 DNS 异常或仅备用可用，建议先核对 DNS 时间线。", id))
@@ -233,6 +251,9 @@ func (c *Collector) analysisLocked() Analysis {
 	if kinds["clock-adjustment"] {
 		a.Findings = append(a.Findings, "采样期间检测到系统时间校正，绝对时间可能跳变；Debug 到期使用单调时钟，不受 NTP 校时影响。")
 	}
+	if kinds["dns-parse"] {
+		a.Findings = append(a.Findings, "观察到 DNS 请求报文解析失败；上游 DNS 探测正常也不能排除客户端请求异常，需核对原始报文，不能据此判断 MTU 故障。")
+	}
 	if kinds["proxy-rejected"] {
 		a.Findings = append(a.Findings, "观察到 SOCKS5 请求被节点拒绝，请核对拒绝码、UDP 支持及节点访问策略。")
 	}
@@ -249,6 +270,9 @@ func (a Analysis) Text() []byte {
 	b := []byte(a.Notice + "\n\n")
 	for _, f := range a.Findings {
 		b = append(b, []byte("- "+f+"\n")...)
+	}
+	for _, target := range a.FailedTargets {
+		b = append(b, []byte(fmt.Sprintf("目标错误观察 %s %s：%d 条连接（最近保留记录）\n", target.Protocol, target.Target, target.Count))...)
 	}
 	for _, e := range a.Events {
 		b = append(b, []byte(fmt.Sprintf("%s [%s] %s: %s\n", e.At.UTC().Format(time.RFC3339), e.MappingID, e.Kind, e.Detail))...)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -137,5 +138,39 @@ func TestNetworkTCPingUsesProxyAndDoesNotRecordWithDebugOff(t *testing.T) {
 	s.handleNodeNetworkTest(w, r, "n")
 	if w.Code != 429 {
 		t.Fatal(w.Code)
+	}
+}
+
+func TestNetworkProtocolsReturnsSeparateFailures(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertNode(model.SocksNode{ID: "n", Addr: "127.0.0.1:1"}); err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(st, nil, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	request := httptest.NewRequest("POST", "/api/nodes/n/network-test", strings.NewReader(`{"kind":"protocols"}`)).WithContext(ctx)
+	response := httptest.NewRecorder()
+	server.handleNodeNetworkTest(response, request, "n")
+	var result struct {
+		OK        bool                            `json:"ok"`
+		Protocols map[string]model.ProtocolHealth `json:"protocols"`
+	}
+	if response.Code != 200 {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.OK || len(result.Protocols) != 3 {
+		t.Fatal(result)
+	}
+	for _, name := range []string{"tcp", "udp", "dns"} {
+		if result.Protocols[name].State != "unavailable" || result.Protocols[name].Error == "" {
+			t.Fatal(name, result)
+		}
 	}
 }

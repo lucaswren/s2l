@@ -31,7 +31,7 @@ onBeforeUnmount(()=>{disposed=true;stopPolling();});
 <template>
  <el-card shadow="never" class="settings-card debug-settings">
   <template #header><div class="card-heading"><span>Debug 日志</span><el-tag :type="state.enabled?'success':'info'">{{ status }}</el-tag></div></template>
-  <p class="muted">关闭时不记录排障日志。开启后采集 30 分钟，最多保留最近 4 MiB。</p>
+  <p class="muted">采集 30 分钟，保留最近 4 MiB。</p>
   <el-alert v-if="error" :title="error" type="error" :closable="false" class="section-gap" />
   <div class="debug-summary" v-if="hasSession">
    <div><span>已保留</span><strong>{{ (state.bytes/1024).toFixed(0) }} KiB</strong></div>
@@ -44,7 +44,7 @@ onBeforeUnmount(()=>{disposed=true;stopPolling();});
    <el-button :disabled="busy || !hasSession" @click="download">导出日志</el-button>
    <el-button :disabled="busy" @click="refresh">刷新状态</el-button>
   </div>
-  <p v-if="hasSession && !state.enabled" class="muted">已停止采集，仍可导出。重新采集会清空本次内容。</p>
+  <p v-if="hasSession && !state.enabled" class="muted">重新采集会清空本次内容。</p>
   <details class="debug-help"><summary>采集说明</summary>
    <p>日志仅存内存，服务重启后清空。导出包含网络地址与访问目标，分享前请检查。</p>
    <p>健康状态每 5 秒采样；保留最近 512 条事件和 360 次资源采样。时间显示为浏览器本地时间，日志保存为 UTC。</p>

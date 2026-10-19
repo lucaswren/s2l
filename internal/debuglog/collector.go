@@ -12,20 +12,23 @@ const Limit = 4 * 1024 * 1024
 var Default = &Collector{}
 
 type Collector struct {
-	mu            sync.Mutex
-	until         time.Time
-	started       time.Time
-	stopped       time.Time
-	stopReason    string
-	data          []byte
-	head          int
-	dropped       int
-	events        []Event
-	droppedEvents int
-	samples       []Sample
-	previous      map[string]observation
-	generation    uint64
-	lastSample    time.Time
+	mu                  sync.Mutex
+	until               time.Time
+	started             time.Time
+	stopped             time.Time
+	stopReason          string
+	data                []byte
+	head                int
+	dropped             int
+	events              []Event
+	droppedEvents       int
+	samples             []Sample
+	previous            map[string]observation
+	generation          uint64
+	lastSample          time.Time
+	connections         map[string]Connection
+	connectionFragments map[string]string
+	droppedConnections  int
 }
 type State struct {
 	Started         time.Time `json:"started_at"`
@@ -54,6 +57,9 @@ func (c *Collector) Set(enabled bool) State {
 			c.previous = nil
 			c.droppedEvents = 0
 			c.lastSample = time.Time{}
+			c.connections = nil
+			c.connectionFragments = nil
+			c.droppedConnections = 0
 			c.started = time.Now()
 			c.stopped = time.Time{}
 			c.stopReason = ""
@@ -117,6 +123,7 @@ func (c *Collector) Add(source string, p []byte) {
 	c.addLocked(source, p)
 }
 func (c *Collector) addLocked(source string, p []byte) {
+	c.observeConnectionsLocked(source, p)
 	b := append([]byte(fmt.Sprintf("%s [%s] ", time.Now().UTC().Format(time.RFC3339Nano), source)), p...)
 	if len(b) == 0 || b[len(b)-1] != '\n' {
 		b = append(b, '\n')

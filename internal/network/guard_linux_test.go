@@ -83,6 +83,17 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	if err != nil || strings.Count(mssRules, mappingComment(m)+"-mss") != 2 {
 		t.Fatalf("MSS protection must cover both PPP directions once: %s %v", mssRules, err)
 	}
+	controller := NewController()
+	if err := controller.Verify(m); err != nil {
+		t.Fatal("complete forwarding path rejected", err)
+	}
+	must("iptables", mappingMSSDeleteArgs(m, "-i")...)
+	if controller.Verify(m) == nil {
+		t.Fatal("missing MSS rule not detected")
+	}
+	if err := addMappingTCPMSS(m); err != nil {
+		t.Fatal(err)
+	}
 	route, err := output("ip", "route", "get", "198.18.0.2", "from", "10.0.101.2", "iif", "ppp0")
 	if err != nil || !strings.Contains(route, "dev tun101") {
 		t.Fatalf("healthy routing: %s %v", route, err)

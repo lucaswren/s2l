@@ -102,11 +102,11 @@ func TestGenerateConfig(t *testing.T) {
 		t.Fatalf("expected early DNS, rejection, sniffing and protocol DNS rules, got %v", rules)
 	}
 	if rules[0].(map[string]any)["action"] != "hijack-dns" || rules[0].(map[string]any)["port"] != float64(53) {
-		t.Fatal("DNS interception must precede HTTPS UDP rejection")
+		t.Fatal("DNS interception must precede UDP rejection")
 	}
 	quic := rules[1].(map[string]any)
-	if quic["network"] != "udp" || quic["port"] != float64(443) || quic["action"] != "reject" || quic["method"] != "default" || quic["no_drop"] != true {
-		t.Fatalf("HTTPS UDP must fail promptly without blocking other UDP: %v", quic)
+	if quic["network"] != "udp" || quic["port"] != nil || quic["action"] != "reject" || quic["method"] != "default" || quic["no_drop"] != true {
+		t.Fatalf("Non-DNS UDP must fail promptly: %v", quic)
 	}
 	if rules[2].(map[string]any)["action"] != "sniff" {
 		t.Fatal("sniffing must follow early rejection")

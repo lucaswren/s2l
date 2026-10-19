@@ -106,7 +106,7 @@ if (( was_l2tp )); then systemctl start xl2tpd; fi
 if (( was_s2l )); then
   systemctl start s2l
   report_web_update verifying
-  python3 "$ROOT_DIR/script/verify_update.py" health /opt/s2l/config.json
+  python3 "$ROOT_DIR/script/verify_update.py" health /opt/s2l/config.json "$backup/app/data/state.json"
   systemctl is-active --quiet s2l
 fi
 if (( was_l2tp )); then systemctl is-active --quiet xl2tpd; fi

@@ -138,8 +138,9 @@ func readPrimary(path string) ([]byte, error) {
 
 func cloneState(in model.AppState) model.AppState {
 	out := model.AppState{
-		Nodes:    make([]model.SocksNode, len(in.Nodes)),
-		Mappings: make([]model.TunnelMapping, len(in.Mappings)),
+		NetworkPolicyVersion: in.NetworkPolicyVersion,
+		Nodes:                make([]model.SocksNode, len(in.Nodes)),
+		Mappings:             make([]model.TunnelMapping, len(in.Mappings)),
 	}
 	copy(out.Nodes, in.Nodes)
 	copy(out.Mappings, in.Mappings)
@@ -171,7 +172,7 @@ func (s *Store) Snapshot() model.AppState {
 	nodes = append(nodes, s.state.Nodes...)
 	mappings := make([]model.TunnelMapping, 0, len(s.state.Mappings))
 	mappings = append(mappings, s.state.Mappings...)
-	return model.AppState{Nodes: nodes, Mappings: mappings}
+	return model.AppState{NetworkPolicyVersion: s.state.NetworkPolicyVersion, Nodes: nodes, Mappings: mappings}
 }
 
 // --- Nodes ---

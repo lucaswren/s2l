@@ -221,7 +221,7 @@ async function speedTest(n) {
           @remove="remove"
       /></el-card>
     </div>
-    <NetworkTest v-if="networkNode" :node="networkNode" @close="networkNode = null" />
+    <NetworkTest v-if="networkNode" :node="networkNode" @close="networkNode = null" @changed="emit('changed')" />
     <el-dialog
       :model-value="mode === 'edit'"
       :title="editingId ? '编辑节点' : '新增节点'"

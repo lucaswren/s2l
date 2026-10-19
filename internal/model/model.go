@@ -32,7 +32,7 @@ type TunnelMapping struct {
 	MTU         int    `json:"mtu,omitempty"`
 	MSS         int    `json:"mss,omitempty"`
 	QueueLength int    `json:"queue_length,omitempty"`
-	UDPPolicy   string `json:"udp_policy,omitempty"` // reject-quic (default) | allow | reject
+	UDPPolicy   string `json:"udp_policy,omitempty"` // reject (default) | allow | reject-quic
 	DNSMode     string `json:"dns_mode,omitempty"`   // auto (default) | doh | tcp
 }
 
@@ -56,7 +56,7 @@ func (m TunnelMapping) EffectiveQueueLength() int {
 }
 func (m TunnelMapping) EffectiveUDPPolicy() string {
 	if m.UDPPolicy == "" {
-		return "reject-quic"
+		return "reject"
 	}
 	return m.UDPPolicy
 }
@@ -77,6 +77,7 @@ type ResolverStatus struct {
 }
 
 type ProcessStatus struct {
+	DNSParseErrors  uint64 `json:"dns_parse_errors"`
 	ProxyRejections uint64 `json:"proxy_rejections"`
 	LogBytes        uint64 `json:"log_bytes"`
 	Timeouts        uint64 `json:"timeouts"`
@@ -144,6 +145,7 @@ type SystemStatus struct {
 
 // AppState 持久化到 data/state.json 的完整状态
 type AppState struct {
-	Nodes    []SocksNode     `json:"nodes"`
-	Mappings []TunnelMapping `json:"mappings"`
+	NetworkPolicyVersion int             `json:"network_policy_version,omitempty"`
+	Nodes                []SocksNode     `json:"nodes"`
+	Mappings             []TunnelMapping `json:"mappings"`
 }

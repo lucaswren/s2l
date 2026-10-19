@@ -47,6 +47,13 @@ func main() {
 		log.Fatalf("store: %v", err)
 	}
 
+	// Migrate before monitoring or rebuilding any running tunnel configuration.
+	if changed, err := st.MigrateTCPOnlyPolicy(); err != nil {
+		log.Fatalf("migrate network policy: %v", err)
+	} else if changed > 0 {
+		log.Printf("network policy migrated for %d mapping(s): reject UDP, DNS via DoH/TCP", changed)
+	}
+
 	sb := singbox.NewManager(cfg.SingboxBin)
 	netCtrl := network.NewController()
 	l2tpMgr := l2tp.NewManager(cfg.ChapSecrets, cfg.Xl2tpdConf, cfg.PPPOptions)
@@ -67,9 +74,13 @@ func main() {
 			// 稍等 TUN/网络栈就绪
 			time.Sleep(500 * time.Millisecond)
 			svc.RestoreRunning()
+			svc.SetStartupComplete()
 		}()
 	}
 
+	if !cfg.ShouldAutoRestore() {
+		svc.SetStartupComplete()
+	}
 	webFS, err := web.FS()
 	if err != nil {
 		log.Fatalf("embed web: %v", err)

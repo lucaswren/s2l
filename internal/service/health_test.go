@@ -137,3 +137,55 @@ func TestUpstreamSuccessCannotHideLocalRecoveryFailure(t *testing.T) {
 		t.Fatal("stale probes were not invalidated")
 	}
 }
+
+func TestUDPProbeCooldownPreservesEvidence(t *testing.T) {
+	now := time.Now()
+	for _, state := range []string{"unsupported", "unavailable"} {
+		h := healthRecord{}
+		if !h.udpProbeDue(now) {
+			t.Fatal("initial probe skipped")
+		}
+		h.applyReport(speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: state, Error: "UDP rejected"}}, now)
+		// unavailable needs three observations before its longer cooldown.
+		if state == "unavailable" {
+			h.applyReport(speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: state}}, now)
+			h.applyReport(speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: state}}, now)
+		}
+		before := h.UDP
+		h.applyReport(speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}}, now.Add(10*time.Second))
+		if h.UDP != before {
+			t.Fatal("skipped probe overwrote evidence", h.UDP, before)
+		}
+		if h.udpProbeDue(now.Add(9*time.Minute)) || !h.udpProbeDue(now.Add(10*time.Minute)) {
+			t.Fatal("incorrect UDP cooldown", state)
+		}
+		if h.TCP.State != "healthy" || h.DNS.State != "healthy" {
+			t.Fatal("UDP prevented TCP/DNS checks")
+		}
+		h.invalidateProtocols()
+		if !h.udpProbeDue(now) {
+			t.Fatal("recovery must invalidate cooldown")
+		}
+	}
+}
+
+func TestUDPRecoveryConfirmsQuicklyAndIgnoresReusedEvidence(t *testing.T) {
+	now := time.Now()
+	h := healthRecord{}
+	h.udp = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "unavailable", CheckedAt: now}, failures: 3}
+	measured := model.ProtocolHealth{State: "healthy", CheckedAt: now.Add(10 * time.Minute)}
+	h.udp.observe(measured, measured.CheckedAt)
+	h.UDP = h.udp.ProtocolHealth
+	if h.UDP.State != "checking" || !h.udpProbeDue(measured.CheckedAt.Add(10*time.Second)) {
+		t.Fatal("slow recovery confirmation")
+	}
+	h.udp.observe(measured, measured.CheckedAt.Add(time.Second))
+	if h.udp.State == "healthy" {
+		t.Fatal("cached result counted twice")
+	}
+	measured.CheckedAt = measured.CheckedAt.Add(10 * time.Second)
+	h.udp.observe(measured, measured.CheckedAt)
+	if h.udp.State != "healthy" {
+		t.Fatal(h.udp)
+	}
+}

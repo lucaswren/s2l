@@ -16,12 +16,14 @@ import (
 
 // MappingService 编排「sing-box + 网络规则 + L2TP」整条链路
 type MappingService struct {
-	store        *store.Store
-	singbox      *singbox.Manager
-	net          *network.Controller
-	l2tp         *l2tp.Manager
-	startedAt    time.Time
-	shuttingDown bool
+	store           *store.Store
+	singbox         *singbox.Manager
+	net             *network.Controller
+	l2tp            *l2tp.Manager
+	startedAt       time.Time
+	shuttingDown    bool
+	startupComplete bool
+	probes          nodeProbeCache
 
 	mu             sync.Mutex
 	stateGate      sync.RWMutex // state edits exclude lifecycle work; independent mappings share read access
@@ -102,7 +104,13 @@ func (s *MappingService) restoreMapping(id string) (bool, error) {
 	if !ok || m.Status != model.StatusRunning || shuttingDown || alreadyStarted {
 		return false, nil
 	}
-	return true, s.startLocked(id)
+	err := s.startLocked(id)
+	if err != nil && network.ValidateMapping(m) == nil && m.L2TPUser != "" && m.L2TPPass != "" {
+		if _, ok := s.store.GetNode(m.NodeID); ok {
+			err = errors.Join(err, s.scheduleStartupRetry(m, err))
+		}
+	}
+	return true, err
 }
 
 // SynchronizeState coordinates API state edits with startup and recovery.
@@ -188,6 +196,9 @@ func (s *MappingService) startLocked(id string) error {
 		return s.failStart(m, previousActive, fmt.Errorf("network: %w", err))
 	}
 
+	if err := s.net.Verify(m); err != nil {
+		return s.failStart(m, previousActive, errors.Join(err, s.cleanupRuntime(m)))
+	}
 	if err := s.store.UpdateMappingStatus(id, model.StatusRunning, ""); err != nil {
 		cleanupErr := s.cleanupRuntime(m)
 		rollbackErr := s.l2tp.ApplyStop(m.ID, previousActive)

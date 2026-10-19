@@ -50,3 +50,7 @@ func (c *Controller) ActiveCount() int {
 func (c *Controller) EnsureGuard() error { return fmt.Errorf("PPP guards require Linux") }
 
 func TunePeers(model.TunnelMapping) error { return nil }
+
+func (c *Controller) Verify(model.TunnelMapping) error {
+	return fmt.Errorf("forwarding verification requires Linux")
+}

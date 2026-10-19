@@ -72,7 +72,11 @@ func (s *Store) recoverCorruptState(original []byte) error {
 		return err
 	}
 	keep = true
+	version := s.state.NetworkPolicyVersion
 	s.state = b.State
+	if s.state.NetworkPolicyVersion < version {
+		s.state.NetworkPolicyVersion = version
+	}
 	if err = s.saveLocked(); err != nil {
 		return err
 	}

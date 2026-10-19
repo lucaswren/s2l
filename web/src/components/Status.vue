@@ -28,12 +28,13 @@ const pids = computed(() =>
 const health = computed(() => Object.entries(props.status.upstream_health || {}).map(([id, h]) => ({id, ...h})));
 const healthLabels = {checking: "检测中", healthy: "正常", unstable: "连接不稳定", unavailable: "不可用", recovering: "恢复中", 'circuit-open': "恢复熔断", degraded: "部分可用", unsupported: "不支持"};
 function protocolLabel(result) {
+ if (result?.method === "udp-associate" && result?.error?.includes("code=")) return "节点拒绝 UDP";
  if (result?.state === "degraded" && result?.method === "tcp-fallback") return "仅备用可用";
  return healthLabels[result?.state] || "检测中";
 }
 function protocolDetail(result) {
  const methods = {https: "HTTPS 转发", "dns-udp": "UDP 中继实测", "udp-associate": "UDP 协商", doh: "DoH", tcp: "TCP DNS", "tcp-fallback": "TCP DNS 备用", "doh/tcp": "DoH / TCP DNS"};
- return [methods[result?.method], result?.error].filter(Boolean).join(" · ") || "等待检测";
+ return [methods[result?.method], result?.error, result?.checked_at ? `检测于 ${new Date(result.checked_at).toLocaleString()}` : ""].filter(Boolean).join(" · ") || "等待检测";
 }
 function formatBytes(n) {
   if (!n) return "0 B";
@@ -51,7 +52,7 @@ function formatBytes(n) {
   <div class="section-head">
     <div>
       <h2>运行监控</h2>
-      <p class="muted">上游协议探测、本地恢复、实时 DNS 解析器与接口丢包</p>
+
     </div>
   </div>
   <el-card shadow="never" class="section-gap">
@@ -64,7 +65,7 @@ function formatBytes(n) {
       </el-table-column>
       <el-table-column label="本地链路" min-width="100"><template #default="{row}"><el-tooltip :content="row.recovery_error || '独立检查进程和 TUN，不受上游探测退避影响'"><span>{{ healthLabels[row.local_state] || '检测中' }}</span></el-tooltip></template></el-table-column>
       <el-table-column label="实际 DNS" min-width="145"><template #default="{row}"><div>{{ row.resolver?.active === 'tcp' ? 'TCP DNS' : row.resolver?.active === 'doh' ? 'DoH' : '等待启动' }}</div><div class="muted">备用成功 {{ row.resolver?.fallbacks || 0 }} · 失败 {{ row.resolver?.failures || 0 }}</div></template></el-table-column>
-      <el-table-column label="连接错误记录" min-width="180"><template #default="{row}"><el-tooltip :content="'当前进程日志分类计数，不等同于失败请求数量；网络不可达 ' + (row.process?.network_errors || 0) + '，本次服务累计退出 ' + (row.process?.exits || 0)"><span>超时 {{ row.process?.timeouts || 0 }} · 拒绝 {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} · 代理拒绝 {{ row.process?.proxy_rejections || 0 }}</span></el-tooltip></template></el-table-column>
+      <el-table-column label="连接错误记录" min-width="180"><template #default="{row}"><el-tooltip :content="'当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 ' + (row.process?.network_errors || 0) + '，本次服务累计退出 ' + (row.process?.exits || 0)"><span>超时 {{ row.process?.timeouts || 0 }} · 拒绝 {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} · 代理拒绝 {{ row.process?.proxy_rejections || 0 }} · DNS 报文 {{ row.process?.dns_parse_errors || 0 }}</span></el-tooltip></template></el-table-column>
       <el-table-column label="最近检测"><template #default="{ row }">{{ row.checked_at && !row.checked_at.startsWith('0001') ? new Date(row.checked_at).toLocaleString() : '等待检测' }}</template></el-table-column>
       <el-table-column prop="error" label="故障说明" min-width="220" />
       <el-table-column label="自动恢复" min-width="230"><template #default="{row}">
@@ -73,8 +74,11 @@ function formatBytes(n) {
         <el-button v-if="row.local_state !== 'healthy'" size="small" :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">手动重试恢复</el-button>
       </template></el-table-column>
     </el-table>
-    <p class="muted">映射运行中不代表上游可用。UDP 不支持时 TCP 仍可正常使用。DNS 列是独立上游探测，“实际 DNS”显示映射当前解析器；自动模式按真实查询失败切换。探测不验证客户端完整链路或所有 UDP 应用。</p>
-    <p class="muted">本地恢复预算为 10 分钟内 3 次，耗尽后冷却 5 分钟并试探一次；连续稳定 2 分钟后重置预算。单纯上游不可用不会重启本地隧道。手动重试会重置恢复预算。</p>
+    <p class="muted">上游探测不覆盖客户端分流与 L2TP；错误数为当前进程累计值。</p>
+    <details class="muted"><summary>检测与恢复说明</summary>
+     <p>DNS 为独立探测，“实际 DNS”为映射当前解析器。UDP 不可用时 TCP 仍可能正常。UDP 确认不支持或不可用后每 10 分钟复测；节点网络测试可立即复测。</p>
+     <p>本地恢复在 10 分钟内最多尝试 3 次，冷却 5 分钟；稳定 2 分钟后重置。上游异常不会触发隧道重启，手动重试会重置预算。</p>
+    </details>
   </el-card>
   <el-row :gutter="16"
     ><el-col :xs="24" :md="8"

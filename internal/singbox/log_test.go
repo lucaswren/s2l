@@ -118,3 +118,14 @@ func TestProxyRejectionsAcrossChunks(t *testing.T) {
 		t.Fatal(writer.Status())
 	}
 }
+
+func TestDNSParseErrorsAcrossChunks(t *testing.T) {
+	writer, _ := openDebugLog("unused")
+	defer writer.Close()
+	for _, fragment := range []string{"ERROR dns: process packet connection: unpack requ", "est: dns: bad rdata\n", "ERROR dns: process packet connection: unpack request: dns: buffer size too small\n", "INFO dns: exchanged example.com\n"} {
+		writer.Write([]byte(fragment))
+	}
+	if writer.Status().DNSParseErrors != 2 {
+		t.Fatal(writer.Status())
+	}
+}

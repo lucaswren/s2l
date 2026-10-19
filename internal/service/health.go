@@ -17,6 +17,8 @@ type healthRecord struct {
 	failures, successes int
 	next                time.Time
 	localNext           time.Time
+	forwardingNext      time.Time
+	startupPending      bool
 	generation          uint64
 	recoveryFailures    int
 	recovery            recoveryBudget
@@ -154,17 +156,35 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 	s.mu.Unlock()
 	alive := s.singbox.IsRunning(m.TunName) && network.WaitInterface(m.TunName, 100*time.Millisecond) == nil
 	now := time.Now()
+	if h.startupPending {
+		s.retryStartup(m, h)
+		return
+	}
 	if alive {
 		err := network.TunePeers(m)
+		verifyDue := !now.Before(h.forwardingNext)
+		if err == nil && verifyDue {
+			err = s.net.Verify(m)
+			if err != nil {
+				debuglog.Default.Printf("mapping %s forwarding rules missing; repairing: %v", m.ID, err)
+				err = s.net.Setup(m)
+				if err == nil {
+					err = s.net.Verify(m)
+				}
+			}
+		}
 		s.mu.Lock()
 		h.LocalCheckedAt = now
 		if err != nil {
 			h.recovery.healthySince = time.Time{}
 			h.LocalState = "unstable"
-			h.RecoveryError = "PPP interface tuning failed; enable Debug, reproduce and export logs"
+			h.RecoveryError = "本地转发或 PPP 参数检查失败，请开启 Debug 查看详情"
 			debuglog.Default.Printf("mapping %s PPP tune failed: %v", m.ID, err)
 		} else {
 			h.LocalState = "healthy"
+			if verifyDue {
+				h.forwardingNext = now.Add(30 * time.Second)
+			}
 			h.RecoveryError = ""
 			if h.recovery.healthy(now) {
 				h.recoveryFailures = 0
@@ -209,6 +229,9 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		}
 		if err == nil {
 			err = s.net.Setup(m)
+			if err == nil {
+				err = s.net.Verify(m)
+			}
 		}
 	}
 	if err != nil {
@@ -237,8 +260,14 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 		return
 	}
 	generation := h.generation
+	probeUDP := h.udpProbeDue(time.Now())
 	s.mu.Unlock()
-	report := speedtest.ProbeHealth(ctx, node, m.EffectiveDNSMode())
+	report := s.probes.get(ctx, probeKey{node, m.EffectiveDNSMode(), probeUDP}, func() speedtest.HealthReport {
+		if probeUDP {
+			return speedtest.ProbeHealth(ctx, node, m.EffectiveDNSMode())
+		}
+		return speedtest.ProbeTCPDNS(ctx, node, m.EffectiveDNSMode())
+	})
 	s.finishProbe(ctx, m, node, h, generation, report)
 }
 
@@ -263,7 +292,14 @@ type protocolRecord struct {
 }
 
 func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
-	p.CheckedAt = now
+	if !result.CheckedAt.IsZero() {
+		if !p.CheckedAt.IsZero() && !result.CheckedAt.After(p.CheckedAt) {
+			return
+		}
+		p.CheckedAt = result.CheckedAt
+	} else {
+		p.CheckedAt = now
+	}
 	p.Method = result.Method
 	switch result.State {
 	case "healthy":
@@ -272,7 +308,7 @@ func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
 		if p.successes >= 2 {
 			p.State = "healthy"
 			p.Error = ""
-		} else if p.State == "" || p.State == "unsupported" {
+		} else if p.State != "healthy" {
 			p.State = "checking"
 			p.Error = ""
 		}
@@ -303,16 +339,34 @@ func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time)
 	if report.TCP.State != "healthy" {
 		tcpError = fmt.Errorf("TCP HTTPS forwarding check failed")
 	}
-	h.observe(tcpError, now)
-	h.tcp.observe(report.TCP, now)
-	h.udp.observe(report.UDP, now)
-	h.dns.observe(report.DNS, now)
+	if report.TCP.CheckedAt.IsZero() || h.TCP.CheckedAt.IsZero() || report.TCP.CheckedAt.After(h.TCP.CheckedAt) {
+		h.observe(tcpError, now)
+		h.tcp.observe(report.TCP, now)
+	} else if h.baseState != "" {
+		h.State = h.baseState
+		if h.State == "healthy" {
+			h.Error = ""
+		}
+	}
+	if report.UDP.State != "" {
+		h.udp.observe(report.UDP, now)
+	}
+	if report.DNS.State != "" {
+		h.dns.observe(report.DNS, now)
+	}
 	h.TCP = h.tcp.ProtocolHealth
 	h.UDP = h.udp.ProtocolHealth
 	h.DNS = h.dns.ProtocolHealth
 	if h.State == "healthy" && (h.UDP.State != "healthy" || h.DNS.State != "healthy") {
 		h.State = "degraded"
-		h.Error = "TCP is available; inspect the separate UDP and DNS results"
+		switch {
+		case h.DNS.State != "healthy":
+			h.Error = "TCP 正常；DNS 异常或检测中"
+		case h.UDP.State == "unsupported":
+			h.Error = "TCP 正常；UDP 不支持"
+		default:
+			h.Error = "TCP 正常；UDP 不可用或检测中"
+		}
 	} else if h.State == "unavailable" && (h.UDP.State == "healthy" || (h.DNS.State == "healthy" || h.DNS.State == "degraded")) {
 		h.State = "degraded"
 		h.Error = "Some upstream checks succeed; inspect the TCP result"
@@ -363,4 +417,22 @@ func (h *healthRecord) finishRecovery(err error, now time.Time) {
 		h.Error = ""
 		h.next = time.Time{}
 	}
+}
+
+// UDP capability changes slowly. Retain its real timestamp between probes;
+// explicit node diagnostics always probe all protocols immediately.
+func (h *healthRecord) udpProbeDue(now time.Time) bool {
+	if h.UDP.CheckedAt.IsZero() {
+		return true
+	}
+	interval := time.Minute
+	switch h.UDP.State {
+	case "unsupported", "unavailable":
+		interval = 10 * time.Minute
+	case "unstable":
+		interval = time.Minute
+	case "checking":
+		interval = 10 * time.Second
+	}
+	return !now.Before(h.UDP.CheckedAt.Add(interval))
 }

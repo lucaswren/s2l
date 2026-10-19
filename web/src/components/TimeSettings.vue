@@ -1,9 +1,11 @@
 <script setup>
-import { onMounted, ref, reactive } from 'vue';
+import { computed, onMounted, ref, reactive } from 'vue';
 import { api } from '../api/client';
+import { timezoneGroups } from '../api/timezones';
 const info = ref(null), busy = ref(false), error = ref(''), message = ref('');
 const form = reactive({timezone:'Asia/Shanghai', auto_sync:true, mode:'system'});
 const servers = ref('');
+const zoneGroups = computed(() => timezoneGroups(info.value?.timezones, info.value?.timezone, info.value?.server_time));
 async function load() {
  busy.value=true; error.value='';
  try { info.value=await api.timeSettings(); Object.assign(form,{timezone:info.value.timezone,auto_sync:info.value.auto_sync,mode:info.value.mode}); servers.value=info.value.servers.join('\n'); }
@@ -29,7 +31,8 @@ onMounted(load);
    <p>服务器时间：{{ serverTime() }} · {{ info.timezone }}</p>
    <p>自动同步：{{ info.auto_sync?'已开启':'已关闭' }}；系统时钟：{{ info.synchronized?'已同步':'尚未确认同步' }}<span v-if="info.active_server">；当前 NTP：{{ info.active_server }}</span></p>
    <el-form label-position="top" :disabled="busy" @submit.prevent="save">
-    <el-form-item label="服务器时区"><el-select v-model="form.timezone" filterable style="width:100%"><el-option v-for="zone in info.timezones" :key="zone" :label="zone" :value="zone" /></el-select></el-form-item>
+    <el-form-item label="服务器时区"><el-select v-model="form.timezone" filterable placeholder="搜索城市、时区或 UTC 偏移" style="width:100%"><el-option-group v-for="group in zoneGroups" :key="group.label" :label="group.label"><el-option v-for="zone in group.options" :key="zone.value" :label="zone.label" :value="zone.value" /></el-option-group></el-select></el-form-item>
+    <p class="muted zone-help">UTC 偏移按服务器当前日期显示，夏令时地区会随日期变化。</p>
     <el-form-item label="自动同步"><el-switch v-model="form.auto_sync" /></el-form-item>
     <el-form-item label="NTP 服务器"><el-radio-group v-model="form.mode"><el-radio value="system">系统默认</el-radio><el-radio value="custom" :disabled="!info.custom_available">自定义 NTP</el-radio></el-radio-group></el-form-item>
     <el-form-item v-if="form.mode==='custom'" label="NTP 服务器（每行一个，最多 8 个）"><el-input v-model="servers" type="textarea" :rows="3" placeholder="输入可访问的 NTP 服务器域名或 IP" /></el-form-item>
@@ -42,6 +45,7 @@ onMounted(load);
 </template>
 
 <style scoped>
+.zone-help {margin-top:-12px;font-size:12px;}
 .time-help {margin-bottom:16px;font-size:13px;line-height:1.7;}
 .time-help summary {cursor:pointer;}
 </style>

@@ -21,13 +21,25 @@ type HealthReport struct{ TCP, UDP, DNS model.ProtocolHealth }
 
 // All target traffic is carried by SOCKS5; UDP goes only to its negotiated relay.
 func ProbeHealth(ctx context.Context, node model.SocksNode, dnsMode ...string) HealthReport {
+	return probeHealth(ctx, node, true, dnsMode...)
+}
+
+// ProbeTCPDNS leaves UDP empty so callers can retain the last measured UDP result.
+func ProbeTCPDNS(ctx context.Context, node model.SocksNode, dnsMode ...string) HealthReport {
+	return probeHealth(ctx, node, false, dnsMode...)
+}
+
+func probeHealth(ctx context.Context, node model.SocksNode, probeUDP bool, dnsMode ...string) HealthReport {
 	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 	var report HealthReport
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(2)
 	go func() { defer wg.Done(); err := CheckHealth(ctx, node); report.TCP = protocolResult("https", err) }()
-	go func() { defer wg.Done(); report.UDP = checkUDPHealth(ctx, node) }()
+	if probeUDP {
+		wg.Add(1)
+		go func() { defer wg.Done(); report.UDP = checkUDPHealth(ctx, node) }()
+	}
 	go func() { defer wg.Done(); report.DNS = checkDNSHealth(ctx, node, dnsMode...) }()
 	wg.Wait()
 	return report
@@ -156,7 +168,7 @@ func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHea
 			return model.ProtocolHealth{State: "unsupported", Method: "udp-associate", Error: "Proxy explicitly rejects UDP ASSOCIATE as unsupported", CheckedAt: time.Now()}
 		}
 		if errors.As(err, &reply) {
-			return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association rejected: code=%d", reply.code))
+			return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association rejected: code=%d (proxy reply; inspect upstream policy)", reply.code))
 		}
 		return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association failed"))
 	}
