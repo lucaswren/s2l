@@ -19,7 +19,7 @@ func (c *Controller) Verify(m model.TunnelMapping) error {
 	if err := validateMapping(m); err != nil {
 		return err
 	}
-	rules, err := output("ip", "-j", "rule", "show")
+	rules, err := output("ip", "-N", "-j", "rule", "show")
 	if err != nil {
 		return err
 	}
@@ -64,6 +64,7 @@ func (c *Controller) Verify(m model.TunnelMapping) error {
 func verifyRouteJSON(m model.TunnelMapping, rules, routes []byte) error {
 	var ruleList []struct {
 		Src      string `json:"src"`
+		SrcLen   *int   `json:"srclen"`
 		Table    any    `json:"table"`
 		Priority int    `json:"priority"`
 	}
@@ -72,7 +73,11 @@ func verifyRouteJSON(m model.TunnelMapping, rules, routes []byte) error {
 	}
 	found := false
 	for _, r := range ruleList {
-		if r.Src == canonicalSubnet(m.Subnet) && fmt.Sprint(r.Table) == strconv.Itoa(m.TableID) && r.Priority == 10000+m.TableID {
+		source := r.Src
+		if r.SrcLen != nil && !strings.Contains(source, "/") {
+			source = fmt.Sprintf("%s/%d", source, *r.SrcLen)
+		}
+		if canonicalSubnet(source) == canonicalSubnet(m.Subnet) && fmt.Sprint(r.Table) == strconv.Itoa(m.TableID) && r.Priority == 10000+m.TableID {
 			found = true
 		}
 	}
