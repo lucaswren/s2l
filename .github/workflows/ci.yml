@@ -38,6 +38,11 @@ jobs:
       - name: Verify real L2TP fixed exits, DNS and UDP rejection
         run: |
           sudo apt-get install -y xl2tpd ppp curl
+          # Hosted Azure kernels can omit L2TP from their base module package.
+          # Install modules for the running kernel; never skip the real dial test.
+          if ! modinfo l2tp_ppp >/dev/null 2>&1; then
+            sudo apt-get install -y "linux-modules-extra-$(uname -r)"
+          fi
           sudo modprobe ppp_generic
           sudo modprobe l2tp_ppp
           go test -c -o /tmp/s2l-l2tp.test ./internal/service
