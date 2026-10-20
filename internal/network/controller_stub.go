@@ -3,6 +3,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -52,5 +53,9 @@ func (c *Controller) EnsureGuard() error { return fmt.Errorf("PPP guards require
 func TunePeers(model.TunnelMapping) error { return nil }
 
 func (c *Controller) Verify(model.TunnelMapping) error {
+	return fmt.Errorf("forwarding verification requires Linux")
+}
+
+func (c *Controller) VerifyContext(context.Context, model.TunnelMapping) error {
 	return fmt.Errorf("forwarding verification requires Linux")
 }

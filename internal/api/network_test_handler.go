@@ -88,15 +88,15 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		writeError(w, 400, "invalid json")
 		return
 	}
-	if body.Kind != "ping" && body.Kind != "tcping" && body.Kind != "mtr" && body.Kind != "protocols" {
-		writeError(w, 400, "kind must be protocols, ping, tcping or mtr")
+	if body.Kind != "ping" && body.Kind != "tcping" && body.Kind != "https" && body.Kind != "mtr" && body.Kind != "protocols" && body.Kind != "quality" {
+		writeError(w, 400, "kind must be protocols, ping, tcping, https, quality or mtr")
 		return
 	}
 	if body.MTRProtocol != "" && body.MTRProtocol != "tcp" && body.MTRProtocol != "icmp" {
 		writeError(w, 400, "mtr_protocol must be tcp or icmp")
 		return
 	}
-	if body.Kind == "tcping" && !validProbeTarget(body.Target) {
+	if (body.Kind == "tcping" || body.Kind == "https" || body.Kind == "quality") && !validProbeTarget(body.Target) {
 		writeError(w, 400, "target must be host:port (IPv6: [address]:port)")
 		return
 	}
@@ -120,8 +120,19 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		}
 		result["path"] = "S2L → SOCKS5 节点 → 探测目标"
 		result["target"] = "HTTPS / UDP 中继 / DNS"
+		result["capability_warning"] = report.UDP.State != "healthy"
 		result["protocols"] = map[string]any{"tcp": report.TCP, "udp": report.UDP, "dns": report.DNS}
-		result["ok"] = report.TCP.State == "healthy" && report.UDP.State == "healthy" && report.DNS.State == "healthy"
+		result["ok"] = report.TCP.State == "healthy" && (report.DNS.State == "healthy" || report.DNS.State == "degraded")
+	} else if body.Kind == "https" {
+		measured := speedtest.ProbeHTTPS(ctx, node, body.Target)
+		result["protocols"] = map[string]any{"tcp": measured}
+		result["path"] = "S2L → SOCKS5 节点 → 指定 HTTPS 目标"
+		result["ok"] = measured.State == "healthy"
+	} else if body.Kind == "quality" {
+		q := speedtest.ProbeQuality(ctx, node, body.Target)
+		result["quality"] = q
+		result["ok"] = q.Successes == networkProbeAttempts
+		result["path"] = "S2L → 固定 SOCKS5 → HTTPS 响应传输"
 	} else if body.Kind == "tcping" {
 		samples := []tcpSample{}
 		successes := 0

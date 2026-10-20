@@ -48,7 +48,7 @@ func (s *Server) handleNodeByID(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "node not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, n)
+		writeResource(w, n)
 	case http.MethodDelete:
 		if err := s.store.DeleteNode(id); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -77,6 +77,21 @@ func (s *Server) createOrUpdateNode(w http.ResponseWriter, r *http.Request) {
 	}
 	if n.ID == "" {
 		n.ID = newID("node_")
+	}
+	old, exists := s.store.GetNode(n.ID)
+	if !exists && r.Header.Get("If-Match") != "" {
+		writeError(w, 409, "配置已删除，请重新加载列表")
+		return
+	}
+	if exists && !revisionMatches(w, r, old) {
+		return
+	}
+	if !validGroup(n.Group) {
+		writeError(w, 400, "分组名称无效")
+		return
+	}
+	if s.previewChange(w, r, old, n, n.ID) {
+		return
 	}
 	if err := s.store.UpsertNode(n); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())

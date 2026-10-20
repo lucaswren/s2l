@@ -12,12 +12,13 @@ const emit = defineEmits(["changed", "toast"]);
 const networkNode = ref(null);
 const mode = ref(""); // '' | edit | import
 const editingId = ref("");
+const editRevision=ref("");
 const busy = ref(false);
 const formRef = ref();
 const required = { required: true, message: "请填写此项", trigger: "blur" };
 const testingId = ref("");
 const speedResults = reactive({});
-const form = reactive({ name: "", addr: "", username: "", password: "" });
+const form = reactive({ name: "", addr: "", username: "", password: "",group:"" });
 const importText = ref("");
 const importErrors = ref([]);
 
@@ -45,8 +46,8 @@ function formatSpeed(result) {
 }
 
 function resetForm() {
-  editingId.value = "";
-  Object.assign(form, { name: "", addr: "", username: "", password: "" });
+  editingId.value = "";editRevision.value="";
+  Object.assign(form, { name: "", addr: "", username: "", password: "",group:"" });
 }
 
 function openCreate() {
@@ -61,9 +62,9 @@ async function openEdit(n) {
     emit("toast", { type: "err", message: e.message });
     return;
   }
-  editingId.value = n.id;
+  editingId.value = n.id;editRevision.value=n._revision||"";
   Object.assign(form, {
-    name: n.name || "",
+    name: n.name || "",group:n.group||"",
     addr: n.addr || "",
     username: n.username || "",
     password: n.password || "",
@@ -88,7 +89,10 @@ async function save() {
   try {
     const body = { ...form };
     if (editingId.value) body.id = editingId.value;
-    await api.saveNode(body);
+    const preview=await api.previewNode(body,editRevision.value);
+    const labels={group:'分组',name:'名称',addr:'节点地址',username:'代理账号',password:'代理密码',node_id:'出口节点',tun_name:'TUN',table_id:'路由表',subnet:'子网',l2tp_user:'拨号账号',l2tp_pass:'拨号密码',mtu:'MTU',mss:'MSS',queue_length:'队列长度',udp_policy:'UDP 策略',dns_mode:'DNS 模式',upload_kbps:'上传限速',download_kbps:'下载限速',max_connections:'连接上限'};
+    await ElMessageBox.confirm(`变更：${preview.fields.map(f=>labels[f]||f).join('、')||'无'}。影响 ${preview.affected.length} 条映射。${preview.message}`,'保存配置',{confirmButtonText:'保存',cancelButtonText:'返回编辑'});
+    await api.saveNode(body,editRevision.value);
     emit("toast", {
       type: "ok",
       message: editingId.value ? "已更新" : "已创建",
@@ -96,6 +100,7 @@ async function save() {
     close();
     emit("changed");
   } catch (e) {
+    if(e==='cancel'||e==='close')return;
     emit("toast", { type: "err", message: e.message });
   } finally {
     busy.value = false;
@@ -238,7 +243,8 @@ async function speedTest(n) {
         :disabled="busy"
         @submit.prevent="save"
         ><div class="form-grid">
-          <el-form-item label="名称"
+          <el-form-item label="分组"><el-input v-model="form.group" maxlength="64"/></el-form-item>
+ <el-form-item label="名称"
             ><el-input
               v-model="form.name"
               placeholder="留空使用地址" /></el-form-item

@@ -106,6 +106,10 @@ lcp-echo-interval 30
 lcp-echo-failure 4
 connect-delay 5000
 `
+	if err := c.ensureEventScripts(); err != nil {
+		return err
+	}
+	content += fmt.Sprintf("ip-up-script %s\nip-down-script %s\n", c.optionsPath+".s2l-up", c.optionsPath+".s2l-down")
 	previous, err := os.ReadFile(c.optionsPath)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -164,4 +168,55 @@ func renderFullConf(active []model.TunnelMapping, optionsPath string, chapPath .
 	}
 	b.WriteString(confEnd + "\n")
 	return b.String(), nil
+}
+
+func (c *ConfManager) ensureEventScripts() error {
+	for _, kind := range []string{"up", "down"} {
+		// pppd supplies interface, tty, speed, local IP, peer IP and ipparam.
+		script := `#!/bin/sh
+python3 -c 'import socket,json,sys,os,datetime
+try:
+ s=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM);s.settimeout(0.3)
+ s.sendto(json.dumps({"kind":"KIND","interface":sys.argv[1],"peer":sys.argv[5],"pid":int(os.environ.get("PPPD_PID","0")),"at":datetime.datetime.now(datetime.timezone.utc).isoformat()}).encode(),"/run/s2l/ppp-events.sock")
+except Exception: pass
+' "$@"
+if [ -x /etc/ppp/ip-KIND ]; then exec /etc/ppp/ip-KIND "$@"; fi
+exit 0
+`
+		script = strings.ReplaceAll(script, "KIND", kind)
+		path := c.optionsPath + ".s2l-" + kind
+		if err := writeEventScript(path, []byte(script)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PPP can launch a hook while another mapping is being started. Replace the
+// complete script atomically, and leave an identical executable untouched.
+func writeEventScript(path string, data []byte) error {
+	if old, e := os.ReadFile(path); e == nil && string(old) == string(data) {
+		if info, e := os.Stat(path); e == nil && info.Mode().Perm() == 0700 {
+			return nil
+		}
+	}
+	f, e := os.CreateTemp(filepath.Dir(path), ".ppp-hook-*")
+	if e != nil {
+		return e
+	}
+	defer os.Remove(f.Name())
+	if e = f.Chmod(0700); e == nil {
+		_, e = f.Write(data)
+	}
+	if e == nil {
+		e = f.Sync()
+	}
+	closeErr := f.Close()
+	if e == nil {
+		e = closeErr
+	}
+	if e != nil {
+		return e
+	}
+	return os.Rename(f.Name(), path)
 }

@@ -11,10 +11,14 @@ import (
 
 // run 执行系统命令，失败时返回合并后的 stderr/stdout。
 func run(name string, args ...string) error {
+	return runContext(context.Background(), name, args...)
+}
+
+func runContext(parent context.Context, name string, args ...string) error {
 	if name == "iptables" || name == "ip6tables" {
 		args = append([]string{"-w", "5"}, args...)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.WaitDelay = time.Second
@@ -33,10 +37,14 @@ func run(name string, args ...string) error {
 
 // output 执行命令并返回 stdout。
 func output(name string, args ...string) (string, error) {
+	return outputContext(context.Background(), name, args...)
+}
+
+func outputContext(parent context.Context, name string, args ...string) (string, error) {
 	if name == "iptables" || name == "ip6tables" {
 		args = append([]string{"-w", "5"}, args...)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.WaitDelay = time.Second

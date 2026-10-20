@@ -35,7 +35,7 @@ func probeHealth(ctx context.Context, node model.SocksNode, probeUDP bool, dnsMo
 	var report HealthReport
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); err := CheckHealth(ctx, node); report.TCP = protocolResult("https", err) }()
+	go func() { defer wg.Done(); report.TCP = probeHTTPSTargets(ctx, node, healthTargets) }()
 	if probeUDP {
 		wg.Add(1)
 		go func() { defer wg.Done(); report.UDP = checkUDPHealth(ctx, node) }()
@@ -261,4 +261,14 @@ func udpResponse(packet []byte, target string) ([]byte, error) {
 		return nil, fmt.Errorf("unexpected UDP response source")
 	}
 	return packet[len(packet)-reader.Len():], nil
+}
+
+func ProbeTCP(ctx context.Context, node model.SocksNode) model.ProtocolHealth {
+	return probeHTTPSTargets(ctx, node, healthTargets)
+}
+func ProbeDNS(ctx context.Context, node model.SocksNode, mode string) model.ProtocolHealth {
+	return checkDNSHealth(ctx, node, mode)
+}
+func ProbeUDP(ctx context.Context, node model.SocksNode) model.ProtocolHealth {
+	return checkUDPHealth(ctx, node)
 }

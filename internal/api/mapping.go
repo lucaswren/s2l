@@ -32,6 +32,14 @@ func (s *Server) handleMappingByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := parts[0]
+	if len(parts) == 2 && parts[1] == "connections" {
+		s.handleConnections(w, r, id)
+		return
+	}
+	if len(parts) == 2 && parts[1] == "network-test" {
+		s.handleMappingDiagnostic(w, r, id)
+		return
+	}
 
 	// POST /api/mappings/{id}/action  { "action": "start"|"stop" }
 	if len(parts) == 2 && parts[1] == "action" && r.Method == http.MethodPost {
@@ -77,7 +85,7 @@ func (s *Server) handleMappingByID(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, "mapping not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, m)
+		writeResource(w, m)
 	case http.MethodDelete:
 		if s.svc != nil {
 			if err := s.svc.DeleteMapping(id); err != nil {
@@ -151,6 +159,21 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	old, exists := s.store.GetMapping(m.ID)
+	if !exists && r.Header.Get("If-Match") != "" {
+		writeError(w, 409, "配置已删除，请重新加载列表")
+		return
+	}
+	if exists && !revisionMatches(w, r, old) {
+		return
+	}
+	if !validGroup(m.Group) {
+		writeError(w, 400, "分组名称无效")
+		return
+	}
+	if s.previewChange(w, r, old, m, m.NodeID) {
+		return
+	}
 	if err := s.store.UpsertMapping(m); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

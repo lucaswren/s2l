@@ -87,6 +87,14 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	if err := controller.Verify(m); err != nil {
 		t.Fatal("complete forwarding path rejected", err)
 	}
+	// Existing mappings upgraded without the kernel rejection rule must be
+	// detected as incomplete, so the normal repair installs it automatically.
+	udpArgs := mappingUDPRejectArgs(m)
+	must("iptables", append([]string{"-D", "S2L_FORWARD"}, udpArgs...)...)
+	if controller.Verify(m) == nil {
+		t.Fatal("missing UDP rejection rule not detected")
+	}
+	must("iptables", append([]string{"-I", "S2L_FORWARD", "1"}, udpArgs...)...)
 	must("iptables", mappingMSSDeleteArgs(m, "-i")...)
 	if controller.Verify(m) == nil {
 		t.Fatal("missing MSS rule not detected")

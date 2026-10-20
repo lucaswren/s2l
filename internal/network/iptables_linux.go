@@ -32,6 +32,19 @@ func AddFirewall(m model.TunnelMapping) error {
 	if err := run("iptables", "-I", "S2L_FORWARD", "1", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt); err != nil {
 		return err
 	}
+	// Reject at PPP ingress, before NAT and the userspace TUN stack. This
+	// guarantees an ICMP error reaches the real client instead of relying on
+	// a particular tun stack's error translation. DNS remains intercepted.
+	if args := mappingUDPRejectArgs(m); len(args) > 0 {
+		if err := run("iptables", append([]string{"-I", "S2L_FORWARD", "1"}, args...)...); err != nil {
+			return errors.Join(err, DelFirewall(m))
+		}
+	}
+	if args := connectionLimitArgs(m); len(args) > 0 {
+		if err := run("iptables", append([]string{"-I", "S2L_FORWARD", "1"}, args...)...); err != nil {
+			return errors.Join(err, DelFirewall(m))
+		}
+	}
 	if err := run("iptables", "-t", "nat", "-A", "POSTROUTING",
 		"-o", m.TunName, "-j", "MASQUERADE",
 		"-m", "comment", "--comment", cmt,
@@ -63,7 +76,17 @@ func AddFirewall(m model.TunnelMapping) error {
 // DelFirewall 按 comment 删除该映射相关的 iptables 规则
 func DelFirewall(m model.TunnelMapping) error {
 	cmt := mappingComment(m)
+	var udpErrors []error
+	if args := connectionLimitArgs(m); len(args) > 0 {
+		udpErrors = append(udpErrors, deleteFirewallRule(append([]string{"-D", "S2L_FORWARD"}, args...)...))
+	}
+	for _, policy := range []string{"reject", "reject-quic"} {
+		copy := m
+		copy.UDPPolicy = policy
+		udpErrors = append(udpErrors, deleteFirewallRule(append([]string{"-D", "S2L_FORWARD"}, mappingUDPRejectArgs(copy)...)...))
+	}
 	return errors.Join(
+		errors.Join(udpErrors...),
 		deleteFirewallRule(mappingMSSDeleteArgs(m, "-i")...),
 		deleteFirewallRule(mappingMSSDeleteArgs(m, "-o")...),
 		deleteFirewallRule("-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
@@ -72,6 +95,19 @@ func DelFirewall(m model.TunnelMapping) error {
 		deleteFirewallRule("-D", "FORWARD", "-o", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 	)
+}
+
+func mappingUDPRejectArgs(m model.TunnelMapping) []string {
+	args := []string{"-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-p", "udp"}
+	switch m.EffectiveUDPPolicy() {
+	case "allow":
+		return nil
+	case "reject-quic":
+		args = append(args, "--dport", "443")
+	default:
+		args = append(args, "!", "--dport", "53")
+	}
+	return append(args, "-j", "REJECT", "--reject-with", "icmp-port-unreachable", "-m", "comment", "--comment", mappingComment(m)+"-udp")
 }
 
 func mappingMSSArgs(m model.TunnelMapping, direction string) []string {

@@ -2,22 +2,23 @@
 import { computed, ref, watch, onBeforeUnmount } from 'vue';
 import { api } from '../api/client';
 import { mtrHops } from '../utils/mtr';
+import {protocolSummary} from '../utils/health';
 const props = defineProps({ node: Object });
 const emit = defineEmits(['close', 'changed']);
 const kind = ref('protocols'), mtrProtocol = ref('tcp');
 const target = ref('www.example.com:443');
 const stopped = ref(false);
 const busy = ref(false), result = ref(null), error = ref(''), elapsed = ref(0);
-const labels = {healthy:'正常', degraded:'仅备用可用', unavailable:'不可用', unsupported:'不支持'};
+const labels = {healthy:'正常', degraded:'仅备用可用', unavailable:'不可用', unsupported:'不支持',restricted:'目标已响应 · 状态异常'};
 const methods = {https:'HTTPS 转发', 'dns-udp':'UDP 中继', 'udp-associate':'UDP 协商', doh:'DoH', tcp:'TCP DNS', 'tcp-fallback':'TCP DNS 备用', 'doh/tcp':'DoH / TCP DNS'};
-const modes = [{value:'protocols',label:'协议检测'}, {value:'tcping',label:'TCPing'}, {value:'ping',label:'Ping'}, {value:'mtr',label:'MTR 追踪'}];
+const modes = [{value:'protocols',label:'协议检测'}, {value:'tcping',label:'TCPing'}, {value:'https',label:'HTTPS'}, {value:'quality',label:'传输质量'}, {value:'ping',label:'Ping'}, {value:'mtr',label:'MTR 追踪'}];
 const mobileQuery = window.matchMedia('(max-width: 600px)');
 const mobile = ref(mobileQuery.matches);
 const resized = event => { mobile.value = event.matches; };
 mobileQuery.addEventListener('change', resized);
 const rows = computed(() => Object.entries(result.value?.protocols || {}).map(([name,value]) => ({name:name.toUpperCase(), ...value})));
 const hops = computed(() => mtrHops(result.value?.output));
-const summary = computed(() => stopped.value ? '测试已停止 · 保留部分结果' : busy.value ? `检测中 · ${elapsed.value} 秒` : result.value?.kind === 'mtr' && result.value.ok ? (result.value.reached ? '追踪完成 · 目标已响应' : '追踪完成 · 目标未响应') : result.value?.ok ? '检测通过' : '检测完成 · 存在异常');
+const summary = computed(() => stopped.value ? '测试已停止 · 保留部分结果' : busy.value ? `检测中 · ${elapsed.value} 秒` : result.value?.kind === 'mtr' && result.value.ok ? (result.value.reached ? '追踪完成 · 目标已响应' : '追踪完成 · 目标未响应') : result.value?.kind === 'https' && result.value?.protocols?.tcp?.state === 'restricted' ? '目标已响应 · 状态异常' : result.value?.ok ? (result.value.capability_warning ? 'TCP / DNS 正常 · UDP 能力受限' : '检测通过') : '检测完成 · 存在异常');
 let controller, timer, disposed = false;
 watch([kind,mtrProtocol], () => { if (!busy.value) { result.value=null;error.value='';stopped.value=false; } });
 onBeforeUnmount(() => { disposed=true;controller?.abort();clearInterval(timer);mobileQuery.removeEventListener('change',resized); });
@@ -50,13 +51,14 @@ function download() {
  <el-dialog :model-value="true" title="网络测试" class="network-test-dialog" width="760px" :fullscreen="mobile" :close-on-click-modal="false" :close-on-press-escape="!busy" append-to-body @close="close">
   <div class="network-test-node"><strong>{{ node.name }}</strong><span>{{ node.addr }}</span></div>
   <div class="network-test-modes" role="group" aria-label="测试类型"><el-button v-for="mode in modes" :key="mode.value" :type="kind === mode.value ? 'primary' : 'default'" :disabled="busy" :aria-pressed="kind === mode.value" @click="kind=mode.value">{{ mode.label }}</el-button></div>
-  <div v-if="kind === 'tcping'" class="network-test-options"><label for="network-test-target">目标地址</label><el-input id="network-test-target" v-model="target" :disabled="busy" placeholder="host:port，例如 www.example.com:443" @keyup.enter="run" /></div>
+  <div v-if="kind === 'tcping' || kind === 'https' || kind === 'quality'" class="network-test-options"><label for="network-test-target">目标地址</label><el-input id="network-test-target" v-model="target" :disabled="busy" placeholder="host:port，例如 www.example.com:443" @keyup.enter="run" /></div>
   <div v-if="kind === 'mtr'" class="network-test-options"><label>探测方式</label><el-radio-group v-model="mtrProtocol" :disabled="busy"><el-radio-button value="tcp">TCP · 节点端口</el-radio-button><el-radio-button value="icmp">ICMP</el-radio-button></el-radio-group></div>
-  <p class="network-test-hint">{{ kind === 'tcping' ? '经 SOCKS5 节点测试 TCP 建连。' : kind === 'protocols' ? '经 SOCKS5 节点检测 TCP、UDP 和 DNS。' : '测试 S2L 服务器到节点的网络路径。' }}</p>
+  <p class="network-test-hint">{{ kind === 'quality' ? '经固定 SOCKS5 交替请求 1 KB 和 256 KB 响应，默认 8 次。' : kind === 'https' ? '经 SOCKS5 检测指定目标的 TLS 与 HTTP 响应，不影响自动健康判断。' : kind === 'tcping' ? '经 SOCKS5 节点测试 TCP 建连。' : kind === 'protocols' ? '经 SOCKS5 节点检测 TCP、UDP 和 DNS。' : '测试 S2L 服务器到节点的网络路径。' }}</p>
+  <div v-if="result?.quality" class="quality-results"><p>成功 {{result.quality.successes}} / {{result.quality.samples.length}} · 中位数 {{Math.round(result.quality.median_ms)}} ms · P95 {{Math.round(result.quality.p95_ms)}} ms</p><article v-for="(sample,i) in result.quality.samples" :key="i"><strong>{{i+1}} · {{sample.requested/1024}} KB 请求</strong><p>首字节 {{Math.round(sample.first_byte_ms)}} ms · 总耗时 {{Math.round(sample.duration_ms)}} ms · 收到 {{sample.received}} B</p><p>{{sample.error || (sample.bounded?'达到读取上限':sample.complete?'响应完整':'响应未完成')}} · HTTP {{sample.status}}</p></article><p class="muted">{{result.quality.scope}}</p></div>
   <el-alert v-if="error" :title="error" type="error" :closable="false" />
   <div v-if="busy || result" class="network-test-result" aria-live="polite" :aria-busy="busy">
    <div class="network-test-summary"><el-tag :type="busy || stopped ? 'info' : result?.ok ? 'success' : 'warning'">{{ summary }}</el-tag><span v-if="result?.target">{{ result.target }}</span></div>
-   <div v-if="rows.length" class="network-protocols"><article v-for="row in rows" :key="row.name" class="network-protocol"><div><strong>{{ row.name }}</strong><el-tag :type="row.state === 'healthy' ? 'success' : 'warning'" size="small">{{ labels[row.state] || row.state }}</el-tag></div><span class="network-test-hint">{{ methods[row.method] || row.method }}</span><p v-if="row.error">{{ row.error }}</p></article></div>
+   <div v-if="rows.length" class="network-protocols"><article v-for="row in rows" :key="row.name" class="network-protocol"><div><strong>{{ row.name }}</strong><el-tag :type="row.state === 'healthy' ? 'success' : 'warning'" size="small">{{ labels[row.state] || row.state }}</el-tag></div><span class="network-test-hint">{{ methods[row.method] || row.method }}</span><p>{{protocolSummary(row)}}</p><p v-if="row.error && !(row.state === 'restricted' && row.status_code)">{{ row.error }}</p><details v-if="row.attempts?.length"><summary>分目标结果</summary><p v-for="attempt in row.attempts" :key="attempt.target">{{attempt.target}} · {{protocolSummary(attempt)}}</p></details></article></div>
    <template v-if="result?.kind === 'mtr'">
     <p v-if="busy && !hops.length" class="network-test-hint">正在等待跳点响应…</p>
     <div v-if="hops.length" class="network-hops"><article v-for="hop in hops" :key="hop.hop" class="network-hop"><span class="network-hop-number">{{ hop.hop }}</span><div><strong>{{ hop.address }}</strong><small>响应 {{ hop.received }}<template v-if="hop.sent"> / {{ hop.sent }}</template></small></div><div class="network-hop-latency"><strong>{{ hop.average }} <small>ms</small></strong><small>平均 · 最新 {{ hop.last }} ms</small></div></article></div>
@@ -112,3 +114,5 @@ function download() {
 }
 @media(max-width:360px){.network-test-modes{grid-template-columns:repeat(2,minmax(0,1fr));}.network-test-modes .el-button{min-height:44px;}}
 </style>
+
+<style scoped>.quality-results{overflow-wrap:anywhere}.quality-results article{padding:8px 0;border-bottom:1px solid var(--el-border-color-lighter)}</style>

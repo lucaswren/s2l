@@ -42,3 +42,17 @@ python3 -m unittest discover -s script/tests
 文件、介面與服務描述的展示名稱統一為 **S2L**；執行檔、模組與儲存庫路徑、命令、設定鍵及既有程式識別標記保留小寫 `s2l`。協定名稱統一為 SOCKS5、L2TP、IPsec；須區分伺服器端測速與用戶端完整路徑，以及嘗試還原與已驗證的恢復結果。
 
 中文文件依文字系統使用 `zh-Hant`（繁體中文）與 `zh-Hans`（简体中文），遵循 [BCP 47 文字子標籤](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3)。語言標籤表示文字系統，法律適用地區另於內容中說明。檔名、導覽連結與 HTML 語言屬性須保持一致；提交前執行 `python3 script/check_docs.py` 檢查本地文件連結。
+
+
+## 診斷整合測試
+
+```bash
+# Build web/dist first. Requires local Chrome, Node.js 22+ and Python 3.
+node script/test_ui.mjs
+
+# Disposable Linux host only: requires PPP/L2TP kernel support and test dependencies.
+go test -c -o /tmp/s2l-l2tp.test ./internal/service
+sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
+```
+
+The L2TP runner isolates mount, network and PID namespaces. It checks two fixed exits, DNS over TCP, active UDP rejection, process recovery and missing-rule repair against local fixtures. Browser checks cover desktop and 390/320-pixel layouts using mock APIs; they do not replace Linux data-plane tests.

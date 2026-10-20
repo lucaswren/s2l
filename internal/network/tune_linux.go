@@ -3,13 +3,12 @@
 package network
 
 import (
-	"encoding/json"
 	"fmt"
-	"github.com/lucaswren/s2l/internal/model"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/lucaswren/s2l/internal/model"
 )
 
 // TuneInterface 优化 TUN/PPP 口队列与 MTU，减轻分片与延迟
@@ -38,46 +37,24 @@ func TuneInterface(name string, mtu int, queueLength ...int) error {
 
 // Connected PPP interfaces predate default sysctl changes; tune them explicitly.
 func TunePeers(m model.TunnelMapping) error {
-	_, subnet, err := net.ParseCIDR(m.Subnet)
+	rows, err := ReadPeers([]model.TunnelMapping{m})
 	if err != nil {
 		return err
 	}
-	data, err := output("ip", "-j", "address", "show")
-	if err != nil {
-		return err
-	}
-	var interfaces []struct {
-		Name        string `json:"ifname"`
-		MTU         int    `json:"mtu"`
-		QueueLength int    `json:"txqlen"`
-		Addresses   []struct {
-			Local string `json:"local"`
-			Peer  string `json:"peer"`
-		} `json:"addr_info"`
-	}
-	if err := json.Unmarshal([]byte(data), &interfaces); err != nil {
-		return err
-	}
-	for _, iface := range interfaces {
-		if !strings.HasPrefix(iface.Name, "ppp") {
+	return TunePeerSnapshot(m, rows)
+}
+
+func TunePeerSnapshot(m model.TunnelMapping, rows []model.PPPSession) error {
+	for _, p := range rows {
+		if p.MappingID != m.ID {
 			continue
 		}
-		for _, address := range iface.Addresses {
-			peer := strings.Split(address.Peer, "/")[0]
-			ip := net.ParseIP(peer)
-			if ip == nil {
-				ip = net.ParseIP(address.Local)
-			}
-			if ip != nil && subnet.Contains(ip) {
-				rp, readErr := os.ReadFile(filepath.Join("/proc/sys/net/ipv4/conf", iface.Name, "rp_filter"))
-				if readErr == nil && strings.TrimSpace(string(rp)) == "0" && iface.MTU == m.EffectiveMTU() && iface.QueueLength == m.EffectiveQueueLength() {
-					break
-				}
-				if err := TuneInterface(iface.Name, m.EffectiveMTU(), m.EffectiveQueueLength()); err != nil {
-					return err
-				}
-				break
-			}
+		rp, err := os.ReadFile(filepath.Join("/proc/sys/net/ipv4/conf", p.Interface, "rp_filter"))
+		if err == nil && strings.TrimSpace(string(rp)) == "0" && p.MTU == m.EffectiveMTU() && p.QueueLength == m.EffectiveQueueLength() {
+			continue
+		}
+		if err := TuneInterface(p.Interface, m.EffectiveMTU(), m.EffectiveQueueLength()); err != nil {
+			return err
 		}
 	}
 	return nil

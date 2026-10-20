@@ -3,6 +3,12 @@ package model
 import "fmt"
 
 func (m TunnelMapping) ValidateOptions() error {
+	if m.MaxSessions < 0 || m.MaxSessions > 128 {
+		return fmt.Errorf("max_sessions must be between 0 and 128")
+	}
+	if m.UploadKbps < 0 || m.UploadKbps > 10000000 || m.DownloadKbps < 0 || m.DownloadKbps > 10000000 || m.MaxConnections < 0 || m.MaxConnections > 1000000 {
+		return fmt.Errorf("bandwidth or connection limit out of range")
+	}
 	if mtu := m.EffectiveMTU(); mtu < 1280 || mtu > 1400 {
 		return fmt.Errorf("mtu must be between 1280 and 1400")
 	}

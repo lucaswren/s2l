@@ -57,6 +57,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/mappings/import", s.handleImportMappings)
 	mux.HandleFunc("/api/mappings/", s.handleMappingByID)
 	mux.HandleFunc("/api/status", s.handleStatus)
+	mux.HandleFunc("/api/history", s.handleHistory)
+	mux.HandleFunc("/api/operations", s.handleOperations)
+	mux.HandleFunc("/api/sessions/disconnect", s.handleSessions)
+	mux.HandleFunc("/api/metrics", s.handleMetrics)
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/time", s.handleTimeSettings)
 	mux.HandleFunc("/api/settings/update", s.handleUpdate)
@@ -103,7 +107,7 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 
-	return s.withAuth(s.withUpdateProtection(s.withMutations(mux)))
+	return s.withAuth(s.withUpdateProtection(s.withAudit(s.withMutations(mux))))
 }
 
 // Keep validation and writes atomic across API requests. State edits also share
@@ -113,7 +117,7 @@ func (s *Server) withMutations(next http.Handler) http.Handler {
 		path := strings.TrimRight(r.URL.Path, "/")
 		resource := r.URL.Path == "/api/nodes" || strings.HasPrefix(r.URL.Path, "/api/nodes/") ||
 			r.URL.Path == "/api/mappings" || strings.HasPrefix(r.URL.Path, "/api/mappings/")
-		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || (strings.HasSuffix(path, "/speedtest") || strings.HasSuffix(path, "/network-test")) {
+		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || (strings.HasSuffix(path, "/speedtest") || strings.HasSuffix(path, "/network-test") || strings.HasSuffix(path, "/connections")) {
 			next.ServeHTTP(w, r)
 			return
 		}

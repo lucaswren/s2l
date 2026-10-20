@@ -3,19 +3,33 @@
 package network
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/lucaswren/s2l/internal/model"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/lucaswren/s2l/internal/lockutil"
+	"github.com/lucaswren/s2l/internal/model"
 )
 
 // Verify checks the kernel forwarding path without mutating it.
 func (c *Controller) Verify(m model.TunnelMapping) error {
-	c.mu.Lock()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return c.VerifyContext(ctx, m)
+}
+
+func (c *Controller) VerifyContext(ctx context.Context, m model.TunnelMapping) error {
+	if err := lockutil.Lock(ctx, &c.mu); err != nil {
+		return err
+	}
 	defer c.mu.Unlock()
+	run := func(name string, args ...string) error { return runContext(ctx, name, args...) }
+	output := func(name string, args ...string) (string, error) { return outputContext(ctx, name, args...) }
 	if err := validateMapping(m); err != nil {
 		return err
 	}
@@ -41,6 +55,12 @@ func (c *Controller) Verify(m model.TunnelMapping) error {
 	for _, direction := range []string{"-i", "-o"} {
 		checks = append(checks, append([]string{"-t", "mangle", "-C", "FORWARD"}, mappingMSSArgs(m, direction)...))
 	}
+	if args := mappingUDPRejectArgs(m); len(args) > 0 {
+		checks = append(checks, append([]string{"-C", "S2L_FORWARD"}, args...))
+	}
+	if args := connectionLimitArgs(m); len(args) > 0 {
+		checks = append(checks, append([]string{"-C", "S2L_FORWARD"}, args...))
+	}
 	for _, args := range checks {
 		if err := run("iptables", args...); err != nil {
 			return fmt.Errorf("forwarding rule missing: %w", err)
@@ -58,7 +78,7 @@ func (c *Controller) Verify(m model.TunnelMapping) error {
 	if strings.TrimSpace(string(enabled)) != "1" {
 		return fmt.Errorf("IPv4 forwarding disabled")
 	}
-	return nil
+	return verifyBandwidth(ctx, m)
 }
 
 func verifyRouteJSON(m model.TunnelMapping, rules, routes []byte) error {

@@ -90,6 +90,7 @@ func SubnetsOverlap(a, b string) bool {
 func SameMappingSettings(a, b model.TunnelMapping) bool {
 	normalize := func(m model.TunnelMapping) model.TunnelMapping {
 		m.Status = ""
+		m.Group = ""
 		m.ErrorMsg = ""
 		m.MTU = m.EffectiveMTU()
 		m.MSS = m.EffectiveMSS()

@@ -61,6 +61,9 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 		return errors.Join(fmt.Errorf("tcpmss: %w", err), DelFirewall(m), DelPolicyRoute(m))
 	}
 
+	if err := applyBandwidth(m); err != nil {
+		return errors.Join(fmt.Errorf("bandwidth: %w", err), DelFirewall(m), DelPolicyRoute(m))
+	}
 	c.active[mappingKey(m)] = m
 	c.tcpmssOn = true
 	return nil

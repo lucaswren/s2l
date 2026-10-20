@@ -79,3 +79,10 @@ func (m *Manager) RuntimeSnapshot() map[string]RuntimeStats {
 	}
 	return out
 }
+
+func (m *Manager) Connections(context.Context, string) (Connections, error) {
+	return Connections{}, fmt.Errorf("requires Linux")
+}
+func (m *Manager) CloseConnection(context.Context, string, string) error {
+	return fmt.Errorf("requires Linux")
+}

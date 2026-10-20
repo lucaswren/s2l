@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/lucaswren/s2l/internal/debuglog"
+	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/debuglog"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/network"
 	"github.com/lucaswren/s2l/internal/speedtest"
@@ -58,7 +60,7 @@ func (h *healthRecord) observe(err error, now time.Time) {
 				h.OutageSince = time.Time{}
 			}
 		}
-		h.next = now.Add(10 * time.Second)
+		h.next = now.Add(time.Duration(9500+rand.Intn(1001)) * time.Millisecond)
 	}
 	h.baseState = h.State
 }
@@ -82,6 +84,10 @@ func (s *MappingService) Monitor(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); s.runTelemetry(ctx) }()
+	wg.Add(1)
+	go func() { defer wg.Done(); s.listenPPP(ctx) }()
 	defer wg.Wait()
 	localSlots, probeSlots := make(chan struct{}, 4), make(chan struct{}, 4)
 	localBusy := make(map[string]bool)
@@ -95,22 +101,30 @@ func (s *MappingService) Monitor(ctx context.Context) {
 			s.mu.Unlock()
 			return
 		}
+		h := s.health[m.ID]
+		if !local && time.Now().Before(h.next) {
+			s.mu.Unlock()
+			return
+		}
+		slots := probeSlots
+		if local {
+			slots = localSlots
+		}
+		select {
+		case slots <- struct{}{}:
+		default:
+			s.mu.Unlock()
+			return
+		}
 		busy[m.ID] = true
 		s.mu.Unlock()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			defer func() { s.mu.Lock(); delete(busy, m.ID); s.mu.Unlock() }()
-			slots := probeSlots
-			if local {
-				slots = localSlots
-			}
-			select {
-			case slots <- struct{}{}:
-			case <-ctx.Done():
+			defer func() { <-slots; s.mu.Lock(); delete(busy, m.ID); s.mu.Unlock() }()
+			if ctx.Err() != nil {
 				return
 			}
-			defer func() { <-slots }()
 			if local {
 				s.checkLocalMapping(ctx, m)
 			} else {
@@ -118,22 +132,23 @@ func (s *MappingService) Monitor(ctx context.Context) {
 			}
 		}()
 	}
+	cursor := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
 		}
-		if session := debuglog.Default.Session(); session != 0 {
-			sampledAt := time.Now()
-			status := s.Status()
-			debuglog.Default.RecordSession(session, status, debuglog.SampleResources(s.store.DataDir()), sampledAt)
-		}
-		for _, m := range s.store.ListMappings() {
+		mappings := s.store.ListMappings()
+		for i := range mappings {
+			m := mappings[(i+cursor)%len(mappings)]
 			if m.Status == model.StatusRunning {
 				launch(m, true)
 				launch(m, false)
 			}
+		}
+		if len(mappings) > 0 {
+			cursor = (cursor + 4) % len(mappings)
 		}
 	}
 }
@@ -161,19 +176,35 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		return
 	}
 	if alive {
-		err := network.TunePeers(m)
+		peers, _, peerErr := s.peerSnapshot()
+		var err error
+		if peerErr != "" {
+			err = fmt.Errorf("PPP snapshot unavailable")
+		} else {
+			err = network.TunePeerSnapshot(m, peers)
+		}
 		verifyDue := !now.Before(h.forwardingNext)
-		if err == nil && verifyDue {
-			err = s.net.Verify(m)
-			if err != nil {
-				debuglog.Default.Printf("mapping %s forwarding rules missing; repairing: %v", m.ID, err)
-				err = s.net.Setup(m)
-				if err == nil {
-					err = s.net.Verify(m)
+		repairAttempted, repairSucceeded := false, false
+		if verifyDue {
+			ruleErr := s.net.VerifyContext(ctx, m)
+			if ruleErr != nil && ctx.Err() == nil {
+				repairAttempted = true
+				debuglog.Default.Printf("mapping %s forwarding rules missing; repairing: %v", m.ID, ruleErr)
+				ruleErr = s.net.Setup(m)
+				if ruleErr == nil {
+					ruleErr = s.net.VerifyContext(ctx, m)
+					repairSucceeded = ruleErr == nil
 				}
 			}
+			err = errors.Join(err, ruleErr)
 		}
 		s.mu.Lock()
+		if repairAttempted {
+			h.RepairAttempts++
+		}
+		if repairSucceeded {
+			h.RepairSuccesses++
+		}
 		h.LocalCheckedAt = now
 		if err != nil {
 			h.recovery.healthySince = time.Time{}
@@ -192,6 +223,13 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 			}
 		}
 		s.mu.Unlock()
+		if repairAttempted {
+			detail := "规则修复失败"
+			if repairSucceeded {
+				detail = "规则已修复，保留原进程与出口"
+			}
+			s.operations.Audit("rule-repair", m.ID, detail)
+		}
 		return
 	}
 	s.mu.Lock()
@@ -238,8 +276,13 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		_ = s.singbox.Stop(m.TunName)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	h.finishRecovery(err, time.Now())
+	s.mu.Unlock()
+	detail := "进程恢复失败"
+	if err == nil {
+		detail = "进程已恢复，保留固定节点"
+	}
+	s.operations.Audit("process-recovery", m.ID, detail)
 	if err != nil {
 		debuglog.Default.Printf("mapping %s recovery failed: %v", m.ID, err)
 	}
@@ -262,12 +305,27 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 	generation := h.generation
 	probeUDP := h.udpProbeDue(time.Now())
 	s.mu.Unlock()
-	report := s.probes.get(ctx, probeKey{node, m.EffectiveDNSMode(), probeUDP}, func() speedtest.HealthReport {
-		if probeUDP {
-			return speedtest.ProbeHealth(ctx, node, m.EffectiveDNSMode())
-		}
-		return speedtest.ProbeTCPDNS(ctx, node, m.EffectiveDNSMode())
-	})
+	report := speedtest.HealthReport{}
+	var legs sync.WaitGroup
+	legs.Add(2)
+	go func() {
+		defer legs.Done()
+		report.TCP = s.probes.get(ctx, probeKey{node, "tcp", false}, func() speedtest.HealthReport { return speedtest.HealthReport{TCP: speedtest.ProbeTCP(ctx, node)} }).TCP
+	}()
+	go func() {
+		defer legs.Done()
+		report.DNS = s.probes.get(ctx, probeKey{node, "dns:" + m.EffectiveDNSMode(), false}, func() speedtest.HealthReport {
+			return speedtest.HealthReport{DNS: speedtest.ProbeDNS(ctx, node, m.EffectiveDNSMode())}
+		}).DNS
+	}()
+	if probeUDP {
+		legs.Add(1)
+		go func() {
+			defer legs.Done()
+			report.UDP = s.probes.get(ctx, probeKey{node, "udp", true}, func() speedtest.HealthReport { return speedtest.HealthReport{UDP: speedtest.ProbeUDP(ctx, node)} }).UDP
+		}()
+	}
+	legs.Wait()
 	s.finishProbe(ctx, m, node, h, generation, report)
 }
 
@@ -280,6 +338,7 @@ func (s *MappingService) finishProbe(ctx context.Context, m model.TunnelMapping,
 		return
 	}
 	old := h.State
+	h.UDPPolicy = m.EffectiveUDPPolicy()
 	h.applyReport(report, time.Now())
 	if old != h.State {
 		debuglog.Default.Printf("mapping %s upstream health: %s", m.ID, h.State)
@@ -301,6 +360,9 @@ func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
 		p.CheckedAt = now
 	}
 	p.Method = result.Method
+	p.MeasuredState = result.State
+	p.Stage, p.StatusCode, p.DurationMS = result.Stage, result.StatusCode, result.DurationMS
+	p.Attempts = append([]model.ProbeAttempt(nil), result.Attempts...)
 	switch result.State {
 	case "healthy":
 		p.failures = 0
@@ -312,8 +374,8 @@ func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
 			p.State = "checking"
 			p.Error = ""
 		}
-	case "degraded":
-		p.State = "degraded"
+	case "degraded", "restricted":
+		p.State = result.State
 		p.Error = result.Error
 		p.failures = 0
 		p.successes = 0
@@ -336,7 +398,7 @@ func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
 
 func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time) {
 	var tcpError error
-	if report.TCP.State != "healthy" {
+	if report.TCP.State != "healthy" && report.TCP.State != "restricted" {
 		tcpError = fmt.Errorf("TCP HTTPS forwarding check failed")
 	}
 	if report.TCP.CheckedAt.IsZero() || h.TCP.CheckedAt.IsZero() || report.TCP.CheckedAt.After(h.TCP.CheckedAt) {
@@ -357,9 +419,11 @@ func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time)
 	h.TCP = h.tcp.ProtocolHealth
 	h.UDP = h.udp.ProtocolHealth
 	h.DNS = h.dns.ProtocolHealth
-	if h.State == "healthy" && (h.UDP.State != "healthy" || h.DNS.State != "healthy") {
+	if h.State == "healthy" && ((h.UDPPolicy != "reject" && h.UDPPolicy != "" && h.UDP.State != "healthy") || h.DNS.State != "healthy" || h.TCP.State == "restricted") {
 		h.State = "degraded"
 		switch {
+		case h.TCP.State == "restricted":
+			h.Error = "代理已连通；检测目标限制访问或服务异常"
 		case h.DNS.State != "healthy":
 			h.Error = "TCP 正常；DNS 异常或检测中"
 		case h.UDP.State == "unsupported":
@@ -370,7 +434,7 @@ func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time)
 	} else if h.State == "unavailable" && (h.UDP.State == "healthy" || (h.DNS.State == "healthy" || h.DNS.State == "degraded")) {
 		h.State = "degraded"
 		h.Error = "Some upstream checks succeed; inspect the TCP result"
-		h.next = now.Add(10 * time.Second)
+		h.next = now.Add(time.Duration(9500+rand.Intn(1001)) * time.Millisecond)
 	}
 	if h.LocalState != "" && h.LocalState != "healthy" {
 		h.State = h.LocalState

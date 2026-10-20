@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -52,7 +53,7 @@ func TestRetryDelayBounded(t *testing.T) {
 }
 
 func TestSeparateProtocolsDoNotDisableHealthyTCP(t *testing.T) {
-	h := healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking"}}
+	h := healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking", UDPPolicy: "allow"}}
 	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy", Method: "doh"}, UDP: model.ProtocolHealth{State: "unsupported", Error: "UDP unsupported"}}
 	now := time.Now()
 	for i := 0; i < 4; i++ {
@@ -153,7 +154,7 @@ func TestUDPProbeCooldownPreservesEvidence(t *testing.T) {
 		}
 		before := h.UDP
 		h.applyReport(speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}}, now.Add(10*time.Second))
-		if h.UDP != before {
+		if !reflect.DeepEqual(h.UDP, before) {
 			t.Fatal("skipped probe overwrote evidence", h.UDP, before)
 		}
 		if h.udpProbeDue(now.Add(9*time.Minute)) || !h.udpProbeDue(now.Add(10*time.Minute)) {
@@ -187,5 +188,30 @@ func TestUDPRecoveryConfirmsQuicklyAndIgnoresReusedEvidence(t *testing.T) {
 	h.udp.observe(measured, measured.CheckedAt)
 	if h.udp.State != "healthy" {
 		t.Fatal(h.udp)
+	}
+}
+
+func TestRejectUDPPolicyDoesNotDowngradeTCPMapping(t *testing.T) {
+	h := healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking", UDPPolicy: "reject"}}
+	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "unsupported"}}
+	h.applyReport(report, time.Now())
+	h.applyReport(report, time.Now())
+	if h.State != "healthy" || h.UDP.State != "unsupported" {
+		t.Fatal(h)
+	}
+	h.UDPPolicy = "allow"
+	h.applyReport(report, time.Now())
+	if h.State != "degraded" {
+		t.Fatal("allow policy did not expose missing UDP", h)
+	}
+}
+func TestRestrictedTargetDoesNotCondemnProxy(t *testing.T) {
+	h := healthRecord{UpstreamHealth: model.UpstreamHealth{UDPPolicy: "reject"}}
+	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "restricted", Stage: "http", StatusCode: 429}, DNS: model.ProtocolHealth{State: "healthy"}}
+	for i := 0; i < 5; i++ {
+		h.applyReport(report, time.Now())
+	}
+	if h.State != "degraded" || h.TCP.State != "restricted" || h.TCP.StatusCode != 429 || h.failures != 0 {
+		t.Fatal(h)
 	}
 }

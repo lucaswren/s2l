@@ -146,11 +146,11 @@ Sanitize logs before sharing. Do not flush all host firewall rules to diagnose a
 
 ## Mapping options and Debug
 
-Mappings accept MTU 1280–1400 (default 1400), MSS 536 through MTU-40 (default 1200), queue length 100–10000 (default 1000), UDP policy and DNS mode. Missing fields use compatible defaults; stop before editing. PPP interfaces are tuned by peer address during local checks; MRU remains 1400. UDP can be allowed, rejected on port 443 (default), or rejected except for port 53 DNS. Allowing UDP does not add upstream capability.
+Mappings accept MTU 1280–1400 (default 1400), MSS 536 through MTU-40 (default 1200), queue length 100–10000 (default 1000), UDP policy and DNS mode. Missing fields use compatible defaults; stop before editing. PPP interfaces are tuned by peer address during local checks; MRU remains 1400. Non-DNS UDP is rejected by default; UDP can optionally be allowed or rejected only on port 443. Allowing UDP does not add upstream capability.
 
 Each mapping has a private loopback TCP resolver. Cloudflare DoH and Google TCP DNS both use the mapping's SOCKS5. A DNS-only outbound is pinned to that loopback endpoint; client traffic still uses SOCKS5. Valid NXDOMAIN does not trigger failover; malformed replies, SERVFAIL, REFUSED and timeout do. Both methods failing returns SERVFAIL, with no direct remote DNS fallback. sing-box owns caching. Live resolver counters and upstream probe results are displayed separately. Forced DoH and TCP modes do not switch transports; health checks also probe only the selected method.
 
-Target URL diagnostics have been removed. Enable Debug, reproduce the real client issue, then inspect the timeline or export a ZIP. Debug is off by default: troubleshooting logs and resource samples are not retained while off. Node/mapping backups retain the latest 10 versions; stop all mappings before rollback. Local recovery allows three attempts per ten minutes, then a five-minute cooldown and a trial; two stable minutes reset the budget. See the [detailed stability notes (Simplified Chinese)](../../DEBUG-AND-STABILITY.zh-Hans.md).
+The network test dialog supports a separate HTTPS host:port check; its results do not update automatic node health. Enable Debug, reproduce the real client issue, then inspect the timeline or export a ZIP. Debug is off by default: troubleshooting logs and resource samples are not retained while off. Node/mapping backups retain the latest 10 versions; stop all mappings before rollback. Local recovery allows three attempts per ten minutes, then a five-minute cooldown and a trial; two stable minutes reset the budget. See the [detailed stability notes (Simplified Chinese)](../../DEBUG-AND-STABILITY.zh-Hans.md).
 
 Local liveness is scheduled every five seconds in a separate four-worker pool. Recovery backs off 5–60 seconds independently of upstream probes. Per-mapping locks serialize start/stop/delete/recovery; state reads do not wait on slow lifecycle locks. State edits still coordinate with lifecycle work, and stale probes are discarded.
 
@@ -160,6 +160,33 @@ Credential/comment updates no longer restart xl2tpd. A real global config change
 
 ## v1.3.1 diagnostics and upgrades
 
-First startup backs up and migrates existing mappings to actively reject non-DNS UDP and use automatic DoH/TCP DNS. Stopped mappings stay stopped. Restoring business backups preserves the installed migration version. Upgrades wait for previously running mappings to recover locally; upstream outages alone do not fail verification. Initial restore failures use bounded retries. Forwarding rules, NAT, policy routes and MSS are checked every 30 seconds and repaired without restarting a healthy process.
+First startup backs up and migrates existing mappings to actively reject non-DNS UDP and use automatic DoH/TCP DNS. Stopped mappings stay stopped. Restoring business backups preserves the installed migration version. Upgrades wait for previously running mappings to recover locally; upstream outages alone do not fail verification. Initial restore failures use at most five delivery attempts per batch. Forwarding rules, NAT, policy routes and MSS are checked every 30 seconds and repaired without restarting a healthy process.
 
 Unsupported or persistently unavailable UDP is retried every ten minutes; the first success triggers confirmation after ten seconds. Automatic probes share short-lived results for identical nodes and DNS modes; manual probes update monitoring. Debug includes protocol transitions, 256 recent connection observations and 20 failed-target summaries. Logs do not prove transfer success or original pre-NAT client identity.
+
+
+## Layered diagnostics and monitoring history
+
+Fixed SOCKS5 exits and the configured UDP policy remain unchanged. UDP capability is reported separately: an unsupported upstream does not downgrade a mapping configured to reject UDP. HTTPS diagnostics retain failure phase, HTTP status, elapsed time and per-target evidence; a completed 403/429/5xx response is a target restriction or service error rather than a proxy authentication failure.
+
+Mapping forwarding tests create a temporary isolated peer and send HTTPS through the existing PPP ingress guard, policy route and TUN. They do not test L2TP authentication or alter permanent rules. Requires Linux, root, curl and a subnet of /29 or larger with a free diagnostic address; /30 mappings remain usable but cannot run this synthetic test. Node and mapping exit IPs are observed independently; differing IPs are not proof of misrouting when an upstream uses a dynamic exit pool. Tests can be cancelled, and stale diagnostic namespaces with dead owners are reclaimed at startup.
+
+PPP sessions show interface, peer IP, actual MTU, counters and first observation time. This is not a count of computers behind a NAT gateway or the actual dial time. Failed collection retains the previous snapshot with a warning.
+
+Operational history runs independently of Debug: 24 hours in five-minute buckets, saved approximately once per minute in `data/health-history.json`. Only completed probe samples are counted; absent samples are not treated as outages, and counters resetting cannot create traffic spikes. Exit change counts come only from successful mapping tests. No credentials or raw target URLs are saved in this history. Debug remains bounded and opt-in.
+
+## Operational events and optional limits
+
+Runtime collection is shared for five seconds; the API reports `collected_at`. PPP collection failures do not suppress independent firewall verification. TCP probes are shared by node credentials, DNS probes by node and DNS mode; UDP retains its separate low-frequency schedule.
+
+Managed pppd up/down wrappers emit events through a root-only Unix socket and preserve distribution hooks. New sessions expose their connection time and can be individually disconnected after checking the interface, peer, PID and process identity. Sessions predating service startup retain the observation time and cannot be disconnected without verified events. An unavailable disconnect reason remains unknown.
+
+The monitoring panel includes bounded incidents (500) and operations (1000), with node and multi-node correlation. Multi-node failures indicate a shared path to investigate, not a proven server-network cause. `operations.json` is private and includes optional notification credentials; protect it like other credentials. Notifications use administrator-configured HTTPS webhooks, with optional Bearer authorization, one-minute delivery cooldown, at most five delivery attempts per batch and maintenance suppression. Events remain local unless notifications are explicitly enabled.
+
+Mapping upload/download limits are in Kbit/s; TCP connection limits apply to the whole mapping. Zero means unlimited. The optional PPP session cap rejects only newly connected excess sessions; duplicate accounts are flagged independently. Upload uses TBF shaping; download uses ingress policing and can drop excess traffic. These limits do not change the fixed upstream, DNS transport or UDP policy. Connection details are read on demand from each sing-box process over an authenticated loopback API, limited to 500 displayed entries, and are not stored in history.
+
+Configuration forms preview changed field names without credential values and use resource revisions to reject stale edits. Active runtime settings still require a clean stop; existing automatic backups provide undo. Mapping groups filter batch operations. The authenticated `/api/metrics` endpoint exposes bounded operational gauges and counters without destination labels.
+
+The optional transfer-quality test makes eight alternating bounded requests (1 KiB and 256 KiB), recording first-byte time, total duration, early EOF and median/P95. Targets may ignore Range; a bounded response is not a complete download or a path-MTU proof. Host TCP/conntrack statistics refer to the entire server.
+
+Notification edits use a revision to reject stale forms. Changing the webhook address clears the old token unless a replacement is supplied. Unknown samples and stopped mappings are not reported as confirmed recovery.

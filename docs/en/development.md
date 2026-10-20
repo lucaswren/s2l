@@ -66,3 +66,17 @@ Keep changes focused, explain their trigger and behavior, and include relevant v
 Use **S2L** as the display name in documentation, UI labels and service descriptions. Keep executable names, module/repository paths, commands, configuration keys and existing machine-recognized markers lowercase (`s2l`). Use SOCKS5, L2TP and IPsec consistently; distinguish server-side probes from client-path measurements and rollback attempts from verified recovery.
 
 Chinese editions use the script-based tags `zh-Hant` (繁體中文) and `zh-Hans` (简体中文), following [BCP 47 script subtags](https://www.rfc-editor.org/rfc/rfc5646.html#section-2.2.3). These tags identify the writing system; legal jurisdiction is stated separately in the content. Keep filenames, navigation links and HTML language attributes consistent. Run `python3 script/check_docs.py` to check local documentation links before submitting changes.
+
+
+## Diagnostic integration tests
+
+```bash
+# Build web/dist first. Requires local Chrome, Node.js 22+ and Python 3.
+node script/test_ui.mjs
+
+# Disposable Linux host only: requires PPP/L2TP kernel support and test dependencies.
+go test -c -o /tmp/s2l-l2tp.test ./internal/service
+sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
+```
+
+The L2TP runner isolates mount, network and PID namespaces. It checks two fixed exits, DNS over TCP, active UDP rejection, process recovery and missing-rule repair against local fixtures. Browser checks cover desktop and 390/320-pixel layouts using mock APIs; they do not replace Linux data-plane tests.

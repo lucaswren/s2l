@@ -14,6 +14,9 @@ def main():
         raise SystemExit("requires a private root mount namespace")
     subprocess.run(["ip", "link", "set", "lo", "up"], check=True)
     original_root_mode = Path("/").stat().st_mode
+    umount = shutil.which("umount")
+    if not umount:
+        raise SystemExit("requires umount")
     script = Path(__file__).resolve().parent / "update.sh"
     with tempfile.TemporaryDirectory(prefix="s2l-update-test-") as tmp:
         root = Path(tmp)
@@ -111,7 +114,7 @@ exec /usr/bin/install "$@"''',
                 print(f"PASS: {scenario}")
         finally:
             for target in reversed(mounted):
-                subprocess.run(["/usr/bin/umount", target], check=True)
+                subprocess.run([umount, target], check=True)
 
 
 if __name__ == "__main__":

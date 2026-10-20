@@ -11,6 +11,7 @@ const (
 
 // SocksNode 上游 SOCKS5 代理节点
 type SocksNode struct {
+	Group    string `json:"group,omitempty"`
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Addr     string `json:"addr"` // host:port
@@ -20,20 +21,25 @@ type SocksNode struct {
 
 // TunnelMapping 一条「SOCKS5 → TUN → 路由表 → L2TP」完整映射
 type TunnelMapping struct {
-	ID          string `json:"id"`
-	NodeID      string `json:"node_id"`
-	TunName     string `json:"tun_name"`  // 如 tun101
-	TableID     int    `json:"table_id"`  // 如 101
-	Subnet      string `json:"subnet"`    // L2TP 专属子网，如 10.0.101.0/24
-	L2TPUser    string `json:"l2tp_user"` // L2TP 拨号账号
-	L2TPPass    string `json:"l2tp_pass"` // L2TP 拨号密码
-	Status      string `json:"status"`    // running / stopped / error
-	ErrorMsg    string `json:"error_msg,omitempty"`
-	MTU         int    `json:"mtu,omitempty"`
-	MSS         int    `json:"mss,omitempty"`
-	QueueLength int    `json:"queue_length,omitempty"`
-	UDPPolicy   string `json:"udp_policy,omitempty"` // reject (default) | allow | reject-quic
-	DNSMode     string `json:"dns_mode,omitempty"`   // auto (default) | doh | tcp
+	Group          string `json:"group,omitempty"`
+	UploadKbps     int    `json:"upload_kbps,omitempty"`
+	DownloadKbps   int    `json:"download_kbps,omitempty"`
+	MaxSessions    int    `json:"max_sessions,omitempty"`
+	MaxConnections int    `json:"max_connections,omitempty"`
+	ID             string `json:"id"`
+	NodeID         string `json:"node_id"`
+	TunName        string `json:"tun_name"`  // 如 tun101
+	TableID        int    `json:"table_id"`  // 如 101
+	Subnet         string `json:"subnet"`    // L2TP 专属子网，如 10.0.101.0/24
+	L2TPUser       string `json:"l2tp_user"` // L2TP 拨号账号
+	L2TPPass       string `json:"l2tp_pass"` // L2TP 拨号密码
+	Status         string `json:"status"`    // running / stopped / error
+	ErrorMsg       string `json:"error_msg,omitempty"`
+	MTU            int    `json:"mtu,omitempty"`
+	MSS            int    `json:"mss,omitempty"`
+	QueueLength    int    `json:"queue_length,omitempty"`
+	UDPPolicy      string `json:"udp_policy,omitempty"` // reject (default) | allow | reject-quic
+	DNSMode        string `json:"dns_mode,omitempty"`   // auto (default) | doh | tcp
 }
 
 func (m TunnelMapping) EffectiveMTU() int {
@@ -103,10 +109,23 @@ type TunTraffic struct {
 
 // ProtocolHealth describes one separately verified upstream capability.
 type ProtocolHealth struct {
-	State     string    `json:"state"`
-	Method    string    `json:"method,omitempty"`
-	Error     string    `json:"error,omitempty"`
-	CheckedAt time.Time `json:"checked_at"`
+	MeasuredState string         `json:"measured_state,omitempty"`
+	ExitIP        string         `json:"exit_ip,omitempty"`
+	State         string         `json:"state"`
+	Method        string         `json:"method,omitempty"`
+	Error         string         `json:"error,omitempty"`
+	CheckedAt     time.Time      `json:"checked_at"`
+	Stage         string         `json:"stage,omitempty"`
+	StatusCode    int            `json:"status_code,omitempty"`
+	DurationMS    int64          `json:"duration_ms,omitempty"`
+	Attempts      []ProbeAttempt `json:"attempts,omitempty"`
+}
+
+type ProbeAttempt struct {
+	Target     string `json:"target"`
+	Stage      string `json:"stage"`
+	StatusCode int    `json:"status_code,omitempty"`
+	DurationMS int64  `json:"duration_ms"`
 }
 
 type RecoveryStatus struct {
@@ -118,29 +137,66 @@ type RecoveryStatus struct {
 }
 
 type UpstreamHealth struct {
-	Recovery       RecoveryStatus `json:"recovery"`
-	TCP            ProtocolHealth `json:"tcp"`
-	UDP            ProtocolHealth `json:"udp"`
-	DNS            ProtocolHealth `json:"dns"`
-	Resolver       ResolverStatus `json:"resolver"`
-	Process        ProcessStatus  `json:"process"`
-	LocalState     string         `json:"local_state"`
-	LocalCheckedAt time.Time      `json:"local_checked_at"`
-	RecoveryError  string         `json:"recovery_error,omitempty"`
-	State          string         `json:"state"`
-	TunName        string         `json:"tun_name"`
-	Error          string         `json:"error,omitempty"`
-	CheckedAt      time.Time      `json:"checked_at"`
-	OutageSince    time.Time      `json:"outage_since"`
-	RecoveredAt    time.Time      `json:"recovered_at"`
+	RepairAttempts  uint64         `json:"repair_attempts"`
+	RepairSuccesses uint64         `json:"repair_successes"`
+	UDPPolicy       string         `json:"udp_policy"`
+	Recovery        RecoveryStatus `json:"recovery"`
+	TCP             ProtocolHealth `json:"tcp"`
+	UDP             ProtocolHealth `json:"udp"`
+	DNS             ProtocolHealth `json:"dns"`
+	Resolver        ResolverStatus `json:"resolver"`
+	Process         ProcessStatus  `json:"process"`
+	LocalState      string         `json:"local_state"`
+	LocalCheckedAt  time.Time      `json:"local_checked_at"`
+	RecoveryError   string         `json:"recovery_error,omitempty"`
+	State           string         `json:"state"`
+	TunName         string         `json:"tun_name"`
+	Error           string         `json:"error,omitempty"`
+	CheckedAt       time.Time      `json:"checked_at"`
+	OutageSince     time.Time      `json:"outage_since"`
+	RecoveredAt     time.Time      `json:"recovered_at"`
 }
 
 type SystemStatus struct {
-	UpstreamHealth map[string]UpstreamHealth `json:"upstream_health"`
-	Uptime         time.Duration             `json:"uptime_ns"`
-	Mappings       []TunnelMapping           `json:"mappings"`
-	TunTraffic     []TunTraffic              `json:"tun_traffic"`
-	SingboxPIDs    map[string]int            `json:"singbox_pids"` // tun_name -> pid
+	HostStats         map[string]uint64         `json:"host_stats"`
+	CollectedAt       time.Time                 `json:"collected_at"`
+	Sessions          []PPPSession              `json:"sessions"`
+	SessionsError     string                    `json:"sessions_error,omitempty"`
+	SessionsCheckedAt time.Time                 `json:"sessions_checked_at"`
+	UpstreamHealth    map[string]UpstreamHealth `json:"upstream_health"`
+	Uptime            time.Duration             `json:"uptime_ns"`
+	Mappings          []TunnelMapping           `json:"mappings"`
+	TunTraffic        []TunTraffic              `json:"tun_traffic"`
+	SingboxPIDs       map[string]int            `json:"singbox_pids"` // tun_name -> pid
+}
+
+type MappingDiagnostic struct {
+	Node           ProtocolHealth `json:"node"`
+	ExitComparison string         `json:"exit_comparison"`
+	MappingID      string         `json:"mapping_id"`
+	Scope          string         `json:"scope"`
+	UDPPolicy      string         `json:"udp_policy"`
+	Rules          ProtocolHealth `json:"rules"`
+	Forwarding     ProtocolHealth `json:"forwarding"`
+	CheckedAt      time.Time      `json:"checked_at"`
+	OK             bool           `json:"ok"`
+}
+
+type PPPSession struct {
+	ConnectedAt    time.Time `json:"connected_at,omitempty"`
+	Disconnectable bool      `json:"disconnectable"`
+	Interface      string    `json:"interface"`
+	Index          int       `json:"index"`
+	MappingID      string    `json:"mapping_id,omitempty"`
+	PeerIP         string    `json:"peer_ip"`
+	MTU            int       `json:"mtu"`
+	QueueLength    int       `json:"queue_length"`
+	FirstSeen      time.Time `json:"first_seen"`
+	RxBytes        uint64    `json:"rx_bytes"`
+	TxBytes        uint64    `json:"tx_bytes"`
+	Dropped        uint64    `json:"dropped"`
+	Errors         uint64    `json:"errors"`
+	Error          string    `json:"error,omitempty"`
 }
 
 // AppState 持久化到 data/state.json 的完整状态

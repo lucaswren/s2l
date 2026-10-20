@@ -16,7 +16,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "mapping service unavailable")
 		return
 	}
-	st := s.svc.Status()
+	st := s.svc.CachedStatus()
 	mappings := redactMappings(st.Mappings)
 	if mappings == nil {
 		mappings = []model.TunnelMapping{}
@@ -30,6 +30,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		pids = map[string]int{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"host_stats":             st.HostStats,
+		"collected_at":           st.CollectedAt,
+		"sessions":               st.Sessions,
+		"sessions_error":         st.SessionsError,
+		"sessions_checked_at":    st.SessionsCheckedAt,
 		"startup_complete":       s.svc.StartupComplete(),
 		"configuration_recovery": s.store.RecoveryNotice(),
 		"upstream_health":        st.UpstreamHealth,

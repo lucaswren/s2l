@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/lucaswren/s2l/internal/debuglog"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/lucaswren/s2l/internal/api"
 	"github.com/lucaswren/s2l/internal/config"
+	"github.com/lucaswren/s2l/internal/debuglog"
 	"github.com/lucaswren/s2l/internal/l2tp"
 	"github.com/lucaswren/s2l/internal/network"
 	"github.com/lucaswren/s2l/internal/service"
@@ -61,6 +61,9 @@ func main() {
 
 	if err := netCtrl.EnsureGuard(); err != nil {
 		log.Fatalf("install traffic guards: %v", err)
+	}
+	if err := network.CleanupProofs(); err != nil {
+		log.Printf("diagnostic cleanup warning: %v", err)
 	}
 	monitorCtx, stopMonitor := context.WithCancel(context.Background())
 	monitorDone := make(chan struct{})

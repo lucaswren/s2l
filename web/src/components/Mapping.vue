@@ -14,12 +14,15 @@ const emit = defineEmits(["changed", "toast"]);
 
 const mode = ref(""); // '' | edit | import
 const editingId = ref("");
+const editRevision=ref("");
 const busy = ref(false);
 const formRef = ref();
 const required = { required: true, message: "请填写此项", trigger: "blur" };
 const actionId = ref("");
-const filter = ref("all");
+const filter = ref("all");const groupFilter=ref("*");
+const groups=computed(()=>[...new Set(props.mappings.map(m=>m.group||"未分组"))].sort());
 const shownMappings = computed(() => props.mappings.filter(m => {
+  if(groupFilter.value!=='*' && (m.group||'未分组')!==groupFilter.value)return false;
   if (filter.value === 'all') return true;
   if (filter.value === 'abnormal') return m.status === 'error' || (m.status === 'running' && props.health[m.id] && !['healthy','checking'].includes(props.health[m.id].state));
   return m.status === filter.value;
@@ -62,7 +65,7 @@ const form = reactive({
   subnet: "10.0.101.0/24",
   l2tp_user: "",
   l2tp_pass: "",
-  mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
 });
 const importText = ref("");
 const importErrors = ref([]);
@@ -104,7 +107,7 @@ function applyPreset() {
 }
 
 function resetForm() {
-  editingId.value = "";
+  editingId.value = "";editRevision.value="";
   const id = nextTable.value;
   Object.assign(form, {
     node_id: props.nodes[0]?.id || "",
@@ -113,7 +116,7 @@ function resetForm() {
     subnet: `10.0.${id % 256}.0/24`,
     l2tp_user: `l2tp${id}`,
     l2tp_pass: "",
-  mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
   });
 }
 
@@ -133,9 +136,9 @@ async function openEdit(m) {
     emit("toast", { type: "err", message: e.message });
     return;
   }
-  editingId.value = m.id;
+  editingId.value = m.id;editRevision.value=m._revision||"";
   Object.assign(form, {
-    node_id: m.node_id,
+    node_id: m.node_id,group:m.group||"",upload_kbps:m.upload_kbps||0,download_kbps:m.download_kbps||0,max_connections:m.max_connections||0,max_sessions:m.max_sessions||0,
     tun_name: m.tun_name,
     table_id: m.table_id,
     subnet: m.subnet,
@@ -154,7 +157,7 @@ function openImport() {
 
 function close() {
   mode.value = "";
-  editingId.value = "";
+  editingId.value = "";editRevision.value="";
 }
 
 async function save() {
@@ -166,7 +169,10 @@ async function save() {
       table_id: Number(form.table_id),
     };
     if (editingId.value) body.id = editingId.value;
-    await api.saveMapping(body);
+    const preview=await api.previewMapping(body,editRevision.value);
+    const labels={group:'分组',name:'名称',addr:'节点地址',username:'代理账号',password:'代理密码',node_id:'出口节点',tun_name:'TUN',table_id:'路由表',subnet:'子网',l2tp_user:'拨号账号',l2tp_pass:'拨号密码',mtu:'MTU',mss:'MSS',queue_length:'队列长度',udp_policy:'UDP 策略',dns_mode:'DNS 模式',upload_kbps:'上传限速',download_kbps:'下载限速',max_connections:'连接上限',max_sessions:'PPP 会话上限'};
+    await ElMessageBox.confirm(`变更：${preview.fields.map(f=>labels[f]||f).join('、')||'无'}。影响 ${preview.affected.length} 条映射。${preview.message}`,'保存配置',{confirmButtonText:'保存',cancelButtonText:'返回编辑'});
+    await api.saveMapping(body,editRevision.value);
     emit("toast", {
       type: "ok",
       message: editingId.value ? "映射已更新" : "映射已创建",
@@ -174,6 +180,7 @@ async function save() {
     close();
     emit("changed");
   } catch (e) {
+    if(e==='cancel'||e==='close')return;
     emit("toast", { type: "err", message: e.message });
   } finally {
     busy.value = false;
@@ -265,7 +272,8 @@ const editingActive = computed(() => {
       <el-select v-model="filter" style="width: 150px" aria-label="映射状态筛选">
         <el-option label="全部状态" value="all" /><el-option label="运行中" value="running" /><el-option label="已停止" value="stopped" /><el-option label="异常链路" value="abnormal" />
       </el-select>
-      <el-button :disabled="!!actionsBusy" @click="batch('start')">批量启动当前列表</el-button>
+      <el-select v-model="groupFilter" style="width:150px" aria-label="映射分组筛选"><el-option value="*" label="全部分组"/><el-option v-for="g in groups" :key="g" :value="g" :label="g"/></el-select>
+ <el-button :disabled="!!actionsBusy" @click="batch('start')">批量启动当前列表</el-button>
       <el-button :disabled="!!actionsBusy" @click="batch('stop')">批量停止当前列表</el-button>
       <el-button v-if="batchBusy" @click="cancelBatch = true">取消排队任务</el-button>
       <el-button @click="copyErrors">复制错误详情</el-button>
@@ -441,7 +449,13 @@ const editingActive = computed(() => {
               :readonly="editingActive"
               autocomplete="new-password"
           /></el-form-item>
-          <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingActive" /></el-form-item>
+          <el-form-item label="分组"><el-input v-model="form.group" maxlength="64"/></el-form-item>
+ <el-form-item label="上传上限 Kbit/s"><el-input-number v-model="form.upload_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
+ <el-form-item label="下载上限 Kbit/s"><el-input-number v-model="form.download_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
+ <el-form-item label="PPP 会话上限"><el-input-number v-model="form.max_sessions" :min="0" :max="128" :disabled="editingActive"/></el-form-item>
+ <el-form-item label="TCP 连接上限"><el-input-number v-model="form.max_connections" :min="0" :max="1000000" :disabled="editingActive"/></el-form-item>
+ <p class="muted form-wide">0 表示不限；限额按整条映射合计。下载超额采用丢弃控制速率，非平滑整形。</p>
+ <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingActive" /></el-form-item>
           <el-form-item label="TCP MSS"><el-input-number v-model="form.mss" :min="536" :max="form.mtu - 40" :disabled="editingActive" /></el-form-item>
           <el-form-item label="接口队列长度"><el-input-number v-model="form.queue_length" :min="100" :max="10000" :disabled="editingActive" /></el-form-item>
           <el-form-item label="UDP 策略"><el-select v-model="form.udp_policy" :disabled="editingActive"><el-option value="reject-quic" label="拒绝 UDP/443，支持时回退 TCP" /><el-option value="allow" label="允许 UDP（需上游支持）" /><el-option value="reject" label="主动拒绝 UDP（DNS 走 DoH/TCP，推荐）" /></el-select></el-form-item>

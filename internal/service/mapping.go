@@ -3,13 +3,16 @@ package service
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/lucaswren/s2l/internal/debuglog"
+	"github.com/lucaswren/s2l/internal/history"
 	"github.com/lucaswren/s2l/internal/l2tp"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/network"
+	"github.com/lucaswren/s2l/internal/operations"
 	"github.com/lucaswren/s2l/internal/singbox"
 	"github.com/lucaswren/s2l/internal/store"
 )
@@ -24,6 +27,16 @@ type MappingService struct {
 	shuttingDown    bool
 	startupComplete bool
 	probes          nodeProbeCache
+	history         *history.Store
+	operations      *operations.Store
+	sessions        sessionTracker
+	snapshotMu      sync.Mutex
+	snapshot        model.SystemStatus
+	snapshotAt      time.Time
+	peerMu          sync.Mutex
+	peers           []model.PPPSession
+	peersAt         time.Time
+	peersError      string
 
 	mu             sync.Mutex
 	stateGate      sync.RWMutex // state edits exclude lifecycle work; independent mappings share read access
@@ -40,13 +53,15 @@ func NewMappingService(
 	l2tpMgr *l2tp.Manager,
 ) *MappingService {
 	return &MappingService{
-		store:     st,
-		singbox:   sb,
-		net:       netCtrl,
-		l2tp:      l2tpMgr,
-		startedAt: time.Now(),
-		health:    make(map[string]*healthRecord),
-		inflight:  make(map[string]bool),
+		store:      st,
+		operations: operations.New(filepath.Join(st.DataDir(), "operations.json")),
+		history:    history.New(filepath.Join(st.DataDir(), "health-history.json")),
+		singbox:    sb,
+		net:        netCtrl,
+		l2tp:       l2tpMgr,
+		startedAt:  time.Now(),
+		health:     make(map[string]*healthRecord),
+		inflight:   make(map[string]bool),
 	}
 }
 
@@ -205,7 +220,7 @@ func (s *MappingService) startLocked(id string) error {
 		return errors.Join(fmt.Errorf("persist running status: %w", err), cleanupErr, rollbackErr)
 	}
 	s.mu.Lock()
-	s.health[id] = &healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking", TunName: m.TunName, LocalState: "healthy", LocalCheckedAt: time.Now()}}
+	s.health[id] = &healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking", UDPPolicy: m.EffectiveUDPPolicy(), TunName: m.TunName, LocalState: "healthy", LocalCheckedAt: time.Now()}}
 	s.mu.Unlock()
 	return nil
 }
@@ -323,7 +338,8 @@ func (s *MappingService) Status() model.SystemStatus {
 		}
 		traffic = append(traffic, t)
 	}
-	return model.SystemStatus{
+	peers, peersAt, peersError := s.peerSnapshot()
+	return model.SystemStatus{HostStats: network.HostStats(), Sessions: peers, SessionsCheckedAt: peersAt, SessionsError: peersError,
 		Uptime:         time.Since(s.startedAt),
 		Mappings:       mappings,
 		TunTraffic:     traffic,

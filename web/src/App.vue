@@ -13,7 +13,7 @@ import Mapping from "./components/Mapping.vue";
 const Settings = defineAsyncComponent(
   () => import("./components/Settings.vue"),
 );
-import Status from "./components/Status.vue";
+const Status=defineAsyncComponent(()=>import("./components/Status.vue"));
 import { ElMessage } from "element-plus";
 
 const nodes = ref([]);
@@ -39,7 +39,7 @@ const filteredNodes = computed(() => {
   const s = q.value.trim().toLowerCase();
   if (!s) return nodes.value;
   return nodes.value.filter((n) =>
-    [n.name, n.addr, n.id].join(" ").toLowerCase().includes(s),
+    [n.name, n.addr, n.id,n.group].join(" ").toLowerCase().includes(s),
   );
 });
 
@@ -49,7 +49,7 @@ const filteredMappings = computed(() => {
   const nodeMap = Object.fromEntries(nodes.value.map((n) => [n.id, n.name]));
   return mappings.value.filter((m) =>
     [
-      m.tun_name,
+      m.tun_name,m.group,
       String(m.table_id),
       m.subnet,
       m.l2tp_user,
@@ -93,6 +93,10 @@ async function refresh() {
       tun_traffic: Array.isArray(st?.tun_traffic) ? st.tun_traffic : [],
       singbox_pids: st?.singbox_pids || {},
       upstream_health: st?.upstream_health || {},
+	  mappings: Array.isArray(st?.mappings) ? st.mappings : (Array.isArray(m) ? m : []),
+	  sessions: Array.isArray(st?.sessions) ? st.sessions : [],
+	  sessions_error: st?.sessions_error || '',
+	  sessions_checked_at: st?.sessions_checked_at || '',
       configuration_recovery: st?.configuration_recovery || '',
     };
     error.value = "";

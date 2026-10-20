@@ -32,3 +32,9 @@ test('log export rejects HTML and invalid ZIP bodies before download', async t =
   t.mock.restoreAll();
  }
 });
+
+test('resource revisions travel in If-Match and never enter request JSON', async t => {
+ let saved;
+ t.mock.method(globalThis,'fetch',async(path,options)=>{if(options.method==='POST'){saved=options;return Response.json({ok:true})}return new Response('{"id":"n"}',{headers:{'Content-Type':'application/json','ETag':'"revision-one"'}})});
+ const row=await api.getNode('n');assert.equal(row._revision,'"revision-one"');assert.equal(JSON.stringify(row),'{"id":"n"}');await api.saveNode({...row},row._revision);assert.equal(saved.headers['If-Match'],'"revision-one"');assert.equal(saved.body,'{"id":"n"}');
+});

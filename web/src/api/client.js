@@ -27,6 +27,7 @@ async function request(path, options = {}) {
   if (data === null || typeof data !== "object") {
     throw new Error("服务器返回了无效数据，请刷新后重试");
   }
+  const revision=res.headers?.get("ETag");if(revision && !Array.isArray(data))Object.defineProperty(data,"_revision",{value:revision});
   return data;
 }
 
@@ -77,6 +78,15 @@ async function streamNetworkTest(id, body, signal, onEvent) {
 }
 
 export const api = {
+ operations:(signal)=>request('/api/operations',{signal}),
+ saveNotifications:(body)=>request('/api/operations',{method:'POST',body:JSON.stringify(body)}),
+ disconnectSession:(row)=>request('/api/sessions/disconnect',{method:'POST',body:JSON.stringify({interface:row.interface,peer:row.peer_ip,index:row.index})}),
+ connections:(id,signal)=>request(`/api/mappings/${encodeURIComponent(id)}/connections`,{signal}),
+ closeConnection:(id,connection)=>request(`/api/mappings/${encodeURIComponent(id)}/connections`,{method:'POST',body:JSON.stringify({id:connection})}),
+ previewNode:(body,revision)=>request('/api/nodes?preview=1',{method:'POST',headers:revision?{'If-Match':revision}:{},body:JSON.stringify(body)}),
+ previewMapping:(body,revision)=>request('/api/mappings?preview=1',{method:'POST',headers:revision?{'If-Match':revision}:{},body:JSON.stringify(body)}),
+  history:(id,signal)=>request(`/api/history?mapping_id=${encodeURIComponent(id)}`,{signal}),
+  mappingDiagnostic:(id,signal)=>request(`/api/mappings/${encodeURIComponent(id)}/network-test`,{method:"POST",body:"{}",signal}),
   updateStatus: (signal) => request("/api/settings/update", {signal}),
   updateSoftware: (body) => request("/api/settings/update", {method:"POST", body:JSON.stringify(body)}),
   timeSettings: () => request("/api/settings/time"),
@@ -107,8 +117,9 @@ export const api = {
   networkTestNode: (id, body, signal) => request(`/api/nodes/${id}/network-test`, {method:"POST", body:JSON.stringify(body), signal}),
   listNodes: () => request("/api/nodes"),
   getNode: (id) => request(`/api/nodes/${id}`),
-  saveNode: (body) =>
-    request("/api/nodes", { method: "POST", body: JSON.stringify(body) }),
+  saveNode: (body,revision) =>
+    request("/api/nodes", { method: "POST",
+      headers: revision ? {"If-Match":revision} : {}, body: JSON.stringify(body) }),
   deleteNode: (id) => request(`/api/nodes/${id}`, { method: "DELETE" }),
   importNodes: (body) =>
     request("/api/nodes/import", {
@@ -123,8 +134,9 @@ export const api = {
 
   listMappings: () => request("/api/mappings"),
   getMapping: (id) => request(`/api/mappings/${id}`),
-  saveMapping: (body) =>
-    request("/api/mappings", { method: "POST", body: JSON.stringify(body) }),
+  saveMapping: (body,revision) =>
+    request("/api/mappings", { method: "POST",
+      headers: revision ? {"If-Match":revision} : {}, body: JSON.stringify(body) }),
   deleteMapping: (id) => request(`/api/mappings/${id}`, { method: "DELETE" }),
   importMappings: (body) =>
     request("/api/mappings/import", {

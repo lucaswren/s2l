@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lucaswren/s2l/internal/dnsproxy"
+	"github.com/lucaswren/s2l/internal/lockutil"
 	"github.com/lucaswren/s2l/internal/model"
 	"os/exec"
 	"path/filepath"
@@ -32,12 +33,14 @@ func (m *Manager) ResolveDNS(ctx context.Context, name string, query []byte) ([]
 }
 
 type managedProc struct {
-	cmd      *exec.Cmd
-	pid      int
-	done     chan struct{}
-	resolver *dnsproxy.Server
-	log      *rotatingLog
-	exits    uint64
+	apiAddress string
+	apiSecret  string
+	cmd        *exec.Cmd
+	pid        int
+	done       chan struct{}
+	resolver   *dnsproxy.Server
+	log        *rotatingLog
+	exits      uint64
 }
 
 func NewManager(binPath string) *Manager {
@@ -81,6 +84,11 @@ func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error
 	if err != nil {
 		return err
 	}
+	apiAddress, apiSecret, err := prepareAPI(cfgPath)
+	if err != nil {
+		_ = RemoveConfig(mapping.TunName)
+		return err
+	}
 	logPath := filepath.Join(RuntimeDir(), fmt.Sprintf("s2l-%s.log", mapping.TunName))
 	writer, err := openDebugLog(logPath)
 	if err != nil {
@@ -97,7 +105,7 @@ func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error
 		_ = RemoveConfig(mapping.TunName)
 		return fmt.Errorf("start sing-box: %w", err)
 	}
-	p := &managedProc{cmd: cmd, pid: cmd.Process.Pid, done: make(chan struct{}), resolver: resolver, log: writer}
+	p := &managedProc{apiAddress: apiAddress, apiSecret: apiSecret, cmd: cmd, pid: cmd.Process.Pid, done: make(chan struct{}), resolver: resolver, log: writer}
 	if previous != nil {
 		p.exits = previous.exits + 1
 	}
@@ -263,4 +271,35 @@ func (p *managedProc) running() bool {
 	default:
 		return true
 	}
+}
+
+func (m *Manager) Connections(ctx context.Context, name string) (Connections, error) {
+	value, _ := m.locks.LoadOrStore(name, &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	if err := lockutil.Lock(ctx, mu); err != nil {
+		return Connections{}, err
+	}
+	defer mu.Unlock()
+	m.mu.Lock()
+	p := m.procs[name]
+	m.mu.Unlock()
+	if p == nil || !p.running() {
+		return Connections{}, fmt.Errorf("映射进程未运行")
+	}
+	return readConnections(ctx, p.apiAddress, p.apiSecret)
+}
+func (m *Manager) CloseConnection(ctx context.Context, name, id string) error {
+	value, _ := m.locks.LoadOrStore(name, &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	if err := lockutil.Lock(ctx, mu); err != nil {
+		return err
+	}
+	defer mu.Unlock()
+	m.mu.Lock()
+	p := m.procs[name]
+	m.mu.Unlock()
+	if p == nil || !p.running() {
+		return fmt.Errorf("映射进程未运行")
+	}
+	return closeConnection(ctx, p.apiAddress, p.apiSecret, id)
 }

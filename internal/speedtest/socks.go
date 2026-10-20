@@ -3,6 +3,7 @@ package speedtest
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -23,11 +24,33 @@ func DialSOCKS5(ctx context.Context, proxyAddr, username, password, target strin
 
 type socksReplyError struct{ code byte }
 
+// StageError records the failed protocol phase without exposing credentials.
+type StageError struct {
+	Stage string
+	Err   error
+}
+
+func (e *StageError) Error() string { return e.Stage + ": " + e.Err.Error() }
+func (e *StageError) Unwrap() error { return e.Err }
+func ErrorStage(err error) string {
+	var staged *StageError
+	if errors.As(err, &staged) {
+		return staged.Stage
+	}
+	return "target-connect"
+}
+
 func (e *socksReplyError) Error() string {
 	return fmt.Sprintf("SOCKS request rejected: code %d", e.code)
 }
 
-func dialSOCKSCommand(ctx context.Context, proxyAddr, username, password string, command byte, target string) (net.Conn, string, error) {
+func dialSOCKSCommand(ctx context.Context, proxyAddr, username, password string, command byte, target string) (result net.Conn, boundAddr string, retErr error) {
+	stage := "proxy-connect"
+	defer func() {
+		if retErr != nil {
+			retErr = &StageError{Stage: stage, Err: retErr}
+		}
+	}()
 	if len(username) > 255 || len(password) > 255 {
 		return nil, "", fmt.Errorf("SOCKS credentials exceed protocol limits")
 	}
@@ -59,6 +82,7 @@ func dialSOCKSCommand(ctx context.Context, proxyAddr, username, password string,
 	}
 
 	// greeting
+	stage = "socks-auth"
 	if username != "" {
 		if _, err := conn.Write([]byte{0x05, 0x01, 0x02}); err != nil {
 			return nil, "", err
@@ -105,6 +129,7 @@ func dialSOCKSCommand(ctx context.Context, proxyAddr, username, password string,
 	}
 
 	// CONNECT
+	stage = "target-connect"
 	req := []byte{0x05, command, 0x00}
 	if ip := net.ParseIP(host); ip != nil {
 		if v4 := ip.To4(); v4 != nil {
