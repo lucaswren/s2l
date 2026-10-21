@@ -28,6 +28,7 @@ try{
     if(!visible(e))continue;
     const r=e.getBoundingClientRect(),style=getComputedStyle(e);
     if(e.scrollWidth>e.clientWidth+2||e.scrollHeight>e.clientHeight+2)out.push({text:e.innerText,kind:'clipped',class:e.className,width:e.clientWidth,scroll:e.scrollWidth,height:e.clientHeight,scrollHeight:e.scrollHeight});
+    if(e.classList.contains('cell')&&e.closest('.el-table')&&(style.paddingLeft!=='16px'||style.paddingRight!=='16px'))out.push({kind:'cell-spacing',left:style.paddingLeft,right:style.paddingRight});
     if(e.classList.contains('el-button')&&(r.height<31||parseFloat(style.fontSize)!==14))out.push({text:e.innerText,kind:'nonstandard',height:r.height,font:style.fontSize});
    }
    if(document.documentElement.scrollWidth>innerWidth+2)out.push({kind:'page-overflow',width:innerWidth,scroll:document.documentElement.scrollWidth});
@@ -111,6 +112,9 @@ try{
   for(const locale of ['en','zh-TW','zh-CN']) {
    await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);await pause(100);
    await checkLayout(width+' '+locale+' Google dialog');
+   await evaluate(`(()=>{const e=document.querySelector('.network-test-summary .el-tag__content');window.__statusText=e.textContent;e.textContent+=' · DNS/TCP/TLS/HTTP'.repeat(3)})()`);
+   await checkLayout(width+' '+locale+' multiline status');
+   await evaluate(`document.querySelector('.network-test-summary .el-tag__content').textContent=window.__statusText`);
   }
   await evaluate(`document.querySelector('.network-test-dialog .el-dialog__headerbtn').click()`);await pause(350);
   await evaluate(`[...document.querySelectorAll('[role=tab]')].find(e=>e.innerText==='系统设置').click()`);

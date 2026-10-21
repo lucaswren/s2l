@@ -164,13 +164,13 @@ p {
 .el-button > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
 .el-form-item__label { overflow-wrap: anywhere; }
 .el-alert__content { min-width: 0; overflow-wrap: anywhere; }
-.el-collapse-item__header { min-height: var(--el-collapse-header-height, 48px); height: auto; padding: 8px 0; line-height: 1.5; overflow-wrap: anywhere; }
-.el-collapse-item__title { min-width: 0; }
-.el-tag { max-width: 100%; height: auto; min-height: var(--el-tag-height, 24px); white-space: normal; }
-.el-tag__content { min-width: 0; overflow-wrap: anywhere; }
+body .el-collapse-item__header { min-height: var(--el-collapse-header-height, 48px); height: auto; padding: 8px 0; line-height: 1.5; overflow-wrap: anywhere; }
+body .el-collapse-item__title { min-width: 0; }
+body .el-tag { max-width: 100%; height: auto; min-height: var(--el-tag-height, 24px); white-space: normal; }
+body .el-tag__content { display: block; min-width: 0; max-width: 100%; overflow-wrap: anywhere; white-space: normal; line-height: 1.5; }
 .el-dialog__header { overflow-wrap: anywhere; }
-.el-radio { max-width: 100%; height: auto; min-height: var(--el-component-size); }
-.el-radio__label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+body .el-radio { max-width: 100%; height: auto; min-height: var(--el-component-size); }
+body .el-radio__label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .el-alert__title { line-height: 1.6; }
 .el-dialog__title,.el-drawer__title { line-height: 1.5; font-size: 18px; }
 .el-dialog__body { padding-top: 16px; padding-bottom: 20px; }
@@ -264,13 +264,13 @@ footer {
 .monitor-collapse {
   margin-top: var(--section-gap);
 }
-.el-table .cell { padding: 0 16px; line-height: 1.6; white-space: normal; word-break: normal; overflow-wrap: anywhere; }
+body .el-table .cell { padding: 0 16px; line-height: 1.6; white-space: normal; word-break: normal; overflow-wrap: anywhere; }
 .el-table th.el-table__cell, .el-table td.el-table__cell { padding: 12px 0; vertical-align: top; }
 .el-table .cell p { margin: 4px 0; }
 .el-table .cell .actions { gap: 8px; }
-.el-radio-group, .el-checkbox-group { max-width: 100%; flex-wrap: wrap; row-gap: 8px; }
-.el-checkbox { max-width: 100%; height: auto; min-height: var(--el-component-size); }
-.el-checkbox__label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+body .el-radio-group, body .el-checkbox-group { display: flex; max-width: 100%; flex-wrap: wrap; row-gap: 8px; }
+body .el-checkbox { max-width: 100%; height: auto; min-height: var(--el-component-size); }
+body .el-checkbox__label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .el-table th.el-table__cell {
   background: var(--el-fill-color-light);
   font-weight: 600;

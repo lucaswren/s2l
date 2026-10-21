@@ -94,7 +94,7 @@ function download() {
 .network-test-options>label{font-size:14px;font-weight:500;}
 .network-test-result{margin-top:16px;min-width:0;}
 .network-test-summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;overflow-wrap:anywhere;margin-bottom:16px;}
-.network-test-summary>span:last-child{font-size:14px;color:var(--el-text-color-secondary);}
+.network-test-summary>span:not(.el-tag){font-size:14px;color:var(--el-text-color-secondary);}
 .network-protocols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
 .network-protocol{padding:12px;border:1px solid var(--el-border-color-light);border-radius:8px;min-width:0;}
 .network-protocol>div{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
