@@ -140,11 +140,13 @@ try{
   await wait(`[...document.querySelectorAll('button')].some(e=>e.innerText==='清理旧备份'&&!e.disabled)`);
   await evaluate(`[...document.querySelectorAll('button')].find(e=>e.innerText==='清理旧备份').click()`);
   await wait(`!!document.querySelector('.el-message-box')`);
-  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.innerText==='取消').click()`);await pause(200);
+  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.getClientRects().length&&e.innerText==='取消').click()`);
+  await wait(`[...document.querySelectorAll('.el-message-box')].every(e=>!e.getClientRects().length)`);
   if(await evaluate(`window.__cleanupCalls!==0`))throw Error('backup cleanup ran without confirmation');
   await evaluate(`[...document.querySelectorAll('button')].find(e=>e.innerText==='清理旧备份').click()`);
   await wait(`!!document.querySelector('.el-message-box')`);
-  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.innerText==='删除').click()`);
+  await wait(`[...document.querySelectorAll('.el-message-box')].some(e=>e.getClientRects().length)`);
+  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.getClientRects().length&&e.innerText==='删除').click()`);
   await wait(`window.__cleanupCalls===1`);
   if(await evaluate(`JSON.stringify(window.__cleanupIDs)!=='["backup-1-1.json"]'`))throw Error('backup cleanup included newest backup');
   await evaluate(`window.fetch=window.__backupFetch`);
