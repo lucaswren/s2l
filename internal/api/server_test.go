@@ -24,7 +24,7 @@ func TestAPIMutationProtection(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest(tc.method, "https://admin.example/api/nodes", strings.NewReader(`{}`))
-			r.SetBasicAuth("admin", "test-password-123")
+			r.AddCookie(testLogin(t, s.Handler(), "admin", "test-password-123"))
 			r.Header.Set("Origin", tc.origin)
 			r.Header.Set("Content-Type", tc.contentType)
 			w := httptest.NewRecorder()

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {compareGoogle,readGoogleSnapshot,rejectEvidence} from '../src/utils/google-diagnostic.js';
-const hosts=['www.google.com','accounts.google.com','oauth2.googleapis.com','gmail.googleapis.com','www.youtube.com','gemini.google.com'];
+const hosts=['www.google.com','accounts.google.com','oauth2.googleapis.com','gmail.googleapis.com','www.youtube.com','gemini.google.com','robinfrontend-pa.googleapis.com','oauthaccountmanager.googleapis.com'];
 const dns=()=>({state:'healthy',addresses:['203.0.113.1'],duration_ms:1});
 const report=()=>({node_id:'n',node_name:'线路',checked_at:'2026-10-21T00:00:00Z',targets:hosts.map(host=>({host,a:dns(),aaaa:{state:'no_address',addresses:[]},doh:dns(),tcp_dns:dns(),tcp:'healthy',tls:'healthy',http:'responded',status:403,alpn:'h2',stage:'http'}))});
 test('Google comparison distinguishes TLS failure, DNS address changes and HTTP status without IP-ban conclusions',()=>{
@@ -11,6 +11,7 @@ test('Google comparison distinguishes TLS failure, DNS address changes and HTTP 
 });
 test('historical Google snapshots require matching bounded schema and never retain command or account data',()=>{
  const r=report();r.password='secret';r.command='ignored';const raw=JSON.stringify({schema_version:1,kind:'google',google:[r]});
+ assert.throws(()=>readGoogleSnapshot(JSON.stringify({schema_version:1,kind:'google',google:[{...r,targets:r.targets.slice(0,6)}]})));
  const result=readGoogleSnapshot(raw);assert.equal(result.snapshot,true);assert.equal(result.password,undefined);assert.equal(result.command,undefined);assert.equal(result.targets[0].status,403);
  for(const v of [raw.replace('"schema_version":1','"schema_version":2'),raw.replace('accounts.google.com','evil.example'),raw.replace('"tls":"healthy"','"tls":"forged"'),'x'.repeat(512*1024+1)])assert.throws(()=>readGoogleSnapshot(v));
 });

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"crypto/subtle"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -26,6 +25,8 @@ type Server struct {
 	configPath      string
 	adminUser       string
 	adminPass       string
+	sessions        map[[32]byte]webSession
+	loginAttempts   map[string]loginAttempt
 	debugExports    chan struct{}
 	networkTests    chan struct{}
 	timeSettings    chan struct{}
@@ -48,6 +49,9 @@ func NewServer(st *store.Store, svc *service.MappingService, webFS fs.FS, creden
 // Handler 返回根 http.Handler
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/auth/status", s.handleAuthStatus)
+	mux.HandleFunc("/api/auth/login", s.handleLogin)
+	mux.HandleFunc("/api/auth/logout", s.handleLogout)
 	mux.HandleFunc("/api/backups", s.handleBackups)
 	mux.HandleFunc("/api/backups/preview", s.handleBackupRestore)
 	mux.HandleFunc("/api/backups/restore", s.handleBackupRestore)
@@ -172,12 +176,13 @@ func (s *Server) withAuth(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		user, pass, ok := r.BasicAuth()
-		userOK := subtle.ConstantTimeCompare([]byte(user), []byte(adminUser)) == 1
-		passOK := subtle.ConstantTimeCompare([]byte(pass), []byte(adminPass)) == 1
-		if !ok || !userOK || !passOK {
-			w.Header().Set("WWW-Authenticate", `Basic realm="S2L", charset="UTF-8"`)
-			http.Error(w, "authentication required", http.StatusUnauthorized)
+		// The login shell is public; every management API still authenticates here.
+		if !strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api/auth/status" || r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/logout" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !s.authenticated(r) {
+			writeError(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
 		next.ServeHTTP(w, r)

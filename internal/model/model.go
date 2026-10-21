@@ -74,12 +74,13 @@ func (m TunnelMapping) EffectiveDNSMode() string {
 }
 
 type ResolverStatus struct {
-	Mode      string `json:"mode"`
-	Active    string `json:"active"`
-	Queries   uint64 `json:"queries"`
-	Failures  uint64 `json:"failures"`
-	Fallbacks uint64 `json:"fallbacks"`
-	Switches  uint64 `json:"switches"`
+	GoogleHTTPSSuppressed uint64 `json:"google_https_suppressed"`
+	Mode                  string `json:"mode"`
+	Active                string `json:"active"`
+	Queries               uint64 `json:"queries"`
+	Failures              uint64 `json:"failures"`
+	Fallbacks             uint64 `json:"fallbacks"`
+	Switches              uint64 `json:"switches"`
 }
 
 type ProcessStatus struct {

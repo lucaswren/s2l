@@ -1,4 +1,6 @@
 <script setup>
+import { tr } from '../i18n/index.js';
+
 import { defineAsyncComponent, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
 const NetworkTest = defineAsyncComponent(() => import("./NetworkTest.vue"));
@@ -15,7 +17,7 @@ const editingId = ref("");
 const editRevision=ref("");
 const busy = ref(false);
 const formRef = ref();
-const required = { required: true, message: "请填写此项", trigger: "blur" };
+const required = { required: true, get message() { return tr("请填写此项"); }, trigger: "blur" };
 const testingId = ref("");
 const speedResults = reactive({});
 const form = reactive({ name: "", addr: "", username: "", password: "",group:"" });
@@ -29,20 +31,14 @@ const formats = [
   "name,host:port,user,pass",
 ];
 
-function directionResult(result, direction) {
-  if (result[direction]) return result[direction];
-  if (direction === "download") return result;
-  return { ok: false, error: result.error || "后端未返回上传结果" };
-}
-
 function formatTransfer(result) {
   return result.ok
     ? `${Number(result.speed_mbps || 0).toFixed(1)} Mbps`
-    : "失败";
+    : tr("失败");
 }
 
 function formatSpeed(result) {
-  return `下载 ${formatTransfer(directionResult(result, "download"))} / 上传 ${formatTransfer(directionResult(result, "upload"))}`;
+  return tr("下载 {0} / 上传 {1}", formatTransfer(result.download), formatTransfer(result.upload));
 }
 
 function resetForm() {
@@ -90,12 +86,12 @@ async function save() {
     const body = { ...form };
     if (editingId.value) body.id = editingId.value;
     const preview=await api.previewNode(body,editRevision.value);
-    const labels={group:'分组',name:'名称',addr:'节点地址',username:'代理账号',password:'代理密码',node_id:'出口节点',tun_name:'TUN',table_id:'路由表',subnet:'子网',l2tp_user:'拨号账号',l2tp_pass:'拨号密码',mtu:'MTU',mss:'MSS',queue_length:'队列长度',udp_policy:'UDP 策略',dns_mode:'DNS 模式',upload_kbps:'上传限速',download_kbps:'下载限速',max_connections:'连接上限'};
-    await ElMessageBox.confirm(`变更：${preview.fields.map(f=>labels[f]||f).join('、')||'无'}。影响 ${preview.affected.length} 条映射。${preview.message}`,'保存配置',{confirmButtonText:'保存',cancelButtonText:'返回编辑'});
+    const labels={get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); },get max_connections() { return tr("连接上限"); }};
+    await ElMessageBox.confirm(tr("变更：{0}。影响 {1} 条映射。{2}", preview.fields.map(f=>labels[f]||f).join('、')||tr("无"), preview.affected.length, preview.message),tr("保存配置"),{get confirmButtonText() { return tr("保存"); },get cancelButtonText() { return tr("返回编辑"); }});
     await api.saveNode(body,editRevision.value);
     emit("toast", {
       type: "ok",
-      message: editingId.value ? "已更新" : "已创建",
+      message: editingId.value ? tr("已更新") : tr("已创建"),
     });
     close();
     emit("changed");
@@ -113,8 +109,8 @@ async function doImport() {
     const res = await api.importNodes({ text: importText.value });
     importErrors.value = res.errors || [];
     const msg =
-      `导入 ${res.created || 0} 新 / ${res.updated || 0} 更` +
-      (res.skipped ? ` / ${res.skipped} 跳过` : "");
+      tr("导入 {0} 新 / {1} 更", res.created || 0, res.updated || 0) +
+      (res.skipped ? tr(" / {0} 跳过", res.skipped) : "");
     emit("toast", {
       type: res.errors?.length ? "err" : "ok",
       message: res.errors?.length
@@ -132,10 +128,10 @@ async function doImport() {
 
 async function remove(id) {
   try {
-    await ElMessageBox.confirm("删除该节点？关联映射需先删除。", "删除节点", {
+    await ElMessageBox.confirm(tr("删除该节点？关联映射需先删除。"), tr("删除节点"), {
       type: "warning",
-      confirmButtonText: "删除",
-      cancelButtonText: "取消",
+      get confirmButtonText() { return tr("删除"); },
+      get cancelButtonText() { return tr("取消"); },
     });
   } catch {
     return;
@@ -143,7 +139,7 @@ async function remove(id) {
   try {
     await api.deleteNode(id);
     delete speedResults[id];
-    emit("toast", { type: "ok", message: "已删除" });
+    emit("toast", { type: "ok", get message() { return tr("已删除"); } });
     emit("changed");
   } catch (e) {
     emit("toast", { type: "err", message: e.message });
@@ -171,32 +167,32 @@ async function speedTest(n) {
   <section>
     <div class="section-head">
       <div>
-        <h2>SOCKS5 节点</h2>
+        <h2>{{ tr("SOCKS5 节点") }}</h2>
 
       </div>
       <div class="actions">
-        <el-button @click="openImport">批量导入</el-button
-        ><el-button type="primary" @click="openCreate">新增节点</el-button>
+        <el-button @click="openImport">{{ tr("批量导入") }}</el-button
+        ><el-button type="primary" @click="openCreate">{{ tr("新增节点") }}</el-button>
       </div>
     </div>
     <el-table
       :data="nodes"
       class="desktop-list"
-      empty-text="暂无节点，请新增或导入"
+      :empty-text='tr("暂无节点，请新增或导入")'
       ><el-table-column
         prop="name"
-        label="名称"
+        :label='tr("名称")'
         min-width="130" /><el-table-column
         prop="addr"
-        label="地址"
+        :label='tr("地址")'
         min-width="170" /><el-table-column
         prop="username"
-        label="用户名"
-        min-width="100" /><el-table-column label="上下行速度" min-width="210"
+        :label='tr("用户名")'
+        min-width="100" /><el-table-column :label='tr("上下行速度")' min-width="210"
         ><template #default="{ row }"
           ><SpeedResult
             :result="speedResults[row.id]" /></template></el-table-column
-      ><el-table-column label="操作" width="410" fixed="right"
+      ><el-table-column :label='tr("操作")' width="410" fixed="right"
         ><template #default="{ row }"
           ><NodeActions
             :node="row"
@@ -207,15 +203,15 @@ async function speedTest(n) {
             @remove="remove" /></template></el-table-column
     ></el-table>
     <div class="mobile-list">
-      <el-empty v-if="!nodes.length" description="暂无节点" /><el-card
+      <el-empty v-if="!nodes.length" :description='tr("暂无节点")' /><el-card
         v-for="n in nodes"
         :key="n.id"
         shadow="never"
         ><div class="item-title">{{ n.name }}</div>
         <div class="item-details">
-          <span>地址</span><span class="mono">{{ n.addr }}</span
-          ><span>用户名</span><span>{{ n.username || "—" }}</span
-          ><span>测速</span><SpeedResult :result="speedResults[n.id]" />
+          <span>{{ tr("地址") }}</span><span class="mono">{{ n.addr }}</span
+          ><span>{{ tr("用户名") }}</span><span>{{ n.username || "—" }}</span
+          ><span>{{ tr("测速") }}</span><SpeedResult :result="speedResults[n.id]" />
         </div>
         <NodeActions
           :node="n"
@@ -229,7 +225,7 @@ async function speedTest(n) {
     <NetworkTest v-if="networkNode" :node="networkNode" @close="networkNode = null" @changed="emit('changed')" />
     <el-dialog
       :model-value="mode === 'edit'"
-      :title="editingId ? '编辑节点' : '新增节点'"
+      :title="editingId ? tr(&quot;编辑节点&quot;) : tr(&quot;新增节点&quot;)"
       width="620px"
       class="edit-dialog"
       :close-on-click-modal="false"
@@ -243,20 +239,20 @@ async function speedTest(n) {
         :disabled="busy"
         @submit.prevent="save"
         ><div class="form-grid">
-          <el-form-item label="分组"><el-input v-model="form.group" maxlength="64"/></el-form-item>
- <el-form-item label="名称"
+          <el-form-item :label='tr("分组")'><el-input v-model="form.group" maxlength="64"/></el-form-item>
+ <el-form-item :label='tr("名称")'
             ><el-input
               v-model="form.name"
-              placeholder="留空使用地址" /></el-form-item
-          ><el-form-item label="SOCKS5 地址" prop="addr" :rules="required"
+              :placeholder='tr("留空使用地址")' /></el-form-item
+          ><el-form-item :label='tr("SOCKS5 地址")' prop="addr" :rules="required"
             ><el-input
               v-model="form.addr"
               placeholder="host:port" /></el-form-item
-          ><el-form-item label="用户名"
+          ><el-form-item :label='tr("用户名")'
             ><el-input
               v-model="form.username"
               autocomplete="off" /></el-form-item
-          ><el-form-item label="密码"
+          ><el-form-item :label='tr("密码")'
             ><el-input
               v-model="form.password"
               type="password"
@@ -264,15 +260,15 @@ async function speedTest(n) {
               autocomplete="new-password"
           /></el-form-item></div></el-form
       ><template #footer
-        ><el-button :disabled="busy" @click="close">取消</el-button
+        ><el-button :disabled="busy" @click="close">{{ tr("取消") }}</el-button
         ><el-button type="primary" :loading="busy" @click="save"
-          >保存</el-button
+          >{{ tr("保存") }}</el-button
         ></template
       ></el-dialog
     >
     <el-dialog
       :model-value="mode === 'import'"
-      title="批量导入节点"
+      :title='tr("批量导入节点")'
       width="680px"
       class="edit-dialog"
       :close-on-click-modal="false"
@@ -280,7 +276,7 @@ async function speedTest(n) {
       :show-close="!busy"
       @close="close"
       ><el-alert
-        title="每行一条；同名或同地址会更新现有节点。"
+        :title='tr("每行一条；同名或同地址会更新现有节点。")'
         type="info"
         :closable="false"
       />
@@ -293,24 +289,24 @@ async function speedTest(n) {
         type="textarea"
         :rows="8"
         placeholder="1.2.3.4:1080:user:pass"
-        aria-label="批量导入节点"
+        :aria-label='tr("批量导入节点")'
       /><el-alert
         v-if="importErrors.length"
         class="import-errors"
         type="error"
-        title="以下行未导入"
+        :title='tr("以下行未导入")'
         :closable="false"
         ><ul>
           <li v-for="(err, i) in importErrors" :key="i">{{ err }}</li>
         </ul></el-alert
       ><template #footer
-        ><el-button :disabled="busy" @click="close">取消</el-button
+        ><el-button :disabled="busy" @click="close">{{ tr("取消") }}</el-button
         ><el-button
           type="primary"
           :loading="busy"
           :disabled="!importText.trim()"
           @click="doImport"
-          >导入</el-button
+          >{{ tr("导入") }}</el-button
         ></template
       ></el-dialog
     >

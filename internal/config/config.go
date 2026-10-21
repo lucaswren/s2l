@@ -15,8 +15,8 @@ import (
 type Config struct {
 	PPPManagement model.ManagementAccess `json:"ppp_management"`
 	Listen        string                 `json:"listen"`       // 如 :8080
-	AdminUser     string                 `json:"admin_user"`   // 管理界面 Basic Auth 用户名
-	AdminPass     string                 `json:"admin_pass"`   // 管理界面 Basic Auth 密码
+	AdminUser     string                 `json:"admin_user"`   // 管理用户名；网页登录与脚本认证共用
+	AdminPass     string                 `json:"admin_pass"`   // 管理密码
 	SingboxBin    string                 `json:"singbox_bin"`  // sing-box 路径
 	DataDir       string                 `json:"data_dir"`     // 状态持久化目录
 	ChapSecrets   string                 `json:"chap_secrets"` // /etc/ppp/chap-secrets

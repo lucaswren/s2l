@@ -1,10 +1,11 @@
+import { tr } from '../i18n/index.js';
 // 64 characters divide the byte range exactly, avoiding modulo bias.
 const alphabet =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
 export function generatePassword() {
   if (!globalThis.crypto?.getRandomValues) {
-    throw new Error("浏览器不支持安全随机数，请手动设置密码");
+    throw new Error(tr("浏览器不支持安全随机数，请手动设置密码"));
   }
   let password;
   do {

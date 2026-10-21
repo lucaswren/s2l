@@ -1,0 +1,3113 @@
+{
+  " / {0} 跳过": {
+    "en": " / {0} skipped",
+    "tw": " / {0} 跳過"
+  },
+  " · DNS 地址不同（不等于故障）": {
+    "en": " · Different DNS addresses (not necessarily a fault)",
+    "tw": " · DNS 位址不同（不等于故障）"
+  },
+  " · 已取消": {
+    "en": " · Cancelled",
+    "tw": " · 已取消"
+  },
+  " · 超时": {
+    "en": " · Timed out",
+    "tw": " · 超時"
+  },
+  "0 表示不限；限额按整条映射合计。下载超额采用丢弃控制速率，非平滑整形。": {
+    "en": "0 means unlimited; limits apply to the whole mapping. Download limits drop excess packets rather than smoothly shaping traffic.",
+    "tw": "0 表示不限；限額按整條映射合計。下載超額采用丟棄控制速率，非平滑整形。"
+  },
+  "101,线路A,user101,pass101": {
+    "en": "101,Line A,user101,pass101",
+    "tw": "101,線路A,user101,pass101"
+  },
+  "12–128 位可见 ASCII 字符，不支持空格": {
+    "en": "12–128 printable ASCII characters; no spaces",
+    "tw": "12–128 位可見 ASCII 字符，不支持空格"
+  },
+  "12–128 位字母、数字或 _ . @ + -": {
+    "en": "12–128 letters, numbers or _ . @ + -",
+    "tw": "12–128 位字母、數字或 _ . @ + -"
+  },
+  "12–128 位，与客户端保持一致": {
+    "en": "12–128 characters; must match the client",
+    "tw": "12–128 位，與客戶端保持一致"
+  },
+  "1–64 位字母、数字、点、下划线或连字符": {
+    "en": "1–64 letters, numbers, dots, underscores or hyphens",
+    "tw": "1–64 位字母、數字、點、下劃線或連字符"
+  },
+  "B · 下载": {
+    "en": "B · Download",
+    "tw": "B · 下載"
+  },
+  "DNS 为独立探测，“实际 DNS”为映射当前解析器。拒绝 UDP 策略下，UDP 不支持不影响映射正常判断。UDP 确认不支持或不可用后每 10 分钟复测；节点网络测试可立即复测。": {
+    "en": "DNS probes run independently; Active DNS is the mapping resolver. Unsupported UDP does not make a UDP-reject mapping unhealthy. Unavailable UDP is rechecked every 10 minutes; run a network test to check immediately.",
+    "tw": "DNS 為獨立探測，“實際 DNS”為映射當前解析器。拒絕 UDP 策略下，UDP 不支持不影響映射正常判斷。UDP 確認不支持或不可用后每 10 分鐘復測；節點網路測試可立即復測。"
+  },
+  "DNS 异常": {
+    "en": "DNS failed",
+    "tw": "DNS 異常"
+  },
+  "DNS 模式": {
+    "en": "DNS mode",
+    "tw": "DNS 模式"
+  },
+  "Debug 日志": {
+    "en": "Debug logs",
+    "tw": "Debug 日志"
+  },
+  "Google 专项": {
+    "en": "Google services",
+    "tw": "Google 專項"
+  },
+  "HTTP 响应": {
+    "en": "HTTP response",
+    "tw": "HTTP 回應"
+  },
+  "HTTP 未完成": {
+    "en": "HTTP incomplete",
+    "tw": "HTTP 未完成"
+  },
+  "HTTPS 端口": {
+    "en": "HTTPS port",
+    "tw": "HTTPS 連接埠"
+  },
+  "HTTPS 管理端口": {
+    "en": "HTTPS management port",
+    "tw": "HTTPS 管理連接埠"
+  },
+  "HTTPS 管理组件不可用，请更新安装文件。": {
+    "en": "HTTPS management helper unavailable; update the installation files.",
+    "tw": "HTTPS 管理元件不可用，請更新安裝文件。"
+  },
+  "HTTPS 转发": {
+    "en": "HTTPS forwarding",
+    "tw": "HTTPS 轉發"
+  },
+  "HTTPS 转发：": {
+    "en": "HTTPS forwarding:",
+    "tw": "HTTPS 轉發："
+  },
+  "IPsec 已启用": {
+    "en": "IPsec enabled",
+    "tw": "IPsec 已啟用"
+  },
+  "IPsec 状态尚未获取，请在系统设置中确认。": {
+    "en": "IPsec status unavailable; check Settings.",
+    "tw": "IPsec 狀態尚未獲取，請在系統設置中確認。"
+  },
+  "IPsec 状态异常": {
+    "en": "IPsec status error",
+    "tw": "IPsec 狀態異常"
+  },
+  "IPsec 组件尚未就绪，请升级服务器安装文件。": {
+    "en": "IPsec helper unavailable; update the server installation files.",
+    "tw": "IPsec 元件尚未就緒，請升級伺服器安裝文件。"
+  },
+  "IPv4 子网": {
+    "en": "IPv4 subnet",
+    "tw": "IPv4 子網"
+  },
+  "KB 请求": {
+    "en": "KB request",
+    "tw": "KB 請求"
+  },
+  "Kbps（0 为不限）": {
+    "en": "Kbps (0 = unlimited)",
+    "tw": "Kbps（0 為不限）"
+  },
+  "L2TP · 不加密接入流量": {
+    "en": "L2TP · Unencrypted access traffic",
+    "tw": "L2TP · 不加密接入流量"
+  },
+  "L2TP 内管理访问": {
+    "en": "Management over L2TP",
+    "tw": "L2TP 內管理訪問"
+  },
+  "L2TP 客户端配置": {
+    "en": "L2TP client setup",
+    "tw": "L2TP 客戶端配置"
+  },
+  "L2TP 密码": {
+    "en": "L2TP password",
+    "tw": "L2TP 密碼"
+  },
+  "L2TP 接入": {
+    "en": "L2TP access",
+    "tw": "L2TP 接入"
+  },
+  "L2TP 账号": {
+    "en": "L2TP account",
+    "tw": "L2TP 帳號"
+  },
+  "L2TP/IPsec · IKEv1 · 预共享密钥认证": {
+    "en": "L2TP/IPsec · IKEv1 · Pre-shared key",
+    "tw": "L2TP/IPsec · IKEv1 · 預共享密鑰認證"
+  },
+  "L2TP、IPsec、管理员": {
+    "en": "L2TP, IPsec, administrator",
+    "tw": "L2TP、IPsec、管理員"
+  },
+  "Linux 用户": {
+    "en": "Linux user",
+    "tw": "Linux 用戶"
+  },
+  "MTR 追踪": {
+    "en": "MTR trace",
+    "tw": "MTR 追蹤"
+  },
+  "NTP 服务器": {
+    "en": "NTP server",
+    "tw": "NTP 伺服器"
+  },
+  "NTP 服务器（每行一个，最多 8 个）": {
+    "en": "NTP servers (one per line, up to 8)",
+    "tw": "NTP 伺服器（每行一個，最多 8 個）"
+  },
+  "PPP 会话上限": {
+    "en": "PPP session limit",
+    "tw": "PPP 會話上限"
+  },
+  "PPP 在线会话": {
+    "en": "Active PPP sessions",
+    "tw": "PPP 在線會話"
+  },
+  "QUIC 回退：待客户端验证": {
+    "en": "QUIC fallback: client verification required",
+    "tw": "QUIC 回退：待客戶端驗證"
+  },
+  "S2L 堆 / RSS": {
+    "en": "S2L heap / RSS",
+    "tw": "S2L 堆 / RSS"
+  },
+  "SOCKS5 地址": {
+    "en": "SOCKS5 address",
+    "tw": "SOCKS5 位址"
+  },
+  "SOCKS5 节点": {
+    "en": "SOCKS5 nodes",
+    "tw": "SOCKS5 節點"
+  },
+  "SOCKS5 认证": {
+    "en": "SOCKS5 authentication",
+    "tw": "SOCKS5 認證"
+  },
+  "SSH 登录密码": {
+    "en": "SSH login password",
+    "tw": "SSH 登錄密碼"
+  },
+  "SSH 端口": {
+    "en": "SSH port",
+    "tw": "SSH 連接埠"
+  },
+  "SSH 管理组件不可用。": {
+    "en": "SSH management helper unavailable.",
+    "tw": "SSH 管理元件不可用。"
+  },
+  "TCP / DNS 成功率": {
+    "en": "TCP / DNS success rate",
+    "tw": "TCP / DNS 成功率"
+  },
+  "TCP / DNS 正常 · UDP 能力受限": {
+    "en": "TCP / DNS healthy · Limited UDP support",
+    "tw": "TCP / DNS 正常 · UDP 能力受限"
+  },
+  "TCP DNS 备用": {
+    "en": "TCP DNS fallback",
+    "tw": "TCP DNS 備用"
+  },
+  "TCP · 节点端口": {
+    "en": "TCP · Node port",
+    "tw": "TCP · 節點連接埠"
+  },
+  "TCP 异常": {
+    "en": "TCP failed",
+    "tw": "TCP 異常"
+  },
+  "TCP 探测成功率": {
+    "en": "TCP probe success rate",
+    "tw": "TCP 探測成功率"
+  },
+  "TCP 连接上限": {
+    "en": "TCP connection limit",
+    "tw": "TCP 連接上限"
+  },
+  "TLS 异常": {
+    "en": "TLS failed",
+    "tw": "TLS 異常"
+  },
+  "TLS 握手": {
+    "en": "TLS handshake",
+    "tw": "TLS 握手"
+  },
+  "TUN / 路由表": {
+    "en": "TUN / Routing table",
+    "tw": "TUN / 路由表"
+  },
+  "TUN 接口": {
+    "en": "TUN interface",
+    "tw": "TUN 接口"
+  },
+  "UDP 中继": {
+    "en": "UDP relay",
+    "tw": "UDP 中繼"
+  },
+  "UDP 中继实测": {
+    "en": "UDP relay check",
+    "tw": "UDP 中繼實測"
+  },
+  "UDP 协商": {
+    "en": "UDP negotiation",
+    "tw": "UDP 協商"
+  },
+  "UDP 策略": {
+    "en": "UDP policy",
+    "tw": "UDP 策略"
+  },
+  "UTC 偏移按服务器当前日期显示，夏令时地区会随日期变化。": {
+    "en": "UTC offsets reflect the current server date and may change with daylight saving time.",
+    "tw": "UTC 偏移按伺服器當前日期顯示，夏令時地區會隨日期變化。"
+  },
+  "host:port，例如 www.example.com:443": {
+    "en": "host:port, e.g. www.example.com:443",
+    "tw": "host:port，例如 www.example.com:443"
+  },
+  "ms · 总耗时": {
+    "en": "ms · Total time",
+    "tw": "ms · 總耗時"
+  },
+  "ms · 收到": {
+    "en": "ms · Received",
+    "tw": "ms · 收到"
+  },
+  "table_id,节点,l2tp账号,l2tp密码": {
+    "en": "table_id,node,l2tp_user,l2tp_password",
+    "tw": "table_id,節點,l2tp帳號,l2tp密碼"
+  },
+  "table_id,节点,tun,subnet,账号,密码": {
+    "en": "table_id,node,tun,subnet,user,password",
+    "tw": "table_id,節點,tun,subnet,帳號,密碼"
+  },
+  "· DNS 报文": {
+    "en": "· DNS packets",
+    "tw": "· DNS 報文"
+  },
+  "· TCP/TLS 替代路径": {
+    "en": "· TCP/TLS alternatives",
+    "tw": "· TCP/TLS 替代路徑"
+  },
+  "· 上/下行": {
+    "en": "· Upload/download",
+    "tw": "· 上/下行"
+  },
+  "· 下次": {
+    "en": "· Next",
+    "tw": "· 下次"
+  },
+  "· 中位数": {
+    "en": "· Median",
+    "tw": "· 中位數"
+  },
+  "· 代理拒绝": {
+    "en": "· Proxy rejected",
+    "tw": "· 代理拒絕"
+  },
+  "· 会话变化": {
+    "en": "· Session changes",
+    "tw": "· 會話變化"
+  },
+  "· 出口": {
+    "en": "· Exit",
+    "tw": "· 出口"
+  },
+  "· 发送": {
+    "en": "· Sent",
+    "tw": "· 發送"
+  },
+  "· 含本地修改": {
+    "en": "· With local changes",
+    "tw": "· 含本地修改"
+  },
+  "· 备用": {
+    "en": "· Fallback",
+    "tw": "· 備用"
+  },
+  "· 失败": {
+    "en": "· Failed",
+    "tw": "· 失敗"
+  },
+  "· 尝试": {
+    "en": "· Attempts",
+    "tw": "· 嘗試"
+  },
+  "· 已是该版本": {
+    "en": "· Already up to date",
+    "tw": "· 已是該版本"
+  },
+  "· 建立于": {
+    "en": "· Created",
+    "tw": "· 建立于"
+  },
+  "· 当前版本较新": {
+    "en": "· Installed version is newer",
+    "tw": "· 當前版本較新"
+  },
+  "· 成功": {
+    "en": "· Passed",
+    "tw": "· 成功"
+  },
+  "· 拒绝": {
+    "en": "· Rejected",
+    "tw": "· 拒絕"
+  },
+  "· 映射": {
+    "en": "· Mapping",
+    "tw": "· 映射"
+  },
+  "· 最近检测": {
+    "en": "· Last checked",
+    "tw": "· 最近檢測"
+  },
+  "· 查看连接": {
+    "en": "· View connections",
+    "tw": "· 查看連接"
+  },
+  "· 目标限制": {
+    "en": "· Target restrictions",
+    "tw": "· 目標限制"
+  },
+  "· 累计重传段": {
+    "en": "· Retransmitted segments",
+    "tw": "· 累計重傳段"
+  },
+  "· 网络不可达": {
+    "en": "· Network unreachable",
+    "tw": "· 網路不可達"
+  },
+  "· 进程变化": {
+    "en": "· Process changes",
+    "tw": "· 進程變化"
+  },
+  "· 错误": {
+    "en": "· Errors",
+    "tw": "· 錯誤"
+  },
+  "· 限额已启用": {
+    "en": "· Limits enabled",
+    "tw": "· 限額已啟用"
+  },
+  "· 静默至": {
+    "en": "· Muted until",
+    "tw": "· 靜默至"
+  },
+  "↑ 上传": {
+    "en": "↑ Upload",
+    "tw": "↑ 上傳"
+  },
+  "↓ 下载": {
+    "en": "↓ Download",
+    "tw": "↓ 下載"
+  },
+  "上下行测速": {
+    "en": "Upload/download test",
+    "tw": "上下行測速"
+  },
+  "上下行速度": {
+    "en": "Transfer speeds",
+    "tw": "上下行速度"
+  },
+  "上传": {
+    "en": "Upload",
+    "tw": "上傳"
+  },
+  "上传上限 Kbit/s": {
+    "en": "Upload limit Kbit/s",
+    "tw": "上傳上限 Kbit/s"
+  },
+  "上传限速": {
+    "en": "Upload rate limit",
+    "tw": "上傳限速"
+  },
+  "下次重试": {
+    "en": "Next retry",
+    "tw": "下次重試"
+  },
+  "下载 {0} / 上传 {1}": {
+    "en": "Download {0} / Upload {1}",
+    "tw": "下載 {0} / 上傳 {1}"
+  },
+  "下载上限 Kbit/s": {
+    "en": "Download limit Kbit/s",
+    "tw": "下載上限 Kbit/s"
+  },
+  "下载限速": {
+    "en": "Download rate limit",
+    "tw": "下載限速"
+  },
+  "不可用": {
+    "en": "Unavailable",
+    "tw": "不可用"
+  },
+  "不支持": {
+    "en": "Unsupported",
+    "tw": "不支持"
+  },
+  "不限": {
+    "en": "Unlimited",
+    "tw": "不限"
+  },
+  "专项检测完成 · 请查看各阶段结果": {
+    "en": "Checks complete · Review individual stages",
+    "tw": "專項檢測完成 · 請查看各階段結果"
+  },
+  "丢包": {
+    "en": "Packet loss",
+    "tw": "丟包"
+  },
+  "丢包 / 错误": {
+    "en": "Dropped / Errors",
+    "tw": "丟包 / 錯誤"
+  },
+  "两次出口观测不同；上游可能采用动态出口，请结合节点配置核对。": {
+    "en": "The observed exit changed between checks. The upstream may use dynamic exits; review the node configuration.",
+    "tw": "兩次出口觀測不同；上游可能采用動態出口，請結合節點配置核對。"
+  },
+  "两次输入的密码不一致": {
+    "en": "Passwords do not match",
+    "tw": "兩次輸入的密碼不一致"
+  },
+  "中间跳不响应不等于业务丢包。": {
+    "en": "Unresponsive intermediate hops do not necessarily mean traffic loss.",
+    "tw": "中間跳不回應不等于業務丟包。"
+  },
+  "主动拒绝 UDP（DNS 走 DoH/TCP，推荐）": {
+    "en": "Reject UDP (DNS via DoH/TCP, recommended)",
+    "tw": "主動拒絕 UDP（DNS 走 DoH/TCP，推薦）"
+  },
+  "亚洲": {
+    "en": "Asia",
+    "tw": "亞洲"
+  },
+  "仅 DoH": {
+    "en": "DoH only",
+    "tw": "僅 DoH"
+  },
+  "仅 TCP DNS": {
+    "en": "TCP DNS only",
+    "tw": "僅 TCP DNS"
+  },
+  "仅修改密码；密钥登录策略与账号锁定状态保持不变。": {
+    "en": "Changes only the password; SSH key policy and account lock status are preserved.",
+    "tw": "僅修改密碼；密鑰登錄策略與帳號鎖定狀態保持不變。"
+  },
+  "仅备用可用": {
+    "en": "Only fallback available",
+    "tw": "僅備用可用"
+  },
+  "仅检测当前节点": {
+    "en": "Test current node only",
+    "tw": "僅檢測當前節點"
+  },
+  "仅看差异": {
+    "en": "Differences only",
+    "tw": "僅看差異"
+  },
+  "代理密码": {
+    "en": "Proxy password",
+    "tw": "代理密碼"
+  },
+  "代理账号": {
+    "en": "Proxy username",
+    "tw": "代理帳號"
+  },
+  "以下行未导入": {
+    "en": "Rows not imported",
+    "tw": "以下行未導入"
+  },
+  "任务 / FD": {
+    "en": "Tasks / FD",
+    "tw": "任務 / FD"
+  },
+  "任务已中断": {
+    "en": "Task interrupted",
+    "tw": "任務已中斷"
+  },
+  "任务状态": {
+    "en": "Task status",
+    "tw": "任務狀態"
+  },
+  "会话管理": {
+    "en": "Sessions",
+    "tw": "會話管理"
+  },
+  "传输质量": {
+    "en": "Transfer quality",
+    "tw": "傳輸質量"
+  },
+  "使用说明": {
+    "en": "User guide",
+    "tw": "使用說明"
+  },
+  "例如服务器绑定的公网 IPv4": {
+    "en": "e.g. a public IPv4 address assigned to the server",
+    "tw": "例如伺服器綁定的公網 IPv4"
+  },
+  "保存": {
+    "en": "Save",
+    "tw": "保存"
+  },
+  "保存时间设置": {
+    "en": "Save time settings",
+    "tw": "保存時間設置"
+  },
+  "保存管理例外": {
+    "en": "Save management exception",
+    "tw": "保存管理例外"
+  },
+  "保存账号": {
+    "en": "Save account",
+    "tw": "保存帳號"
+  },
+  "保存通知设置": {
+    "en": "Save notification settings",
+    "tw": "保存通知設置"
+  },
+  "保存配置": {
+    "en": "Save configuration",
+    "tw": "保存配置"
+  },
+  "保留当前设置": {
+    "en": "Keep current settings",
+    "tw": "保留當前設置"
+  },
+  "修改 HTTPS 端口": {
+    "en": "Change HTTPS port",
+    "tw": "修改 HTTPS 連接埠"
+  },
+  "修改 SSH 密码": {
+    "en": "Change SSH password",
+    "tw": "修改 SSH 密碼"
+  },
+  "修改 SSH 登录密码": {
+    "en": "Change SSH login password",
+    "tw": "修改 SSH 登錄密碼"
+  },
+  "修改 SSH 端口": {
+    "en": "Change SSH port",
+    "tw": "修改 SSH 連接埠"
+  },
+  "修改 root 密码；请保留当前连接验证新密码。": {
+    "en": "Change the root password; keep the current connection to verify the new password.",
+    "tw": "修改 root 密碼；請保留當前連接驗證新密碼。"
+  },
+  "修改密码": {
+    "en": "Change password",
+    "tw": "修改密碼"
+  },
+  "修改端口": {
+    "en": "Change port",
+    "tw": "修改連接埠"
+  },
+  "修改（可能包含凭据）": {
+    "en": "Changes (may contain credentials)",
+    "tw": "修改（可能包含憑據）"
+  },
+  "停止": {
+    "en": "Stop",
+    "tw": "停止"
+  },
+  "停止时间": {
+    "en": "Stop time",
+    "tw": "停止時間"
+  },
+  "停止检测": {
+    "en": "Stop checking",
+    "tw": "停止檢測"
+  },
+  "停止测试": {
+    "en": "Stop test",
+    "tw": "停止測試"
+  },
+  "停止采集": {
+    "en": "Stop recording",
+    "tw": "停止采集"
+  },
+  "健康状态每 5 秒采样；保留最近 512 条事件和 360 次资源采样。时间显示为浏览器本地时间，日志保存为 UTC。": {
+    "en": "Health is sampled every 5 seconds. Keeps 512 events and 360 resource samples. Times use your browser time zone; logs are stored in UTC.",
+    "tw": "健康狀態每 5 秒采樣；保留最近 512 條事件和 360 次資源采樣。時間顯示為瀏覽器本地時間，日志保存為 UTC。"
+  },
+  "允许 UDP（需上游支持）": {
+    "en": "Allow UDP (requires upstream support)",
+    "tw": "允許 UDP（需上游支持）"
+  },
+  "允许的 PPP 来源网段": {
+    "en": "Allowed PPP source networks",
+    "tw": "允許的 PPP 來源網段"
+  },
+  "允许的 TCP 端口": {
+    "en": "Allowed TCP ports",
+    "tw": "允許的 TCP 連接埠"
+  },
+  "先放行新 TCP 端口；修改后使用新地址登录。": {
+    "en": "Allow the new TCP port first; sign in at the new address after changing it.",
+    "tw": "先放行新 TCP 連接埠；修改后使用新位址登錄。"
+  },
+  "先放行新端口，并保留当前连接验证登录。": {
+    "en": "Allow the new port first; keep the current connection while verifying access.",
+    "tw": "先放行新連接埠，并保留當前連接驗證登錄。"
+  },
+  "先添加 SOCKS5 节点，再新建映射并选择节点。路由表编号自动选择未被其他映射使用的值； 请确认所选路由表未被主机上的其他服务占用。填写 L2TP 账号与密码后保存并启动。批量导入格式见对应导入窗口。": {
+    "en": "Add a SOCKS5 node, then create a mapping and select the node. The routing table number is chosen automatically; check that other host services do not use it. Enter L2TP credentials, save and start. Import formats appear in each import dialog.",
+    "tw": "先添加 SOCKS5 節點，再新建映射并選擇節點。路由表編號自動選擇未被其他映射使用的值； 請確認所選路由表未被主機上的其他服務占用。填寫 L2TP 帳號與密碼后保存并啟動。批量導入格式見對應導入窗口。"
+  },
+  "全部分组": {
+    "en": "All groups",
+    "tw": "全部分組"
+  },
+  "全部状态": {
+    "en": "All states",
+    "tw": "全部狀態"
+  },
+  "公共故障关联": {
+    "en": "Shared fault correlation",
+    "tw": "公共故障關聯"
+  },
+  "关闭": {
+    "en": "Close",
+    "tw": "關閉"
+  },
+  "关闭后恢复普通 L2TP，客户端需清空预共享密钥并重新拨号。": {
+    "en": "Disabling restores plain L2TP. Clear the client pre-shared key and reconnect.",
+    "tw": "關閉后恢復普通 L2TP，客戶端需清空預共享密鑰并重新撥號。"
+  },
+  "关闭此连接？应用可能重新建立连接。": {
+    "en": "Close this connection? The App may reconnect automatically.",
+    "tw": "關閉此連接？應用可能重新建立連接。"
+  },
+  "关闭连接": {
+    "en": "Close connection",
+    "tw": "關閉連接"
+  },
+  "关闭预览": {
+    "en": "Close preview",
+    "tw": "關閉預覽"
+  },
+  "其他": {
+    "en": "Other",
+    "tw": "其他"
+  },
+  "冷却中": {
+    "en": "Cooling down",
+    "tw": "冷卻中"
+  },
+  "准备更新": {
+    "en": "Prepare update",
+    "tw": "準備更新"
+  },
+  "凭据有变化，密码内容已隐藏。": {
+    "en": "Credentials changed; password contents are hidden.",
+    "tw": "憑據有變化，密碼內容已隱藏。"
+  },
+  "凭据有变化，密码已隐藏。": {
+    "en": "Credentials changed; passwords are hidden.",
+    "tw": "憑據有變化，密碼已隱藏。"
+  },
+  "出口节点": {
+    "en": "Exit node",
+    "tw": "出口節點"
+  },
+  "分别经所选节点检测，不切换出口。": {
+    "en": "Test each selected node without switching exits.",
+    "tw": "分別經所選節點檢測，不切換出口。"
+  },
+  "分析时间线": {
+    "en": "Analyze timeline",
+    "tw": "分析時間線"
+  },
+  "分目标结果": {
+    "en": "Results by target",
+    "tw": "分目標結果"
+  },
+  "分组": {
+    "en": "Group",
+    "tw": "分組"
+  },
+  "分项检查 DNS、TCP/TLS 与 HTTP。": {
+    "en": "Check DNS, TCP/TLS and HTTP separately.",
+    "tw": "分項檢查 DNS、TCP/TLS 與 HTTP。"
+  },
+  "创建与导入": {
+    "en": "Create and import",
+    "tw": "創建與導入"
+  },
+  "删除": {
+    "en": "Delete",
+    "tw": "刪除"
+  },
+  "删除映射": {
+    "en": "Delete mapping",
+    "tw": "刪除映射"
+  },
+  "删除节点": {
+    "en": "Delete node",
+    "tw": "刪除節點"
+  },
+  "删除该映射及其拨号账号？": {
+    "en": "Delete this mapping and its dial-in account?",
+    "tw": "刪除該映射及其撥號帳號？"
+  },
+  "删除该节点？关联映射需先删除。": {
+    "en": "Delete this node? Remove its mappings first.",
+    "tw": "刪除該節點？關聯映射需先刪除。"
+  },
+  "刷新": {
+    "en": "Refresh",
+    "tw": "刷新"
+  },
+  "刷新事件": {
+    "en": "Refresh events",
+    "tw": "刷新事件"
+  },
+  "刷新同步状态": {
+    "en": "Refresh sync status",
+    "tw": "刷新同步狀態"
+  },
+  "刷新备份": {
+    "en": "Refresh backups",
+    "tw": "刷新備份"
+  },
+  "刷新状态": {
+    "en": "Refresh status",
+    "tw": "刷新狀態"
+  },
+  "刷新设置": {
+    "en": "Refresh settings",
+    "tw": "刷新設置"
+  },
+  "刷新页面": {
+    "en": "Reload page",
+    "tw": "刷新頁面"
+  },
+  "包含节点、映射及其凭据；不含管理账号、端口、SSH、IPsec 和系统时间。备份仅存于服务器，不进入日志包。": {
+    "en": "Includes nodes, mappings and their credentials. Excludes administrator accounts, ports, SSH, IPsec and system time. Backups stay on the server and are excluded from log exports.",
+    "tw": "包含節點、映射及其憑據；不含管理帳號、連接埠、SSH、IPsec 和系統時間。備份僅存于伺服器，不進入日志包。"
+  },
+  "北极地区": {
+    "en": "Arctic",
+    "tw": "北極地區"
+  },
+  "协议": {
+    "en": "Protocol",
+    "tw": "協議"
+  },
+  "协议检测": {
+    "en": "Protocol checks",
+    "tw": "協議檢測"
+  },
+  "协调世界时": {
+    "en": "Coordinated Universal Time",
+    "tw": "協調世界時"
+  },
+  "南极洲": {
+    "en": "Antarctica",
+    "tw": "南極洲"
+  },
+  "印度洋": {
+    "en": "Indian Ocean",
+    "tw": "印度洋"
+  },
+  "历史对照：": {
+    "en": "Historical baseline:",
+    "tw": "歷史對照："
+  },
+  "历史结果对照": {
+    "en": "Compare historical results",
+    "tw": "歷史結果對照"
+  },
+  "历史记录映射": {
+    "en": "Historical mapping",
+    "tw": "歷史記錄映射"
+  },
+  "原始输出": {
+    "en": "Raw output",
+    "tw": "原始輸出"
+  },
+  "发送": {
+    "en": "Sent",
+    "tw": "發送"
+  },
+  "取消": {
+    "en": "Cancel",
+    "tw": "取消"
+  },
+  "取消排队任务": {
+    "en": "Cancel queued tasks",
+    "tw": "取消排隊任務"
+  },
+  "变化": {
+    "en": "Changes",
+    "tw": "變化"
+  },
+  "变更：{0}。影响 {1} 条映射。{2}": {
+    "en": "Changes: {0}. Affects {1} mappings. {2}",
+    "tw": "變更：{0}。影響 {1} 條映射。{2}"
+  },
+  "可达": {
+    "en": "Reachable",
+    "tw": "可達"
+  },
+  "同步说明": {
+    "en": "About synchronization",
+    "tw": "同步說明"
+  },
+  "同账号重复拨号 · 请检查地址冲突": {
+    "en": "Duplicate account sessions · Check for address conflicts",
+    "tw": "同帳號重復撥號 · 請檢查位址沖突"
+  },
+  "名称": {
+    "en": "Name",
+    "tw": "名稱"
+  },
+  "后台更新并保留配置，关闭网页不影响进度。": {
+    "en": "Updates in the background and preserves configuration; closing this page does not interrupt the update.",
+    "tw": "后臺更新并保留配置，關閉網頁不影響進度。"
+  },
+  "否": {
+    "en": "No",
+    "tw": "否"
+  },
+  "启动": {
+    "en": "Start",
+    "tw": "啟動"
+  },
+  "启动或拨号失败": {
+    "en": "Startup or dial-in failure",
+    "tw": "啟動或撥號失敗"
+  },
+  "启用 IPsec": {
+    "en": "Enable IPsec",
+    "tw": "啟用 IPsec"
+  },
+  "启用 IPsec 前请设置预共享密钥": {
+    "en": "Set a pre-shared key before enabling IPsec",
+    "tw": "啟用 IPsec 前請設置預共享密鑰"
+  },
+  "启用后仅接受通过 IPsec 加密的 L2TP 连接。请放行 UDP 500、4500 和 ESP 协议，客户端填写相同的预共享密钥。现有普通 L2TP 连接需要重新拨号。": {
+    "en": "Accepts only IPsec-encrypted L2TP connections. Allow UDP 500/4500 and ESP; configure the same client pre-shared key. Existing plain L2TP clients must reconnect.",
+    "tw": "啟用后僅接受通過 IPsec 加密的 L2TP 連接。請放行 UDP 500、4500 和 ESP 協議，客戶端填寫相同的預共享密鑰。現有普通 L2TP 連接需要重新撥號。"
+  },
+  "启用管理例外": {
+    "en": "Enable management exception",
+    "tw": "啟用管理例外"
+  },
+  "响应": {
+    "en": "Response",
+    "tw": "回應"
+  },
+  "响应完整": {
+    "en": "Response complete",
+    "tw": "回應完整"
+  },
+  "响应未完成": {
+    "en": "Response incomplete",
+    "tw": "回應未完成"
+  },
+  "回滚后配置": {
+    "en": "Configuration after rollback",
+    "tw": "回滾后配置"
+  },
+  "回滚差异": {
+    "en": "Rollback differences",
+    "tw": "回滾差異"
+  },
+  "在隧道映射的“编辑”中查看；停止映射后可修改。": {
+    "en": "View credentials in the mapping editor; stop the mapping before changing them.",
+    "tw": "在隧道映射的“編輯”中查看；停止映射后可修改。"
+  },
+  "地址": {
+    "en": "Address",
+    "tw": "位址"
+  },
+  "域名不存在": {
+    "en": "NXDOMAIN",
+    "tw": "域名不存在"
+  },
+  "填入检测到的面板及 SSH 端口": {
+    "en": "Use detected panel and SSH ports",
+    "tw": "填入檢測到的面板及 SSH 連接埠"
+  },
+  "增加 {0}": {
+    "en": "Add {0}",
+    "tw": "增加 {0}"
+  },
+  "处理中": {
+    "en": "In progress",
+    "tw": "處理中"
+  },
+  "备份与停止服务": {
+    "en": "Back up and stop services",
+    "tw": "備份與停止服務"
+  },
+  "备份与排障": {
+    "en": "Backups and diagnostics",
+    "tw": "備份與排障"
+  },
+  "备份已创建": {
+    "en": "Backup created",
+    "tw": "備份已創建"
+  },
+  "备份恢复、调试记录": {
+    "en": "Backups, recovery and debug records",
+    "tw": "備份恢復、調試記錄"
+  },
+  "备份范围": {
+    "en": "Backup contents",
+    "tw": "備份范圍"
+  },
+  "备用成功": {
+    "en": "Fallback succeeded",
+    "tw": "備用成功"
+  },
+  "复制连接参数（不含密码）": {
+    "en": "Copy connection details (without password)",
+    "tw": "復制連接參數（不含密碼）"
+  },
+  "复制错误详情": {
+    "en": "Copy error details",
+    "tw": "復制錯誤詳情"
+  },
+  "多节点同时异常 · 公共链路待核验": {
+    "en": "Multiple nodes failing · Check the shared network path",
+    "tw": "多節點同時異常 · 公共鏈路待核驗"
+  },
+  "大西洋": {
+    "en": "Atlantic",
+    "tw": "大西洋"
+  },
+  "太平洋": {
+    "en": "Pacific",
+    "tw": "太平洋"
+  },
+  "失败": {
+    "en": "Failed",
+    "tw": "失敗"
+  },
+  "失败 · 出口变化": {
+    "en": "Failed · Exit changed",
+    "tw": "失敗 · 出口變化"
+  },
+  "失败目标": {
+    "en": "Failed targets",
+    "tw": "失敗目標"
+  },
+  "失败详情": {
+    "en": "Failure details",
+    "tw": "失敗詳情"
+  },
+  "子网": {
+    "en": "Subnet",
+    "tw": "子網"
+  },
+  "安装更新": {
+    "en": "Install update",
+    "tw": "安裝更新"
+  },
+  "实测": {
+    "en": "Measured",
+    "tw": "實測"
+  },
+  "实际 DNS": {
+    "en": "Active DNS",
+    "tw": "實際 DNS"
+  },
+  "实际 DNS：": {
+    "en": "Active DNS:",
+    "tw": "實際 DNS："
+  },
+  "实际 MTU": {
+    "en": "Actual MTU",
+    "tw": "實際 MTU"
+  },
+  "容量已满，已淘汰 {0} KiB 早期日志；导出仅含保留部分。": {
+    "en": "Buffer full: {0} KiB of older logs evicted; exports contain retained data only.",
+    "tw": "容量已滿，已淘汰 {0} KiB 早期日志；導出僅含保留部分。"
+  },
+  "密码": {
+    "en": "Password",
+    "tw": "密碼"
+  },
+  "对全部映射生效；切换接入方式或密钥后，客户端需重新拨号。": {
+    "en": "Applies to all mappings. Clients must reconnect after changing the access mode or key.",
+    "tw": "對全部映射生效；切換接入方式或密鑰后，客戶端需重新撥號。"
+  },
+  "对照": {
+    "en": "Baseline",
+    "tw": "對照"
+  },
+  "对照 DNS 结果无效": {
+    "en": "Invalid baseline DNS results",
+    "tw": "對照 DNS 結果無效"
+  },
+  "对照响应格式无效": {
+    "en": "Invalid baseline response format",
+    "tw": "對照回應格式無效"
+  },
+  "对照文件超过 512 KiB": {
+    "en": "Baseline file exceeds 512 KiB",
+    "tw": "對照文件超過 512 KiB"
+  },
+  "对照检测目标不匹配": {
+    "en": "Baseline targets do not match",
+    "tw": "對照檢測目標不匹配"
+  },
+  "对照线路节点（可选）": {
+    "en": "Comparison node (optional)",
+    "tw": "對照線路節點（可選）"
+  },
+  "对照结果格式无效": {
+    "en": "Invalid baseline result format",
+    "tw": "對照結果格式無效"
+  },
+  "对照阶段结果无效": {
+    "en": "Invalid baseline stage results",
+    "tw": "對照階段結果無效"
+  },
+  "对照：DoH": {
+    "en": "Baseline: DoH",
+    "tw": "對照：DoH"
+  },
+  "导入": {
+    "en": "Import",
+    "tw": "導入"
+  },
+  "导入 {0} 新 / {1} 更": {
+    "en": "Import {0} new / {1} updated",
+    "tw": "導入 {0} 新 / {1} 更"
+  },
+  "导入历史线路结果进行对照": {
+    "en": "Import historical results for comparison",
+    "tw": "導入歷史線路結果進行對照"
+  },
+  "导入完成：新增 {0}，更新 {1}": {
+    "en": "Import complete: {0} added, {1} updated",
+    "tw": "導入完成：新增 {0}，更新 {1}"
+  },
+  "导入节点 → 创建映射 → 启动 → 客户端拨号": {
+    "en": "Import nodes → Create mapping → Start → Connect client",
+    "tw": "導入節點 → 創建映射 → 啟動 → 客戶端撥號"
+  },
+  "导出": {
+    "en": "Export",
+    "tw": "導出"
+  },
+  "导出响应不是日志 ZIP，请稍后重试": {
+    "en": "Export response is not a log ZIP; try again later",
+    "tw": "導出回應不是日志 ZIP，請稍后重試"
+  },
+  "导出日志": {
+    "en": "Export logs",
+    "tw": "導出日志"
+  },
+  "将 HTTPS 端口改为 {0}。请先放行服务器防火墙和云安全组中的 TCP {1}。修改后使用新地址重新登录。": {
+    "en": "Change HTTPS port to {0}? Allow TCP {1} in the server firewall and cloud security group first. Sign in at the new address after changing it.",
+    "tw": "將 HTTPS 連接埠改為 {0}。請先放行伺服器防火墻和云安全組中的 TCP {1}。修改后使用新位址重新登錄。"
+  },
+  "将 SSH 端口改为 {0}。请先放行服务器防火墙和云安全组中的 TCP {1}，并保留当前 SSH 连接，修改后使用新端口验证登录。": {
+    "en": "Change SSH port to {0}? Allow TCP {1} in the server firewall and cloud security group first. Keep the current SSH connection and verify the new port.",
+    "tw": "將 SSH 連接埠改為 {0}。請先放行伺服器防火墻和云安全組中的 TCP {1}，并保留當前 SSH 連接，修改后使用新連接埠驗證登錄。"
+  },
+  "将依次{0}当前筛选列表中的 {1} 条映射。可取消尚未执行的任务。": {
+    "en": "Apply {0} to {1} mappings in the filtered list, in sequence. Pending tasks can be cancelled.",
+    "tw": "將依次{0}當前篩選列表中的 {1} 條映射。可取消尚未執行的任務。"
+  },
+  "将修改 root 的 Linux 登录密码。请保留当前 SSH 连接，并在另一终端使用新密码验证登录；网页管理密码和 SSH 密钥不受影响。": {
+    "en": "Change the Linux root login password? Keep the current SSH connection and verify the new password in another terminal. Web credentials and SSH keys are unaffected.",
+    "tw": "將修改 root 的 Linux 登錄密碼。請保留當前 SSH 連接，并在另一終端使用新密碼驗證登錄；網頁管理密碼和 SSH 密鑰不受影響。"
+  },
+  "尚未测速": {
+    "en": "Not tested",
+    "tw": "尚未測速"
+  },
+  "尚未确认同步": {
+    "en": "Synchronization not yet confirmed",
+    "tw": "尚未確認同步"
+  },
+  "已保留": {
+    "en": "Retained",
+    "tw": "已保留"
+  },
+  "已停止": {
+    "en": "Stopped",
+    "tw": "已停止"
+  },
+  "已关闭": {
+    "en": "Closed",
+    "tw": "已關閉"
+  },
+  "已创建": {
+    "en": "Created",
+    "tw": "已創建"
+  },
+  "已删除": {
+    "en": "Deleted",
+    "tw": "已刪除"
+  },
+  "已到期": {
+    "en": "Expired",
+    "tw": "已到期"
+  },
+  "已取消": {
+    "en": "Cancelled",
+    "tw": "已取消"
+  },
+  "已取消或超时": {
+    "en": "Cancelled or timed out",
+    "tw": "已取消或超時"
+  },
+  "已同步": {
+    "en": "Synchronized",
+    "tw": "已同步"
+  },
+  "已启动": {
+    "en": "Started",
+    "tw": "已啟動"
+  },
+  "已启用，服务未活动": {
+    "en": "Enabled, service inactive",
+    "tw": "已啟用，服務未活動"
+  },
+  "已启用，服务活动": {
+    "en": "Enabled, service active",
+    "tw": "已啟用，服務活動"
+  },
+  "已响应": {
+    "en": "Responded",
+    "tw": "已回應"
+  },
+  "已开启": {
+    "en": "Enabled",
+    "tw": "已開啟"
+  },
+  "已开启自动同步不代表已完成同步。日志统一保存为 UTC，服务器时间为最近刷新结果。": {
+    "en": "Enabling automatic sync does not confirm synchronization. Logs are stored in UTC; server time reflects the latest refresh.",
+    "tw": "已開啟自動同步不代表已完成同步。日志統一保存為 UTC，伺服器時間為最近刷新結果。"
+  },
+  "已排队": {
+    "en": "Queued",
+    "tw": "已排隊"
+  },
+  "已更新": {
+    "en": "Updated",
+    "tw": "已更新"
+  },
+  "已有映射：": {
+    "en": "Existing mappings:",
+    "tw": "已有映射："
+  },
+  "已淘汰": {
+    "en": "Evicted",
+    "tw": "已淘汰"
+  },
+  "已淘汰早期事件": {
+    "en": "Older events evicted",
+    "tw": "已淘汰早期事件"
+  },
+  "已生成 16 位随机密码，请查看并妥善记录后提交": {
+    "en": "Generated a 16-character password; review and record it before saving",
+    "tw": "已生成 16 位隨機密碼，請查看并妥善記錄后提交"
+  },
+  "已结束": {
+    "en": "Finished",
+    "tw": "已結束"
+  },
+  "已设置，留空保留现有密钥": {
+    "en": "Configured; leave blank to keep the current key",
+    "tw": "已設置，留空保留現有密鑰"
+  },
+  "已运行隧道按原日志级别采集；重启映射后才应用当前 Debug 级别。": {
+    "en": "Running tunnels keep their previous log level; restart a mapping to apply the current Debug level.",
+    "tw": "已運行隧道按原日志級別采集；重啟映射后才應用當前 Debug 級別。"
+  },
+  "已配置：": {
+    "en": "Configured:",
+    "tw": "已配置："
+  },
+  "帮助": {
+    "en": "Help",
+    "tw": "幫助"
+  },
+  "平均 HTTPS 耗时": {
+    "en": "Average HTTPS time",
+    "tw": "平均 HTTPS 耗時"
+  },
+  "平均 · 最新": {
+    "en": "Average · Latest",
+    "tw": "平均 · 最新"
+  },
+  "应用接入设置": {
+    "en": "Apply access settings",
+    "tw": "應用接入設置"
+  },
+  "应用设置": {
+    "en": "Apply settings",
+    "tw": "應用設置"
+  },
+  "建连成功": {
+    "en": "Connected",
+    "tw": "建連成功"
+  },
+  "开启 Debug": {
+    "en": "Enable Debug",
+    "tw": "開啟 Debug"
+  },
+  "开始时间": {
+    "en": "Start time",
+    "tw": "開始時間"
+  },
+  "开始更新": {
+    "en": "Start update",
+    "tw": "開始更新"
+  },
+  "开始测试": {
+    "en": "Start test",
+    "tw": "開始測試"
+  },
+  "异常": {
+    "en": "Error",
+    "tw": "異常"
+  },
+  "异常链路": {
+    "en": "Unhealthy path",
+    "tw": "異常鏈路"
+  },
+  "当前版本：": {
+    "en": "Installed version:",
+    "tw": "當前版本："
+  },
+  "当前环境不支持修改 Linux 登录密码。": {
+    "en": "Changing Linux login passwords is unavailable in this environment.",
+    "tw": "當前環境不支持修改 Linux 登錄密碼。"
+  },
+  "当前管理密码": {
+    "en": "Current management password",
+    "tw": "當前管理密碼"
+  },
+  "当前节点": {
+    "en": "Current node",
+    "tw": "當前節點"
+  },
+  "当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 ": {
+    "en": "Cumulative log counts for the current process. DNS packets indicate parsing errors, not upstream DNS availability; network unreachable ",
+    "tw": "當前進程累計日志計數；DNS 報文表示請求解析錯誤，不等于上游 DNS 不可用；網路不可達 "
+  },
+  "当前连接": {
+    "en": "Current connections",
+    "tw": "當前連接"
+  },
+  "当前配置": {
+    "en": "Current configuration",
+    "tw": "當前配置"
+  },
+  "当前配置端口：": {
+    "en": "Configured ports:",
+    "tw": "當前配置連接埠："
+  },
+  "当前：DoH": {
+    "en": "Current: DoH",
+    "tw": "當前：DoH"
+  },
+  "待检查": {
+    "en": "Pending check",
+    "tw": "待檢查"
+  },
+  "快速接入": {
+    "en": "Quick start",
+    "tw": "快速接入"
+  },
+  "恢复": {
+    "en": "Recover",
+    "tw": "恢復"
+  },
+  "恢复 / 进程变化 / 会话变化": {
+    "en": "Recoveries / Process changes / Session changes",
+    "tw": "恢復 / 進程變化 / 會話變化"
+  },
+  "恢复中": {
+    "en": "Recovering",
+    "tw": "恢復中"
+  },
+  "恢复尝试": {
+    "en": "Recovery attempts",
+    "tw": "恢復嘗試"
+  },
+  "恢复熔断": {
+    "en": "Recovery suspended",
+    "tw": "恢復熔斷"
+  },
+  "恢复配置": {
+    "en": "Restore configuration",
+    "tw": "恢復配置"
+  },
+  "成功": {
+    "en": "Passed",
+    "tw": "成功"
+  },
+  "成功 /": {
+    "en": "Passed /",
+    "tw": "成功 /"
+  },
+  "所选节点暂无映射。": {
+    "en": "No mappings for the selected node.",
+    "tw": "所選節點暫無映射。"
+  },
+  "手动重试恢复": {
+    "en": "Retry recovery manually",
+    "tw": "手動重試恢復"
+  },
+  "执行": {
+    "en": "Run",
+    "tw": "執行"
+  },
+  "执行中": {
+    "en": "Running",
+    "tw": "執行中"
+  },
+  "执行失败恢复": {
+    "en": "Recover from failure",
+    "tw": "執行失敗恢復"
+  },
+  "批量停止当前列表": {
+    "en": "Stop filtered mappings",
+    "tw": "批量停止當前列表"
+  },
+  "批量启动当前列表": {
+    "en": "Start filtered mappings",
+    "tw": "批量啟動當前列表"
+  },
+  "批量导入": {
+    "en": "Bulk import",
+    "tw": "批量導入"
+  },
+  "批量导入映射": {
+    "en": "Import mappings",
+    "tw": "批量導入映射"
+  },
+  "批量导入节点": {
+    "en": "Import nodes",
+    "tw": "批量導入節點"
+  },
+  "批量操作": {
+    "en": "Bulk actions",
+    "tw": "批量操作"
+  },
+  "拒绝 UDP/443，支持时回退 TCP": {
+    "en": "Reject UDP/443; clients may fall back to TCP",
+    "tw": "拒絕 UDP/443，支持時回退 TCP"
+  },
+  "拒绝码": {
+    "en": "Rejection code",
+    "tw": "拒絕碼"
+  },
+  "拒绝计数未取得，不能按零命中处理": {
+    "en": "Reject counts unavailable; do not treat this as zero matches",
+    "tw": "拒絕計數未取得，不能按零命中處理"
+  },
+  "拨号上线": {
+    "en": "PPP connected",
+    "tw": "撥號上線"
+  },
+  "拨号下线": {
+    "en": "PPP disconnected",
+    "tw": "撥號下線"
+  },
+  "拨号密码": {
+    "en": "Dial-in password",
+    "tw": "撥號密碼"
+  },
+  "拨号时间 / 首次观测": {
+    "en": "Connected / First observed",
+    "tw": "撥號時間 / 首次觀測"
+  },
+  "拨号账号": {
+    "en": "Dial-in account",
+    "tw": "撥號帳號"
+  },
+  "按路由表填充": {
+    "en": "Fill from routing table",
+    "tw": "按路由表填充"
+  },
+  "按需读取，最多显示 500 条；目标信息不写入历史。": {
+    "en": "Read on demand; shows up to 500 entries. Destinations are not stored in history.",
+    "tw": "按需讀取，最多顯示 500 條；目標信息不寫入歷史。"
+  },
+  "按预览替换全部节点和映射配置？回滚前会自动备份当前配置，恢复后所有映射保持停止。": {
+    "en": "Replace all nodes and mappings with this preview? Current configuration is backed up automatically; restored mappings remain stopped.",
+    "tw": "按預覽替換全部節點和映射配置？回滾前會自動備份當前配置，恢復后所有映射保持停止。"
+  },
+  "排队": {
+    "en": "Queue",
+    "tw": "排隊"
+  },
+  "探测方式": {
+    "en": "Probe method",
+    "tw": "探測方式"
+  },
+  "接入与账号": {
+    "en": "Access and accounts",
+    "tw": "接入與帳號"
+  },
+  "接入映射": {
+    "en": "Access mapping",
+    "tw": "接入映射"
+  },
+  "接口": {
+    "en": "Interface",
+    "tw": "接口"
+  },
+  "接口流量": {
+    "en": "Interface traffic",
+    "tw": "接口流量"
+  },
+  "接口队列长度": {
+    "en": "Interface queue length",
+    "tw": "接口隊列長度"
+  },
+  "接收": {
+    "en": "Received",
+    "tw": "接收"
+  },
+  "接收 / 发送": {
+    "en": "Received / Sent",
+    "tw": "接收 / 發送"
+  },
+  "接收 / 发送峰值": {
+    "en": "Receive / Transmit peak",
+    "tw": "接收 / 發送峰值"
+  },
+  "搜索城市、时区或 UTC 偏移": {
+    "en": "Search city, time zone or UTC offset",
+    "tw": "搜索城市、時區或 UTC 偏移"
+  },
+  "搜索节点、接口或账号": {
+    "en": "Search nodes, interfaces or accounts",
+    "tw": "搜索節點、接口或帳號"
+  },
+  "搜索节点或映射": {
+    "en": "Search nodes or mappings",
+    "tw": "搜索節點或映射"
+  },
+  "操作": {
+    "en": "Actions",
+    "tw": "操作"
+  },
+  "操作失败": {
+    "en": "Action failed",
+    "tw": "操作失敗"
+  },
+  "故障事件与操作记录": {
+    "en": "Incidents and activity",
+    "tw": "故障事件與操作記錄"
+  },
+  "故障分类变化": {
+    "en": "Incident classification changed",
+    "tw": "故障分類變化"
+  },
+  "故障开始": {
+    "en": "Incident started",
+    "tw": "故障開始"
+  },
+  "故障结束": {
+    "en": "Incident resolved",
+    "tw": "故障結束"
+  },
+  "故障通知": {
+    "en": "Incident notifications",
+    "tw": "故障通知"
+  },
+  "文件不是有效的 JSON": {
+    "en": "File is not valid JSON",
+    "tw": "文件不是有效的 JSON"
+  },
+  "断开": {
+    "en": "Disconnect",
+    "tw": "斷開"
+  },
+  "断开 {0} 会话？": {
+    "en": "Disconnect session {0}?",
+    "tw": "斷開 {0} 會話？"
+  },
+  "断开会话": {
+    "en": "Disconnect session",
+    "tw": "斷開會話"
+  },
+  "新 SSH 登录密码": {
+    "en": "New SSH login password",
+    "tw": "新 SSH 登錄密碼"
+  },
+  "新 SSH 端口": {
+    "en": "New SSH port",
+    "tw": "新 SSH 連接埠"
+  },
+  "新增": {
+    "en": "Add",
+    "tw": "新增"
+  },
+  "新增节点": {
+    "en": "Add node",
+    "tw": "新增節點"
+  },
+  "新密码（留空保留当前密码）": {
+    "en": "New password (blank keeps current password)",
+    "tw": "新密碼（留空保留當前密碼）"
+  },
+  "新建映射": {
+    "en": "New mapping",
+    "tw": "新建映射"
+  },
+  "无": {
+    "en": "None",
+    "tw": "無"
+  },
+  "无地址": {
+    "en": "No address",
+    "tw": "無位址"
+  },
+  "无法加载对照节点，可先检测当前节点": {
+    "en": "Could not load comparison nodes; you can test the current node",
+    "tw": "無法加載對照節點，可先檢測當前節點"
+  },
+  "无运行实例": {
+    "en": "No running instances",
+    "tw": "無運行實例"
+  },
+  "日志 ZIP 内容无效，请重新导出": {
+    "en": "Invalid log ZIP; export again",
+    "tw": "日志 ZIP 內容無效，請重新導出"
+  },
+  "日志仅存内存，服务重启后清空。导出包含网络地址与访问目标，分享前请检查。": {
+    "en": "Logs are held in memory and cleared on restart. Exports contain network addresses and destinations; review before sharing.",
+    "tw": "日志僅存內存，服務重啟后清空。導出包含網路位址與訪問目標，分享前請檢查。"
+  },
+  "时区、同步、软件版本": {
+    "en": "Time zone, synchronization and software version",
+    "tw": "時區、同步、軟體版本"
+  },
+  "时区与时间同步": {
+    "en": "Time zone and synchronization",
+    "tw": "時區與時間同步"
+  },
+  "时段": {
+    "en": "Period",
+    "tw": "時段"
+  },
+  "时间": {
+    "en": "Time",
+    "tw": "時間"
+  },
+  "时间与更新": {
+    "en": "Time and updates",
+    "tw": "時間與更新"
+  },
+  "映射": {
+    "en": "Mapping",
+    "tw": "映射"
+  },
+  "映射健康状态": {
+    "en": "Mapping health",
+    "tw": "映射健康狀態"
+  },
+  "映射出口 IP：": {
+    "en": "Mapping exit IP:",
+    "tw": "映射出口 IP："
+  },
+  "映射分组筛选": {
+    "en": "Filter mappings by group",
+    "tw": "映射分組篩選"
+  },
+  "映射已创建": {
+    "en": "Mapping created",
+    "tw": "映射已創建"
+  },
+  "映射已删除": {
+    "en": "Mapping deleted",
+    "tw": "映射已刪除"
+  },
+  "映射已更新": {
+    "en": "Mapping updated",
+    "tw": "映射已更新"
+  },
+  "映射未运行，请先启动": {
+    "en": "Mapping is stopped; start it first",
+    "tw": "映射未運行，請先啟動"
+  },
+  "映射状态筛选": {
+    "en": "Filter mappings by state",
+    "tw": "映射狀態篩選"
+  },
+  "映射策略与共享连接证据": {
+    "en": "Mapping policies and shared connection evidence",
+    "tw": "映射策略與共享連接證據"
+  },
+  "映射转发": {
+    "en": "Mapping forwarding",
+    "tw": "映射轉發"
+  },
+  "映射转发实测": {
+    "en": "Test mapping forwarding",
+    "tw": "映射轉發實測"
+  },
+  "映射转发正常": {
+    "en": "Mapping forwarding healthy",
+    "tw": "映射轉發正常"
+  },
+  "映射连接": {
+    "en": "Mapping connections",
+    "tw": "映射連接"
+  },
+  "是": {
+    "en": "Yes",
+    "tw": "是"
+  },
+  "普通 L2TP": {
+    "en": "Plain L2TP",
+    "tw": "普通 L2TP"
+  },
+  "普通 L2TP 不加密。可选 IPsec 使用 IKEv1 与共享密钥，请确认客户端兼容性及安全策略要求。": {
+    "en": "Plain L2TP is unencrypted. Optional IPsec uses IKEv1 and a shared key; check client compatibility and your security requirements.",
+    "tw": "普通 L2TP 不加密。可選 IPsec 使用 IKEv1 與共享密鑰，請確認客戶端兼容性及安全策略要求。"
+  },
+  "普通 L2TP 或 L2TP/IPsec，接入方式由“系统设置”统一配置。": {
+    "en": "Plain L2TP or L2TP/IPsec; configure the access mode in Settings.",
+    "tw": "普通 L2TP 或 L2TP/IPsec，接入方式由“系統設置”統一配置。"
+  },
+  "暂无历史采样": {
+    "en": "No historical samples",
+    "tw": "暫無歷史采樣"
+  },
+  "暂无发送记录": {
+    "en": "No delivery records",
+    "tw": "暫無發送記錄"
+  },
+  "暂无备份": {
+    "en": "No backups",
+    "tw": "暫無備份"
+  },
+  "暂无已观测会话": {
+    "en": "No observed sessions",
+    "tw": "暫無已觀測會話"
+  },
+  "暂无故障事件": {
+    "en": "No incidents",
+    "tw": "暫無故障事件"
+  },
+  "暂无映射": {
+    "en": "No mappings",
+    "tw": "暫無映射"
+  },
+  "暂无活动映射": {
+    "en": "No active mappings",
+    "tw": "暫無活動映射"
+  },
+  "暂无流量": {
+    "en": "No traffic",
+    "tw": "暫無流量"
+  },
+  "暂无节点": {
+    "en": "No nodes",
+    "tw": "暫無節點"
+  },
+  "暂无节点，请新增或导入": {
+    "en": "No nodes; add or import one",
+    "tw": "暫無節點，請新增或導入"
+  },
+  "暂无记录": {
+    "en": "No records",
+    "tw": "暫無記錄"
+  },
+  "暂无资源采样": {
+    "en": "No resource samples",
+    "tw": "暫無資源采樣"
+  },
+  "暂无连接": {
+    "en": "No connections",
+    "tw": "暫無連接"
+  },
+  "暂无采样事件": {
+    "en": "No sampled events",
+    "tw": "暫無采樣事件"
+  },
+  "更换地址时请重新填写令牌": {
+    "en": "Re-enter the token when changing the address",
+    "tw": "更換位址時請重新填寫令牌"
+  },
+  "更新中": {
+    "en": "Updating",
+    "tw": "更新中"
+  },
+  "更新到 {0}？更新会备份现有配置，短暂中断网页和客户端连接；完成后需重新拨号。": {
+    "en": "Update to {0}? Current configuration will be backed up. Web and client connections will be briefly interrupted; reconnect after completion.",
+    "tw": "更新到 {0}？更新會備份現有配置，短暫中斷網頁和客戶端連接；完成后需重新撥號。"
+  },
+  "更新到稳定版": {
+    "en": "Update to stable release",
+    "tw": "更新到穩定版"
+  },
+  "更新失败": {
+    "en": "Update failed",
+    "tw": "更新失敗"
+  },
+  "更新完成": {
+    "en": "Update complete",
+    "tw": "更新完成"
+  },
+  "更新说明": {
+    "en": "Release notes",
+    "tw": "更新說明"
+  },
+  "最后阶段：": {
+    "en": "Last stage:",
+    "tw": "最后階段："
+  },
+  "最新稳定版：": {
+    "en": "Latest stable release:",
+    "tw": "最新穩定版："
+  },
+  "最近 100 条事件、12 次采样；完整数据见导出包。": {
+    "en": "Last 100 events and 12 samples; export for complete data.",
+    "tw": "最近 100 條事件、12 次采樣；完整數據見導出包。"
+  },
+  "最近 24 小时": {
+    "en": "Last 24 hours",
+    "tw": "最近 24 小時"
+  },
+  "最近保留的日志观察，不能据此判断传输成功或停滞。源地址可能已被 NAT。": {
+    "en": "Recent retained log observations do not prove successful or stalled transfers. Source addresses may have been translated by NAT.",
+    "tw": "最近保留的日志觀察，不能據此判斷傳輸成功或停滯。源位址可能已被 NAT。"
+  },
+  "最近操作与拨号事件": {
+    "en": "Recent actions and PPP events",
+    "tw": "最近操作與撥號事件"
+  },
+  "最近检测": {
+    "en": "Last checked",
+    "tw": "最近檢測"
+  },
+  "服务器": {
+    "en": "Server",
+    "tw": "伺服器"
+  },
+  "服务器 TCP 连接": {
+    "en": "Server TCP connections",
+    "tw": "伺服器 TCP 連接"
+  },
+  "服务器不支持实时追踪，请更新服务后重试": {
+    "en": "Server does not support live tracing; update the service and retry",
+    "tw": "伺服器不支持實時追蹤，請更新服務后重試"
+  },
+  "服务器地址填写部署 S2L 的服务器公网 IPv4 地址，用户名和密码填写对应映射的 L2TP 凭据。服务器启用 IPsec 时填写相同的预共享密钥，关闭时留空。若客户端同时配置其他 IPsec VPN，请检查预共享密钥冲突。具体兼容性需以客户端版本和实际协商结果为准。": {
+    "en": "Use the public IPv4 address of the S2L server and the mapping L2TP credentials. Use the same pre-shared key when IPsec is enabled; otherwise leave it blank. Check for key conflicts with other IPsec VPNs. Compatibility depends on the client version and actual negotiation.",
+    "tw": "伺服器位址填寫部署 S2L 的伺服器公網 IPv4 位址，用戶名和密碼填寫對應映射的 L2TP 憑據。伺服器啟用 IPsec 時填寫相同的預共享密鑰，關閉時留空。若客戶端同時配置其他 IPsec VPN，請檢查預共享密鑰沖突。具體兼容性需以客戶端版本和實際協商結果為準。"
+  },
+  "服务器时区": {
+    "en": "Server time zone",
+    "tw": "伺服器時區"
+  },
+  "服务器时间：": {
+    "en": "Server time:",
+    "tw": "伺服器時間："
+  },
+  "服务器本机 IPv4": {
+    "en": "Server local IPv4",
+    "tw": "伺服器本機 IPv4"
+  },
+  "服务器返回了无效数据，请刷新后重试": {
+    "en": "Invalid server response; refresh and retry",
+    "tw": "伺服器返回了無效數據，請刷新后重試"
+  },
+  "服务器：{0}（请确认是客户端可达的服务器地址）\n映射：{1}\n用户名：{2}\n接入方式：{3}\n密码和预共享密钥请另行填写。": {
+    "en": "Server: {0} (confirm this address is reachable from the client)\nMapping: {1}\nUsername: {2}\nAccess mode: {3}\nEnter passwords and pre-shared keys separately.",
+    "tw": "伺服器：{0}（請確認是客戶端可達的伺服器位址）\n映射：{1}\n用戶名：{2}\n接入方式：{3}\n密碼和預共享密鑰請另行填寫。"
+  },
+  "服务已通过验证": {
+    "en": "Services verified",
+    "tw": "服務已通過驗證"
+  },
+  "未分组": {
+    "en": "Ungrouped",
+    "tw": "未分組"
+  },
+  "未匹配映射": {
+    "en": "Unmatched mapping",
+    "tw": "未匹配映射"
+  },
+  "未协商 ALPN": {
+    "en": "No ALPN negotiated",
+    "tw": "未協商 ALPN"
+  },
+  "未发现匹配端口": {
+    "en": "No matching listening port found",
+    "tw": "未發現匹配連接埠"
+  },
+  "未取得": {
+    "en": "Unavailable",
+    "tw": "未取得"
+  },
+  "未启用": {
+    "en": "Disabled",
+    "tw": "未啟用"
+  },
+  "未开启": {
+    "en": "Off",
+    "tw": "未開啟"
+  },
+  "未收到跳点响应。": {
+    "en": "No hop responses received.",
+    "tw": "未收到跳點回應。"
+  },
+  "未检测": {
+    "en": "Not tested",
+    "tw": "未檢測"
+  },
+  "未知": {
+    "en": "Unknown",
+    "tw": "未知"
+  },
+  "未确认": {
+    "en": "Unconfirmed",
+    "tw": "未確認"
+  },
+  "未能读取": {
+    "en": "Could not read",
+    "tw": "未能讀取"
+  },
+  "本地": {
+    "en": "Local",
+    "tw": "本地"
+  },
+  "本地恢复在 10 分钟内最多尝试 3 次，冷却 5 分钟；稳定 2 分钟后重置。上游异常不会触发隧道重启，手动重试会重置预算。": {
+    "en": "Local recovery allows 3 attempts per 10 minutes, then a 5-minute cooldown; resets after 2 stable minutes. Upstream faults do not restart tunnels. Manual retry resets the budget.",
+    "tw": "本地恢復在 10 分鐘內最多嘗試 3 次，冷卻 5 分鐘；穩定 2 分鐘后重置。上游異常不會觸發隧道重啟，手動重試會重置預算。"
+  },
+  "本地转发异常": {
+    "en": "Local forwarding failed",
+    "tw": "本地轉發異常"
+  },
+  "本地链路": {
+    "en": "Local path",
+    "tw": "本地鏈路"
+  },
+  "本地链路和上游 TCP 检查正常；仍需客户端实际拨号验证": {
+    "en": "Local path and upstream TCP checks passed; client dial-in still needs verification",
+    "tw": "本地鏈路和上游 TCP 檢查正常；仍需客戶端實際撥號驗證"
+  },
+  "本地链路已启动，上游 TCP 尚未验证正常": {
+    "en": "Local path started; upstream TCP is not yet verified",
+    "tw": "本地鏈路已啟動，上游 TCP 尚未驗證正常"
+  },
+  "本地链路异常或恢复中，请查看运行监控": {
+    "en": "Local path failing or recovering; check Monitoring",
+    "tw": "本地鏈路異常或恢復中，請查看運行監控"
+  },
+  "本机 IPv4：": {
+    "en": "Local IPv4:",
+    "tw": "本機 IPv4："
+  },
+  "条": {
+    "en": "entries",
+    "tw": "條"
+  },
+  "条早期连接。": {
+    "en": "older connections.",
+    "tw": "條早期連接。"
+  },
+  "条，仅展示最近 512 条。": {
+    "en": "entries; showing the latest 512.",
+    "tw": "條，僅展示最近 512 條。"
+  },
+  "查看全部目标": {
+    "en": "View all targets",
+    "tw": "查看全部目標"
+  },
+  "查看映射中的错误详情，核对 SOCKS5 地址和凭据。普通 L2TP 需放行 UDP 1701；IPsec 需放行 UDP 500、4500 和 ESP 协议，客户端预共享密钥与服务器一致。SSH 中执行 s2l 可查看服务状态和日志。": {
+    "en": "Check mapping error details and SOCKS5 credentials. Plain L2TP requires UDP 1701; IPsec requires UDP 500/4500 and ESP with matching pre-shared keys. Run s2l over SSH to view service status and logs.",
+    "tw": "查看映射中的錯誤詳情，核對 SOCKS5 位址和憑據。普通 L2TP 需放行 UDP 1701；IPsec 需放行 UDP 500、4500 和 ESP 協議，客戶端預共享密鑰與伺服器一致。SSH 中執行 s2l 可查看服務狀態和日志。"
+  },
+  "检查更新": {
+    "en": "Check for updates",
+    "tw": "檢查更新"
+  },
+  "检测与恢复说明": {
+    "en": "Checks and recovery",
+    "tw": "檢測與恢復說明"
+  },
+  "检测中": {
+    "en": "Checking",
+    "tw": "檢測中"
+  },
+  "检测中 · {0} 秒": {
+    "en": "Checking · {0}s",
+    "tw": "檢測中 · {0} 秒"
+  },
+  "检测于 {0}": {
+    "en": "Checked at {0}",
+    "tw": "檢測于 {0}"
+  },
+  "检测完成 · 存在异常": {
+    "en": "Checks complete · Issues found",
+    "tw": "檢測完成 · 存在異常"
+  },
+  "检测完成，请查看分项": {
+    "en": "Checks complete; review individual results",
+    "tw": "檢測完成，請查看分項"
+  },
+  "检测数据过期或尚未采集": {
+    "en": "Samples are stale or not yet collected",
+    "tw": "檢測數據過期或尚未采集"
+  },
+  "检测期间 UDP 拒绝：{0}；连接限额拒绝：{1}（不限额时无此规则）": {
+    "en": "Rejections during test — UDP: {0}; connection limit: {1} (rule absent when unlimited)",
+    "tw": "檢測期間 UDP 拒絕：{0}；連接限額拒絕：{1}（不限額時無此規則）"
+  },
+  "检测状态一致，不代表 App 行为一致": {
+    "en": "Matching check results do not prove matching App behavior",
+    "tw": "檢測狀態一致，不代表 App 行為一致"
+  },
+  "检测状态一致，未发现分项差异。": {
+    "en": "Check states match; no differences found.",
+    "tw": "檢測狀態一致，未發現分項差異。"
+  },
+  "检测类型": {
+    "en": "Test type",
+    "tw": "檢測類型"
+  },
+  "检测范围与说明": {
+    "en": "Scope and notes",
+    "tw": "檢測范圍與說明"
+  },
+  "检测通过": {
+    "en": "Checks passed",
+    "tw": "檢測通過"
+  },
+  "欧洲": {
+    "en": "Europe",
+    "tw": "歐洲"
+  },
+  "正在等待跳点响应…": {
+    "en": "Waiting for hop responses…",
+    "tw": "正在等待跳點回應…"
+  },
+  "正在通过隔离入口检测映射转发…": {
+    "en": "Checking mapping forwarding through an isolated entry…",
+    "tw": "正在通過隔離入口檢測映射轉發…"
+  },
+  "正常": {
+    "en": "Healthy",
+    "tw": "正常"
+  },
+  "正常重试": {
+    "en": "Normal retry",
+    "tw": "正常重試"
+  },
+  "此检查不代表客户端已经连接，不检测客户端防火墙和运营商网络。": {
+    "en": "This check does not verify client connectivity, client firewalls or the ISP network.",
+    "tw": "此檢查不代表客戶端已經連接，不檢測客戶端防火墻和運營商網路。"
+  },
+  "每 5 分钟汇总；列表展示最近时段。成功率来自已完成探测，未采样不计为离线。": {
+    "en": "Aggregated every 5 minutes. Success rates include completed probes only; missing samples do not imply downtime.",
+    "tw": "每 5 分鐘匯總；列表展示最近時段。成功率來自已完成探測，未采樣不計為離線。"
+  },
+  "每行一个，例如 10.0.101.0/24": {
+    "en": "One per line, e.g. 10.0.101.0/24",
+    "tw": "每行一個，例如 10.0.101.0/24"
+  },
+  "每行一条；同名或同地址会更新现有节点。": {
+    "en": "One per line; matching names or addresses update existing nodes.",
+    "tw": "每行一條；同名或同位址會更新現有節點。"
+  },
+  "每行一条；节点可用名称、ID 或地址；简写自动生成接口与子网。": {
+    "en": "One per line; identify nodes by name, ID or address. Short format generates interfaces and subnets.",
+    "tw": "每行一條；節點可用名稱、ID 或位址；簡寫自動生成接口與子網。"
+  },
+  "测试 S2L 服务器到节点的网络路径。": {
+    "en": "Test the network path from the S2L server to the node.",
+    "tw": "測試 S2L 伺服器到節點的網路路徑。"
+  },
+  "测试入口": {
+    "en": "Test entry",
+    "tw": "測試入口"
+  },
+  "测试已停止 · 保留部分结果": {
+    "en": "Test stopped · Partial results retained",
+    "tw": "測試已停止 · 保留部分結果"
+  },
+  "测速": {
+    "en": "Speed test",
+    "tw": "測速"
+  },
+  "测速由服务器经所选 SOCKS5 节点访问 Cloudflare，分别显示下载、上传速度及连接延迟。 测速会消耗流量，结果不代表完整 L2TP 客户端连接的性能；各方向的失败原因单独显示。": {
+    "en": "Tests Cloudflare through the selected SOCKS5 node, reporting download, upload and connection latency. Uses traffic and does not measure the full L2TP client path. Errors are shown separately for each direction.",
+    "tw": "測速由伺服器經所選 SOCKS5 節點訪問 Cloudflare，分別顯示下載、上傳速度及連接延遲。 測速會消耗流量，結果不代表完整 L2TP 客戶端連接的性能；各方向的失敗原因單獨顯示。"
+  },
+  "浏览器不允许复制，请手动选中连接参数": {
+    "en": "Copy blocked by browser; select the connection details manually",
+    "tw": "瀏覽器不允許復制，請手動選中連接參數"
+  },
+  "浏览器不允许复制，请手动选中错误详情": {
+    "en": "Copy blocked by browser; select the error details manually",
+    "tw": "瀏覽器不允許復制，請手動選中錯誤詳情"
+  },
+  "浏览器不支持安全随机数，请手动设置密码": {
+    "en": "Secure random generation unavailable; set a password manually",
+    "tw": "瀏覽器不支持安全隨機數，請手動設置密碼"
+  },
+  "清理并停止": {
+    "en": "Clean up and stop",
+    "tw": "清理并停止"
+  },
+  "源": {
+    "en": "Source",
+    "tw": "源"
+  },
+  "澳大利亚": {
+    "en": "Australia",
+    "tw": "澳大利亞"
+  },
+  "状态": {
+    "en": "State",
+    "tw": "狀態"
+  },
+  "独立检查进程和 TUN，不受上游探测退避影响": {
+    "en": "Checks the process and TUN independently of upstream probe backoff",
+    "tw": "獨立檢查進程和 TUN，不受上游探測退避影響"
+  },
+  "用户名": {
+    "en": "Username",
+    "tw": "用戶名"
+  },
+  "留空使用地址": {
+    "en": "Blank uses address",
+    "tw": "留空使用位址"
+  },
+  "留空保留原地址": {
+    "en": "Blank keeps current address",
+    "tw": "留空保留原位址"
+  },
+  "监测结束": {
+    "en": "Monitoring ended",
+    "tw": "監測結束"
+  },
+  "目标": {
+    "en": "Target",
+    "tw": "目標"
+  },
+  "目标可达 ·": {
+    "en": "targets reachable ·",
+    "tw": "目標可達 ·"
+  },
+  "目标地址": {
+    "en": "Target address",
+    "tw": "目標位址"
+  },
+  "目标已响应 · 状态异常": {
+    "en": "Target responded · Unexpected status",
+    "tw": "目標已回應 · 狀態異常"
+  },
+  "目标连接": {
+    "en": "Target connection",
+    "tw": "目標連接"
+  },
+  "确认恢复此配置": {
+    "en": "Restore this configuration",
+    "tw": "確認恢復此配置"
+  },
+  "确认新 SSH 登录密码": {
+    "en": "Confirm new SSH login password",
+    "tw": "確認新 SSH 登錄密碼"
+  },
+  "确认新密码": {
+    "en": "Confirm new password",
+    "tw": "確認新密碼"
+  },
+  "确认更新": {
+    "en": "Confirm update",
+    "tw": "確認更新"
+  },
+  "磁盘可用": {
+    "en": "Available disk",
+    "tw": "磁盤可用"
+  },
+  "移除": {
+    "en": "Remove",
+    "tw": "移除"
+  },
+  "立即备份": {
+    "en": "Back up now",
+    "tw": "立即備份"
+  },
+  "端口需为数字，以逗号分隔": {
+    "en": "Enter numeric ports separated by commas",
+    "tw": "連接埠需為數字，以逗號分隔"
+  },
+  "等待启动": {
+    "en": "Waiting to start",
+    "tw": "等待啟動"
+  },
+  "等待服务端链路检查": {
+    "en": "Waiting for server path checks",
+    "tw": "等待服務端鏈路檢查"
+  },
+  "等待检测": {
+    "en": "Waiting for checks",
+    "tw": "等待檢測"
+  },
+  "策略：拒绝非 DNS UDP": {
+    "en": "Policy: reject non-DNS UDP",
+    "tw": "策略：拒絕非 DNS UDP"
+  },
+  "管理地址：": {
+    "en": "Management address:",
+    "tw": "管理位址："
+  },
+  "管理操作": {
+    "en": "Management actions",
+    "tw": "管理操作"
+  },
+  "管理用户名": {
+    "en": "Management username",
+    "tw": "管理用戶名"
+  },
+  "管理账号": {
+    "en": "Management account",
+    "tw": "管理帳號"
+  },
+  "类型": {
+    "en": "Type",
+    "tw": "類型"
+  },
+  "系统设置": {
+    "en": "Settings",
+    "tw": "系統設置"
+  },
+  "系统默认": {
+    "en": "System default",
+    "tw": "系統預設"
+  },
+  "线路对照 ·": {
+    "en": "Line comparison ·",
+    "tw": "線路對照 ·"
+  },
+  "线路管理": {
+    "en": "Lines",
+    "tw": "線路管理"
+  },
+  "经 SOCKS5 检测指定目标的 TLS 与 HTTP 响应，不影响自动健康判断。": {
+    "en": "Check TLS and HTTP through SOCKS5 without affecting automatic health assessment.",
+    "tw": "經 SOCKS5 檢測指定目標的 TLS 與 HTTP 回應，不影響自動健康判斷。"
+  },
+  "经 SOCKS5 节点检测 TCP、UDP 和 DNS。": {
+    "en": "Check TCP, UDP and DNS through the SOCKS5 node.",
+    "tw": "經 SOCKS5 節點檢測 TCP、UDP 和 DNS。"
+  },
+  "经 SOCKS5 节点测试 TCP 建连。": {
+    "en": "Test TCP connections through the SOCKS5 node.",
+    "tw": "經 SOCKS5 節點測試 TCP 建連。"
+  },
+  "经固定 SOCKS5 交替请求 1 KB 和 256 KB 响应，默认 8 次。": {
+    "en": "Alternate 1 KB and 256 KB responses through the fixed SOCKS5 exit; 8 rounds by default.",
+    "tw": "經固定 SOCKS5 交替請求 1 KB 和 256 KB 回應，預設 8 次。"
+  },
+  "结束静默": {
+    "en": "Unmute",
+    "tw": "結束靜默"
+  },
+  "维护静默": {
+    "en": "Maintenance mute",
+    "tw": "維護靜默"
+  },
+  "编译成功后才停止服务；失败沿用现有恢复流程。若网页持续不可达，请通过 SSH 检查 s2l、s2l-guard 与 xl2tpd 服务及升级备份。页面保存的只是更新状态，不记录命令输出或排障日志。": {
+    "en": "Stops services only after a successful build; failures use the existing recovery process. If this page stays unreachable, check s2l, s2l-guard, xl2tpd and upgrade backups over SSH. The page stores update status, not command output or diagnostic logs.",
+    "tw": "編譯成功后才停止服務；失敗沿用現有恢復流程。若網頁持續不可達，請通過 SSH 檢查 s2l、s2l-guard 與 xl2tpd 服務及升級備份。頁面保存的只是更新狀態，不記錄命令輸出或排障日志。"
+  },
+  "编译程序": {
+    "en": "Build program",
+    "tw": "編譯程序"
+  },
+  "编辑": {
+    "en": "Edit",
+    "tw": "編輯"
+  },
+  "编辑映射": {
+    "en": "Edit mapping",
+    "tw": "編輯映射"
+  },
+  "编辑节点": {
+    "en": "Edit node",
+    "tw": "編輯節點"
+  },
+  "网络测试": {
+    "en": "Network test",
+    "tw": "網路測試"
+  },
+  "网页暂时不可达，正在重连；更新失败时可能需要通过 SSH 检查服务。": {
+    "en": "Page temporarily unreachable; reconnecting. Use SSH to check services if the update fails.",
+    "tw": "網頁暫時不可達，正在重連；更新失敗時可能需要通過 SSH 檢查服務。"
+  },
+  "美洲": {
+    "en": "Americas",
+    "tw": "美洲"
+  },
+  "自动停止": {
+    "en": "Auto-stop",
+    "tw": "自動停止"
+  },
+  "自动同步": {
+    "en": "Automatic synchronization",
+    "tw": "自動同步"
+  },
+  "自动同步：": {
+    "en": "Automatic sync:",
+    "tw": "自動同步："
+  },
+  "自动恢复": {
+    "en": "Automatic recovery",
+    "tw": "自動恢復"
+  },
+  "自动恢复冷却": {
+    "en": "Recovery cooldown",
+    "tw": "自動恢復冷卻"
+  },
+  "自动：DoH 故障时切换 TCP DNS": {
+    "en": "Auto: fall back from DoH to TCP DNS",
+    "tw": "自動：DoH 故障時切換 TCP DNS"
+  },
+  "自定义 NTP": {
+    "en": "Custom NTP",
+    "tw": "自定義 NTP"
+  },
+  "自定义 NTP 需使用 systemd-timesyncd，不能与 chrony/ntpd 混用。时间源需能通过 UDP 123 访问；网络接口提供的时间源仍可能生效，以当前 NTP 状态为准。": {
+    "en": "Custom NTP requires systemd-timesyncd and cannot be combined with chrony/ntpd. Time sources must be reachable over UDP 123. Network-provided sources may still apply; check current NTP status.",
+    "tw": "自定義 NTP 需使用 systemd-timesyncd，不能與 chrony/ntpd 混用。時間源需能通過 UDP 123 訪問；網路接口提供的時間源仍可能生效，以當前 NTP 狀態為準。"
+  },
+  "至少 12 位": {
+    "en": "At least 12 characters",
+    "tw": "至少 12 位"
+  },
+  "节点": {
+    "en": "Node",
+    "tw": "節點"
+  },
+  "节点与映射修改前自动备份，保留最近 10 份。恢复前需停止全部映射。": {
+    "en": "Automatically backs up node and mapping edits, retaining 10 backups. Stop all mappings before restoring.",
+    "tw": "節點與映射修改前自動備份，保留最近 10 份。恢復前需停止全部映射。"
+  },
+  "节点关联": {
+    "en": "Linked node",
+    "tw": "節點關聯"
+  },
+  "节点出口 IP：": {
+    "en": "Node exit IP:",
+    "tw": "節點出口 IP："
+  },
+  "节点地址": {
+    "en": "Node address",
+    "tw": "節點位址"
+  },
+  "节点拒绝 UDP": {
+    "en": "Node rejected UDP",
+    "tw": "節點拒絕 UDP"
+  },
+  "节点转发异常": {
+    "en": "Upstream forwarding failed",
+    "tw": "節點轉發異常"
+  },
+  "节点连接": {
+    "en": "Node connection",
+    "tw": "節點連接"
+  },
+  "观察": {
+    "en": "Observing",
+    "tw": "觀察"
+  },
+  "规则修复": {
+    "en": "Rule repair",
+    "tw": "規則修復"
+  },
+  "规则未找到": {
+    "en": "Rule not found",
+    "tw": "規則未找到"
+  },
+  "规则检查：": {
+    "en": "Rule checks:",
+    "tw": "規則檢查："
+  },
+  "解析器与错误计数": {
+    "en": "Resolver and error counts",
+    "tw": "解析器與錯誤計數"
+  },
+  "计数已重置": {
+    "en": "Counter reset",
+    "tw": "計數已重置"
+  },
+  "试探观察中": {
+    "en": "Probing recovery",
+    "tw": "試探觀察中"
+  },
+  "说明 / 实测": {
+    "en": "Notes / Example",
+    "tw": "說明 / 實測"
+  },
+  "请先停止全部映射，再重新预览。": {
+    "en": "Stop all mappings and generate a new preview.",
+    "tw": "請先停止全部映射，再重新預覽。"
+  },
+  "请先停止映射；异常映射需清理成功后再修改配置。": {
+    "en": "Stop the mapping first. Clean up failed mappings before changing configuration.",
+    "tw": "請先停止映射；異常映射需清理成功后再修改配置。"
+  },
+  "请先在下方添加或导入 SOCKS5 节点。": {
+    "en": "Add or import a SOCKS5 node below first.",
+    "tw": "請先在下方添加或導入 SOCKS5 節點。"
+  },
+  "请先选择映射": {
+    "en": "Select a mapping first",
+    "tw": "請先選擇映射"
+  },
+  "请在系统设置确认": {
+    "en": "Confirm in Settings",
+    "tw": "請在系統設置確認"
+  },
+  "请填写此项": {
+    "en": "This field is required",
+    "tw": "請填寫此項"
+  },
+  "请输入新 SSH 密码": {
+    "en": "Enter a new SSH password",
+    "tw": "請輸入新 SSH 密碼"
+  },
+  "请选择 Google 专项检测导出文件": {
+    "en": "Select a Google diagnostic export",
+    "tw": "請選擇 Google 專項檢測導出文件"
+  },
+  "请通过 HTTPS 打开管理页面后修改密码。": {
+    "en": "Open management over HTTPS before changing the password.",
+    "tw": "請通過 HTTPS 打開管理頁面后修改密碼。"
+  },
+  "读取中…": {
+    "en": "Reading…",
+    "tw": "讀取中…"
+  },
+  "账号与密码": {
+    "en": "Account and password",
+    "tw": "帳號與密碼"
+  },
+  "超时": {
+    "en": "Timed out",
+    "tw": "超時"
+  },
+  "路由表": {
+    "en": "Routing table",
+    "tw": "路由表"
+  },
+  "路由表编号已用完": {
+    "en": "No routing table numbers available",
+    "tw": "路由表編號已用完"
+  },
+  "路由表编号（1–252）": {
+    "en": "Routing table number (1–252)",
+    "tw": "路由表編號（1–252）"
+  },
+  "转发实测": {
+    "en": "Forwarding test",
+    "tw": "轉發實測"
+  },
+  "软件更新": {
+    "en": "Software updates",
+    "tw": "軟體更新"
+  },
+  "输入可访问的 NTP 服务器域名或 IP": {
+    "en": "Enter a reachable NTP hostname or IP",
+    "tw": "輸入可訪問的 NTP 伺服器域名或 IP"
+  },
+  "输出已达 32 KiB 上限。": {
+    "en": "Output reached the 32 KiB limit.",
+    "tw": "輸出已達 32 KiB 上限。"
+  },
+  "达到读取上限": {
+    "en": "Read limit reached",
+    "tw": "達到讀取上限"
+  },
+  "运行": {
+    "en": "Uptime",
+    "tw": "運行"
+  },
+  "运行中": {
+    "en": "Running",
+    "tw": "運行中"
+  },
+  "运行监控": {
+    "en": "Monitoring",
+    "tw": "運行監控"
+  },
+  "运行进程": {
+    "en": "Running processes",
+    "tw": "運行進程"
+  },
+  "返回编辑": {
+    "en": "Back to editing",
+    "tw": "返回編輯"
+  },
+  "进程恢复": {
+    "en": "Process recovery",
+    "tw": "進程恢復"
+  },
+  "远程管理": {
+    "en": "Remote management",
+    "tw": "遠程管理"
+  },
+  "连接 ID": {
+    "en": "Connection ID",
+    "tw": "連接 ID"
+  },
+  "连接上限": {
+    "en": "Connection limit",
+    "tw": "連接上限"
+  },
+  "连接不稳定": {
+    "en": "Unstable connection",
+    "tw": "連接不穩定"
+  },
+  "连接准备检查": {
+    "en": "Connection readiness",
+    "tw": "連接準備檢查"
+  },
+  "连接参数已复制": {
+    "en": "Connection details copied",
+    "tw": "連接參數已復制"
+  },
+  "连接延迟": {
+    "en": "Connection latency",
+    "tw": "連接延遲"
+  },
+  "连接排障 ·": {
+    "en": "Connection diagnostics ·",
+    "tw": "連接排障 ·"
+  },
+  "连接数": {
+    "en": "Connections",
+    "tw": "連接數"
+  },
+  "连接管理": {
+    "en": "Connection management",
+    "tw": "連接管理"
+  },
+  "连接较多，仅展示前 500 条。": {
+    "en": "Showing the first 500 connections.",
+    "tw": "連接較多，僅展示前 500 條。"
+  },
+  "连接错误记录": {
+    "en": "Connection error records",
+    "tw": "連接錯誤記錄"
+  },
+  "追踪完成 · 目标已响应": {
+    "en": "Trace complete · Target responded",
+    "tw": "追蹤完成 · 目標已回應"
+  },
+  "追踪完成 · 目标未响应": {
+    "en": "Trace complete · No target response",
+    "tw": "追蹤完成 · 目標未回應"
+  },
+  "追踪数据格式无效": {
+    "en": "Invalid trace format",
+    "tw": "追蹤數據格式無效"
+  },
+  "追踪数据顺序无效": {
+    "en": "Invalid trace event sequence",
+    "tw": "追蹤數據順序無效"
+  },
+  "追踪结束结果无效": {
+    "en": "Invalid trace completion result",
+    "tw": "追蹤結束結果無效"
+  },
+  "追踪输出超过限制": {
+    "en": "Trace output limit exceeded",
+    "tw": "追蹤輸出超過限制"
+  },
+  "追踪连接中断，已保留收到的结果": {
+    "en": "Trace connection interrupted; received results retained",
+    "tw": "追蹤連接中斷，已保留收到的結果"
+  },
+  "选择映射": {
+    "en": "Select mapping",
+    "tw": "選擇映射"
+  },
+  "通知开关": {
+    "en": "Enable notifications",
+    "tw": "通知開關"
+  },
+  "通知配置已更新，请重新加载后编辑": {
+    "en": "Notification settings changed; reload before editing",
+    "tw": "通知配置已更新，請重新加載后編輯"
+  },
+  "部分可用": {
+    "en": "Partially available",
+    "tw": "部分可用"
+  },
+  "配置备份与回滚": {
+    "en": "Configuration backup and rollback",
+    "tw": "配置備份與回滾"
+  },
+  "配置没有差异": {
+    "en": "No configuration differences",
+    "tw": "配置沒有差異"
+  },
+  "配置没有差异（运行状态除外）": {
+    "en": "No configuration differences (excluding runtime state)",
+    "tw": "配置沒有差異（運行狀態除外）"
+  },
+  "配置涉及端口：": {
+    "en": "Configuration ports:",
+    "tw": "配置涉及連接埠："
+  },
+  "采集 30 分钟，保留最近 4 MiB。": {
+    "en": "Record for 30 minutes; keep the latest 4 MiB.",
+    "tw": "采集 30 分鐘，保留最近 4 MiB。"
+  },
+  "采集中": {
+    "en": "Recording",
+    "tw": "采集中"
+  },
+  "采集于": {
+    "en": "Recorded at",
+    "tw": "采集于"
+  },
+  "采集说明": {
+    "en": "About recording",
+    "tw": "采集說明"
+  },
+  "重启服务": {
+    "en": "Restart services",
+    "tw": "重啟服務"
+  },
+  "重新加载": {
+    "en": "Reload",
+    "tw": "重新加載"
+  },
+  "重新加载会放弃未保存的通知配置。": {
+    "en": "Reloading discards unsaved notification settings.",
+    "tw": "重新加載會放棄未保存的通知配置。"
+  },
+  "重新加载配置": {
+    "en": "Reload configuration",
+    "tw": "重新加載配置"
+  },
+  "重新测试": {
+    "en": "Test again",
+    "tw": "重新測試"
+  },
+  "重新采集": {
+    "en": "Record again",
+    "tw": "重新采集"
+  },
+  "重新采集会清空本次内容。": {
+    "en": "Recording again clears the current capture.",
+    "tw": "重新采集會清空本次內容。"
+  },
+  "重试恢复": {
+    "en": "Retry recovery",
+    "tw": "重試恢復"
+  },
+  "链路状态": {
+    "en": "Path status",
+    "tw": "鏈路狀態"
+  },
+  "错误": {
+    "en": "Error",
+    "tw": "錯誤"
+  },
+  "错误数为当前进程累计值。": {
+    "en": "Error counts are cumulative for the current process.",
+    "tw": "錯誤數為當前進程累計值。"
+  },
+  "错误详情已复制": {
+    "en": "Error details copied",
+    "tw": "錯誤詳情已復制"
+  },
+  "队列长度": {
+    "en": "Queue length",
+    "tw": "隊列長度"
+  },
+  "阶段": {
+    "en": "Stage",
+    "tw": "階段"
+  },
+  "阶段差异：": {
+    "en": "Stage differences:",
+    "tw": "階段差異："
+  },
+  "随机生成": {
+    "en": "Generate randomly",
+    "tw": "隨機生成"
+  },
+  "隧道地址": {
+    "en": "Tunnel address",
+    "tw": "隧道位址"
+  },
+  "隧道映射": {
+    "en": "Tunnel mappings",
+    "tw": "隧道映射"
+  },
+  "需指定配置文件并启用管理认证后才能修改。": {
+    "en": "Requires a configuration file and enabled management authentication.",
+    "tw": "需指定配置文件并啟用管理認證后才能修改。"
+  },
+  "静默 1 小时": {
+    "en": "Mute for 1 hour",
+    "tw": "靜默 1 小時"
+  },
+  "静默 24 小时": {
+    "en": "Mute for 24 hours",
+    "tw": "靜默 24 小時"
+  },
+  "非洲": {
+    "en": "Africa",
+    "tw": "非洲"
+  },
+  "面板、SSH、L2TP 管理访问": {
+    "en": "Panel, SSH and L2TP management access",
+    "tw": "面板、SSH、L2TP 管理訪問"
+  },
+  "面板端口、实际 SSH 端口，以逗号分隔": {
+    "en": "Panel and actual SSH ports, separated by commas",
+    "tw": "面板連接埠、實際 SSH 連接埠，以逗號分隔"
+  },
+  "项差异": {
+    "en": "differences",
+    "tw": "項差異"
+  },
+  "预共享密钥（PSK）": {
+    "en": "Pre-shared key (PSK)",
+    "tw": "預共享密鑰（PSK）"
+  },
+  "预览": {
+    "en": "Preview",
+    "tw": "預覽"
+  },
+  "预览回滚": {
+    "en": "Preview rollback",
+    "tw": "預覽回滾"
+  },
+  "首字节": {
+    "en": "First byte",
+    "tw": "首字節"
+  },
+  "首次观测": {
+    "en": "First observed",
+    "tw": "首次觀測"
+  },
+  "首次观测时间不等于拨号时间；一条隧道可能承载多台设备。": {
+    "en": "First observation is not the dial-in time; one tunnel may carry multiple devices.",
+    "tw": "首次觀測時間不等于撥號時間；一條隧道可能承載多臺設備。"
+  },
+  "验证服务": {
+    "en": "Verify services",
+    "tw": "驗證服務"
+  },
+  "高级选项 · 分组、限额与网络参数": {
+    "en": "Advanced · Groups, limits and network settings",
+    "tw": "高級選項 · 分組、限額與網路參數"
+  },
+  "默认 MTU 1400、MSS 1200。减小 MTU 时请同步调整 MSS；允许 UDP 无法为不支持 UDP 的节点增加能力。": {
+    "en": "Default MTU 1400, MSS 1200. Adjust MSS when reducing MTU. Allowing UDP cannot add UDP support to an unsupported node.",
+    "tw": "預設 MTU 1400、MSS 1200。減小 MTU 時請同步調整 MSS；允許 UDP 無法為不支持 UDP 的節點增加能力。"
+  },
+  "（全机统计）": {
+    "en": "(host-wide)",
+    "tw": "（全機統計）"
+  },
+  "（映射网段合计） · PPP 会话上限": {
+    "en": "(mapping subnet total) · PPP session limit",
+    "tw": "（映射網段合計） · PPP 會話上限"
+  },
+  "（非实时）": {
+    "en": "(not live)",
+    "tw": "（非實時）"
+  },
+  "，本次服务累计退出 ": {
+    "en": ", total exits since service startup ",
+    "tw": "，本次服務累計退出 "
+  },
+  "，跳过 {0}": {
+    "en": ", {0} skipped",
+    "tw": "，跳過 {0}"
+  },
+  "；下方保留上次采集结果": {
+    "en": "; previous capture shown below",
+    "tw": "；下方保留上次采集結果"
+  },
+  "；当前 NTP：": {
+    "en": "; current NTP:",
+    "tw": "；當前 NTP："
+  },
+  "；当前监听：": {
+    "en": "; current listeners:",
+    "tw": "；當前監聽："
+  },
+  "；系统时钟：": {
+    "en": "; system clock:",
+    "tw": "；系統時鐘："
+  },
+  "管理登录": {
+    "en": "Sign in to management",
+    "tw": "管理登入"
+  },
+  "登录": {
+    "en": "Sign in",
+    "tw": "登入"
+  },
+  "登录中…": {
+    "en": "Signing in…",
+    "tw": "登入中…"
+  },
+  "退出登录": {
+    "en": "Sign out",
+    "tw": "登出"
+  },
+  "invalid username or password": {
+    "en": "Invalid username or password",
+    "tw": "帳號或密碼錯誤",
+    "cn": "账号或密码错误"
+  },
+  "too many login attempts; try again in one minute": {
+    "en": "Too many attempts. Try again in one minute.",
+    "tw": "嘗試次數過多，請在一分鐘後重試。",
+    "cn": "尝试次数过多，请在一分钟后重试。"
+  },
+  "authentication required": {
+    "en": "Please sign in again",
+    "tw": "請重新登入",
+    "cn": "请重新登录"
+  },
+  "选择服务器地址": {
+    "en": "Select server address",
+    "tw": "選擇伺服器位址"
+  },
+  "已自动填入本机地址": {
+    "en": "Local address filled automatically",
+    "tw": "已自動填入本機位址"
+  },
+  "多设备可共享出口；出现相互影响时，检查连接限额与会话状态。节点检测不经过映射限额。": {
+    "en": "Devices can share an exit. Check connection limits and sessions if they affect each other. Node checks bypass mapping limits.",
+    "tw": "多裝置可共用出口；互相影響時，檢查連線限制與工作階段。節點檢測不經過映射限制。"
+  },
+  "AAAA 记录不代表 IPv6 可用。本次检查 IPv4；客户端回退需实际验证。": {
+    "en": "AAAA records do not prove IPv6 connectivity. These checks use IPv4; verify client fallback separately.",
+    "tw": "AAAA 記錄不代表 IPv6 可用。本次檢查 IPv4；用戶端回退需實際驗證。"
+  },
+  "目标 IP 需绑定本机；公网 NAT 地址需另行核对。移除例外会中断对应管理连接。": {
+    "en": "The target IP must be local; verify public NAT addresses separately. Removing an exception disconnects its management path.",
+    "tw": "目標 IP 需綁定本機；公網 NAT 位址需另行核對。移除例外會中斷對應管理連線。"
+  },
+  "允许指定来源访问本机管理端口，默认关闭。": {
+    "en": "Allow selected sources to reach local management ports. Disabled by default.",
+    "tw": "允許指定來源存取本機管理連接埠，預設關閉。"
+  },
+  "HTTP 状态码仅作诊断参考，不代表账号或 App 可用。": {
+    "en": "HTTP status codes are diagnostic evidence, not confirmation that an account or App works.",
+    "tw": "HTTP 狀態碼僅作診斷參考，不代表帳號或 App 可用。"
+  },
+  "；请使用新账号重新登录。": {
+    "en": "; sign in again with the new credentials.",
+    "tw": "；請使用新帳號重新登入。"
+  },
+  "复测后可达，部分地址失败": {
+    "en": "Reachable on retry; some addresses failed",
+    "tw": "重測後可達，部分位址失敗"
+  },
+  "逐地址结果": {
+    "en": "Results by address",
+    "tw": "逐位址結果"
+  },
+  "HTTPS 端口已更新，请使用新地址登录": {
+    "en": "HTTPS port updated; sign in at the new address",
+    "tw": "HTTPS 連接埠已更新，請使用新位址登錄"
+  },
+  "HTTPS 端口需为 1–65535": {
+    "en": "HTTPS port must be 1–65535",
+    "tw": "HTTPS 連接埠需為 1–65535"
+  },
+  "IPsec 仅支持 Linux 服务器": {
+    "en": "IPsec requires a Linux server",
+    "tw": "IPsec 僅支持 Linux 伺服器"
+  },
+  "IPsec 服务返回异常，请刷新设置查看状态": {
+    "en": "Unexpected IPsec response; refresh settings",
+    "tw": "IPsec 服務返回異常，請刷新設置查看狀態"
+  },
+  "PPP 管理访问已更新；不改变固定出口和 UDP 策略": {
+    "en": "Management access updated; fixed exits and UDP policy are unchanged",
+    "tw": "PPP 管理訪問已更新；不改變固定出口和 UDP 策略"
+  },
+  "SSH 密码只能包含可见 ASCII 字符，不支持空格或控制字符": {
+    "en": "SSH password must use printable ASCII; no spaces or control characters",
+    "tw": "SSH 密碼只能包含可見 ASCII 字符，不支持空格或控制字符"
+  },
+  "SSH 密码更新失败，请检查系统账号和密码策略": {
+    "en": "Could not update SSH password; check the system account and password policy",
+    "tw": "SSH 密碼更新失敗，請檢查系統帳號和密碼策略"
+  },
+  "SSH 密码需为 12–128 位可见 ASCII 字符": {
+    "en": "SSH password must contain 12–128 printable ASCII characters",
+    "tw": "SSH 密碼需為 12–128 位可見 ASCII 字符"
+  },
+  "SSH 登录密码只能通过 HTTPS 修改": {
+    "en": "Use HTTPS to change the SSH login password",
+    "tw": "SSH 登錄密碼只能通過 HTTPS 修改"
+  },
+  "root 登录密码已更新，请保留当前连接并在新终端验证登录": {
+    "en": "Root password updated; keep this connection and verify access in another terminal",
+    "tw": "root 登錄密碼已更新，請保留當前連接并在新終端驗證登錄"
+  },
+  "root 账号已锁定，请通过 SSH 或服务器控制台处理": {
+    "en": "Root account is locked; use SSH or the server console",
+    "tw": "root 帳號已鎖定，請通過 SSH 或伺服器控制臺處理"
+  },
+  "不允许跨站修改设置": {
+    "en": "Cross-site settings changes are not allowed",
+    "tw": "不允許跨站修改設置"
+  },
+  "两次输入的新 SSH 密码不一致": {
+    "en": "New SSH passwords do not match",
+    "tw": "兩次輸入的新 SSH 密碼不一致"
+  },
+  "仅支持 GET": {
+    "en": "GET only",
+    "tw": "僅支持 GET"
+  },
+  "仅支持 Linux OpenSSH": {
+    "en": "Requires Linux OpenSSH",
+    "tw": "僅支持 Linux OpenSSH"
+  },
+  "仅支持 POST": {
+    "en": "POST only",
+    "tw": "僅支持 POST"
+  },
+  "仅支持 S2L 管理的 Nginx HTTPS 服务，请升级安装文件": {
+    "en": "Requires S2L-managed Nginx HTTPS; update the installation files",
+    "tw": "僅支持 S2L 管理的 Nginx HTTPS 服務，請升級安裝文件"
+  },
+  "会话操作忙，请稍后重试": {
+    "en": "Session action busy; try again shortly",
+    "tw": "會話操作忙，請稍后重試"
+  },
+  "保存前已校验；运行中的映射需先停止。失败写入保留原配置，历史版本可在备份中恢复。": {
+    "en": "Validated. Stop running mappings before saving. Failed writes preserve the current configuration; backups provide recovery.",
+    "tw": "保存前已校驗；運行中的映射需先停止。失敗寫入保留原配置，歷史版本可在備份中恢復。"
+  },
+  "保存失败且运行策略恢复失败，请通过原管理线路检查服务": {
+    "en": "Save and policy rollback failed; check services through the original management path",
+    "tw": "保存失敗且運行策略恢復失敗，請通過原管理線路檢查服務"
+  },
+  "保存失败，已恢复原管理例外": {
+    "en": "Save failed; previous management exception restored",
+    "tw": "保存失敗，已恢復原管理例外"
+  },
+  "保存配置失败，管理账号未改变": {
+    "en": "Save failed; management credentials are unchanged",
+    "tw": "保存配置失敗，管理帳號未改變"
+  },
+  "修改后的配置无效": {
+    "en": "Invalid updated configuration",
+    "tw": "修改后的配置無效"
+  },
+  "分组名称无效": {
+    "en": "Invalid group name",
+    "tw": "分組名稱無效"
+  },
+  "参数无效": {
+    "en": "Invalid parameters",
+    "tw": "參數無效"
+  },
+  "密码需为 12–128 位字母、数字或 _ . @ + -": {
+    "en": "Password must contain 12–128 letters, numbers or _ . @ + -",
+    "tw": "密碼需為 12–128 位字母、數字或 _ . @ + -"
+  },
+  "应用失败：": {
+    "en": "Could not apply:",
+    "tw": "應用失敗："
+  },
+  "当前服务不支持修改 PPP 管理访问": {
+    "en": "Management access changes are unavailable in this service",
+    "tw": "當前服務不支持修改 PPP 管理訪問"
+  },
+  "当前环境不支持修改 Linux 用户密码": {
+    "en": "Changing Linux passwords is unavailable in this environment",
+    "tw": "當前環境不支持修改 Linux 用戶密碼"
+  },
+  "当前管理密码不正确": {
+    "en": "Current management password is incorrect",
+    "tw": "當前管理密碼不正確"
+  },
+  "无法生成配置": {
+    "en": "Could not generate configuration",
+    "tw": "無法生成配置"
+  },
+  "无法生成配置文件": {
+    "en": "Could not generate configuration file",
+    "tw": "無法生成配置文件"
+  },
+  "无法确认更新状态，请检查软件更新任务": {
+    "en": "Could not confirm update state; check the update task",
+    "tw": "無法確認更新狀態，請檢查軟體更新任務"
+  },
+  "无法读取 root 账号状态": {
+    "en": "Could not read root account status",
+    "tw": "無法讀取 root 帳號狀態"
+  },
+  "无法读取受管配置文件": {
+    "en": "Could not read managed configuration",
+    "tw": "無法讀取受管配置文件"
+  },
+  "无法读取更新状态，请检查系统更新组件": {
+    "en": "Could not read update state; check the update helper",
+    "tw": "無法讀取更新狀態，請檢查系統更新元件"
+  },
+  "无法读取配置文件": {
+    "en": "Could not read configuration",
+    "tw": "無法讀取配置文件"
+  },
+  "时间服务正在处理中，请稍后重试": {
+    "en": "Time service busy; try again shortly",
+    "tw": "時間服務正在處理中，請稍后重試"
+  },
+  "映射不存在": {
+    "en": "Mapping not found",
+    "tw": "映射不存在"
+  },
+  "映射服务不可用": {
+    "en": "Mapping service unavailable",
+    "tw": "映射服務不可用"
+  },
+  "更新操作正在处理中，请稍后重试": {
+    "en": "Update action busy; try again shortly",
+    "tw": "更新操作正在處理中，請稍后重試"
+  },
+  "未指定配置文件，请使用 -config 启动服务": {
+    "en": "No configuration file; start the service with -config",
+    "tw": "未指定配置文件，請使用 -config 啟動服務"
+  },
+  "检测忙，请稍后重试": {
+    "en": "Diagnostics busy; try again shortly",
+    "tw": "檢測忙，請稍后重試"
+  },
+  "用户名需为 1–64 位字母、数字、点、下划线或连字符": {
+    "en": "Username must contain 1–64 letters, numbers, dots, underscores or hyphens",
+    "tw": "用戶名需為 1–64 位字母、數字、點、下劃線或連字符"
+  },
+  "监控服务不可用": {
+    "en": "Monitoring unavailable",
+    "tw": "監控服務不可用"
+  },
+  "端口需为 1–65535": {
+    "en": "Port must be 1–65535",
+    "tw": "連接埠需為 1–65535"
+  },
+  "管理账号已更新，新凭据立即生效": {
+    "en": "Management account updated; new credentials take effect immediately",
+    "tw": "管理帳號已更新，新憑據立即生效"
+  },
+  "系统时间设置仅支持 Linux / systemd": {
+    "en": "Time settings require Linux / systemd",
+    "tw": "系統時間設置僅支持 Linux / systemd"
+  },
+  "缺少时间管理组件，请更新安装文件": {
+    "en": "Time management helper missing; update the installation files",
+    "tw": "缺少時間管理元件，請更新安裝文件"
+  },
+  "网页更新需要默认 Linux/systemd 安装、管理认证及新版更新组件": {
+    "en": "Web updates require the default Linux/systemd installation, authentication and current update helpers",
+    "tw": "網頁更新需要預設 Linux/systemd 安裝、管理認證及新版更新元件"
+  },
+  "网页更新需默认 Linux/systemd 安装及新版更新组件": {
+    "en": "Web updates require the default Linux/systemd installation and current update helpers",
+    "tw": "網頁更新需預設 Linux/systemd 安裝及新版更新元件"
+  },
+  "请使用 application/json": {
+    "en": "Use application/json",
+    "tw": "請使用 application/json"
+  },
+  "请先在配置文件中启用管理账号认证": {
+    "en": "Enable management authentication in the configuration first",
+    "tw": "請先在配置文件中啟用管理帳號認證"
+  },
+  "请求格式错误": {
+    "en": "Invalid request format",
+    "tw": "請求格式錯誤"
+  },
+  "请选择不同且存在的对照节点": {
+    "en": "Select a different existing comparison node",
+    "tw": "請選擇不同且存在的對照節點"
+  },
+  "读取系统时间服务失败，请检查 systemd 和权限": {
+    "en": "Could not read time service; check systemd and permissions",
+    "tw": "讀取系統時間服務失敗，請檢查 systemd 和權限"
+  },
+  "软件正在更新，请完成后再修改配置或操作映射": {
+    "en": "Update in progress; wait before changing configuration or mappings",
+    "tw": "軟體正在更新，請完成后再修改配置或操作映射"
+  },
+  "运行服务不可用": {
+    "en": "Runtime service unavailable",
+    "tw": "運行服務不可用"
+  },
+  "连接 ID 无效": {
+    "en": "Invalid connection ID",
+    "tw": "連接 ID 無效"
+  },
+  "通知参数无效": {
+    "en": "Invalid notification parameters",
+    "tw": "通知參數無效"
+  },
+  "配置已删除，请重新加载列表": {
+    "en": "Configuration deleted; reload the list",
+    "tw": "配置已刪除，請重新加載列表"
+  },
+  "配置已恢复；所有映射保持停止，请按需启动": {
+    "en": "Configuration restored; mappings remain stopped until started",
+    "tw": "配置已恢復；所有映射保持停止，請按需啟動"
+  },
+  "配置已被其他页面修改，请重新打开编辑后再保存": {
+    "en": "Configuration changed elsewhere; reopen the editor before saving",
+    "tw": "配置已被其他頁面修改，請重新打開編輯后再保存"
+  },
+  "配置文件格式错误": {
+    "en": "Invalid configuration file",
+    "tw": "配置文件格式錯誤"
+  },
+  "预共享密钥需为 12–128 位字母、数字或 _ . @ + -": {
+    "en": "Pre-shared key must contain 12–128 letters, numbers or _ . @ + -",
+    "tw": "預共享密鑰需為 12–128 位字母、數字或 _ . @ + -"
+  },
+  "服务器经固定节点检查 DNS、TCP/TLS、HTTP；失败时最多复测 3 个 IPv4 地址。不验证客户端连接和账号登录。": {
+    "en": "Checks DNS, TCP/TLS and HTTP through the fixed node; retries up to 3 IPv4 addresses on failure. Client connections and account login are not tested.",
+    "tw": "伺服器經固定節點檢查 DNS、TCP/TLS、HTTP；失敗時最多復測 3 個 IPv4 位址。不驗證客戶端連接和帳號登錄。"
+  },
+  "未发送 QUIC；TCP/TLS 可用不代表客户端已回退，需核对客户端行为与 ICMP 返回。": {
+    "en": "No QUIC is sent. Working TCP/TLS does not prove client fallback; check client behavior and ICMP delivery.",
+    "tw": "未發送 QUIC；TCP/TLS 可用不代表客戶端已回退，需核對客戶端行為與 ICMP 返回。"
+  },
+  "计数为映射合计，仅表示规则命中；客户端是否收到 ICMP 需另行验证。": {
+    "en": "Counts apply to the whole mapping and confirm rule matches only. Verify ICMP delivery to the client separately.",
+    "tw": "計數為映射合計，僅表示規則命中；用戶端是否收到 ICMP 需另行驗證。"
+  },
+  "服务器 → 固定 SOCKS5 → 目标服务": {
+    "en": "Server → Fixed SOCKS5 → Target service",
+    "tw": "伺服器 → 固定 SOCKS5 → 目標服務"
+  },
+  "PPP 管理访问已更新": {
+    "en": "Management access updated",
+    "tw": "PPP 管理存取已更新"
+  }
+}

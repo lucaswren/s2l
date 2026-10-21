@@ -4,7 +4,9 @@
 
 L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联至 sing-box TUN、策略路由表及防火墙规则，再由 sing-box 连接 SOCKS5 上游。管理界面的 Nginx HTTPS 代理与此数据路径分开。
 
-`cmd/s2l/` 负责启动与关闭；`internal/api/` 提供 Basic Auth 管理 API；`internal/service/` 编排映射生命周期。`internal/singbox/`、`network/`、`l2tp/` 负责进程、路由、防火墙与 PPP；`store/`、`model/`、`config/` 处理状态、模型与配置。`web/src/` 是前端源码，`web/dist/` 是须提交的内嵌资源；`script/` 与 `deploy/systemd/` 管理安装及服务。
+`cmd/s2l/` 负责启动与关闭；`internal/api/` 提供网页与脚本会话鉴权及管理 API；`internal/service/` 编排映射生命周期。`internal/singbox/`、`network/`、`l2tp/` 负责进程、路由、防火墙与 PPP；`store/`、`model/`、`config/` 处理状态、模型与配置。`web/src/` 是前端源码，`web/dist/` 是须提交的内嵌资源；`script/` 与 `deploy/systemd/` 管理安装及服务。
+
+`internal/dnsproxy/` 负责每条映射的 DoH/TCP；`internal/diagnostics/` 与 `speedtest/` 负责分阶段检测；`history/`、`operations/`、`debuglog/` 分别保留有界历史、事件通知与临时日志。`web/src/i18n/` 集中存放三语言文案，页面复用 `components/` 与 `utils/`。
 
 ## 配置
 
@@ -47,12 +49,13 @@ python3 -m unittest discover -s script/tests
 ## 诊断集成测试
 
 ```bash
-# Build web/dist first. Requires local Chrome, Node.js 22+ and Python 3.
+# 先构建 web/dist；需要 Chrome、Node.js 22+ 和 Python 3。
 node script/test_ui.mjs
+node script/test_auth_ui.mjs
 
-# Disposable Linux host only: requires PPP/L2TP kernel support and test dependencies.
+# 仅在隔离 Linux 测试主机运行，需内核 PPP/L2TP 支持及测试依赖。
 go test -c -o /tmp/s2l-l2tp.test ./internal/service
 sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
 ```
 
-The L2TP runner isolates mount, network and PID namespaces. It checks two fixed exits, DNS over TCP, active UDP rejection, process recovery and missing-rule repair against local fixtures. Browser checks cover desktop and 390/320-pixel layouts using mock APIs; they do not replace Linux data-plane tests.
+L2TP 测试隔离挂载、网络与 PID 命名空间，验证双固定出口、DNS、UDP 主动拒绝、进程恢复与规则修复。浏览器测试覆盖桌面、390/320 像素、语言切换与未保存表单；鉴权测试使用真实后端与临时数据，覆盖登录、会话保持及退出。页面测试不能替代 Linux 数据路径测试。

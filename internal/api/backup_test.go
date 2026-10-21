@@ -42,7 +42,7 @@ func TestBackupPreviewRestoreAndStaleRevision(t *testing.T) {
 		data, _ := json.Marshal(body)
 		r := httptest.NewRequest("POST", path, bytes.NewReader(data))
 		r.Header.Set("Content-Type", "application/json")
-		r.SetBasicAuth("admin", "admin-password-long")
+		r.AddCookie(testLogin(t, h, "admin", "admin-password-long"))
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w

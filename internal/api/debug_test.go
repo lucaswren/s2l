@@ -33,7 +33,7 @@ func TestDebugExportRedactsAndAuthenticates(t *testing.T) {
 	defer debuglog.Default.Set(false)
 	debuglog.Default.Write([]byte("secret-proxy-password secret-admin-password timeout"))
 	r := httptest.NewRequest("GET", "/api/debug/export", nil)
-	r.SetBasicAuth("admin", "secret-admin-password")
+	r.AddCookie(testLogin(t, h, "admin", "secret-admin-password"))
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	if w.Code != 200 {

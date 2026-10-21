@@ -8,9 +8,9 @@ test('raw MTR handles sends, replies, duplicate sequences and missing hops', () 
  assert.equal(hops.length,3);assert.equal(hops[0].sent,1);assert.equal(hops[0].received,1);assert.equal(hops[0].average,'1.00');assert.equal(hops[1].address,'—');assert.equal(hops[2].average,'3.00');
  assert.deepEqual(mtrHops('h 999999 bad\np -1 3 1\npermission denied\n'),[]);
 });
-test('legacy raw replies do not invent send counts', () => {
+test('raw replies require a sequence identifier', () => {
  const [hop]=mtrHops('h 0 192.0.2.1\np 0 1500\np 0 2500\n');
- assert.equal(hop.sent,0);assert.equal(hop.received,2);assert.equal(hop.average,'2.00');
+ assert.equal(hop.sent,0);assert.equal(hop.received,0);assert.equal(hop.average,'—');
 });
 test('MTR streams chunked UTF-8 data before completion', async t => {
  const encoder=new TextEncoder(), events=[];

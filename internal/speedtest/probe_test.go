@@ -73,8 +73,8 @@ func TestProbeDirections(t *testing.T) {
 			if result.OK != (result.Download.OK && result.Upload.OK) || uploaded.Load() != MinBytes {
 				t.Fatalf("upload missing or wrong overall status: %+v", result)
 			}
-			if result.Download.OK && (result.Download.SpeedMbps <= 0 || result.SpeedMbps != result.Download.SpeedMbps) {
-				t.Fatal("download metrics or compatibility fields missing")
+			if result.Download.OK && result.Download.SpeedMbps <= 0 {
+				t.Fatal("download metrics missing")
 			}
 			if result.Upload.OK && (result.Upload.Bytes != MinBytes || result.Upload.SpeedMbps <= 0) {
 				t.Fatal("upload metrics missing")

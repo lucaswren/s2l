@@ -19,6 +19,7 @@ import (
 )
 
 type Resolver struct {
+	googleTCP           bool // immutable after construction
 	mu                  sync.Mutex
 	status              model.ResolverStatus
 	failures, successes int
@@ -191,6 +192,13 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 		return nil, errors.New("DNS resolver closed")
 	}
 	r.status.Queries++
+	if r.googleTCP {
+		if answer, ok := googleHTTPSNoData(query); ok {
+			r.status.GoogleHTTPSSuppressed++
+			r.mu.Unlock()
+			return answer, nil
+		}
+	}
 	mode, active := r.status.Mode, r.status.Active
 	probe := mode == "auto" && active == "tcp" && !r.probing && !time.Now().Before(r.nextProbe)
 	if probe {

@@ -58,6 +58,8 @@ jobs:
       - run: npm --prefix web run build
       - name: Verify desktop and mobile monitoring dialogs
         run: node script/test_ui.mjs
+      - name: Verify multilingual login and backend sessions
+        run: node script/test_auth_ui.mjs
       - run: python3 script/collect_frontend_licenses.py
       - run: git diff --exit-code -- web/dist
       - run: go build -o bin/s2l ./cmd/s2l

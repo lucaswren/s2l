@@ -9,12 +9,14 @@ An L2TP/PPP client connects to xl2tpd. S2L associates mapping credentials and an
 | Path | Responsibility |
 |---|---|
 | `cmd/s2l/` | Startup, configuration validation, restore, shutdown |
-| `internal/api/` | Basic-auth protected management API and SPA delivery |
+| `internal/api/` | Session authentication for the UI and scripts, API validation and SPA delivery |
 | `internal/service/` | Mapping lifecycle and rollback orchestration |
 | `internal/singbox/`, `internal/network/`, `internal/l2tp/` | Process configuration, Linux routing/firewall, PPP/xl2tpd integration |
 | `internal/store/`, `internal/model/`, `internal/config/` | Persistent state, models and runtime configuration |
-| `internal/speedtest/` | SOCKS5 throughput and latency probes |
-| `web/src/`, `web/dist/` | Vue sources and committed embedded assets |
+| `internal/speedtest/`, `internal/diagnostics/` | Node probes, staged Google checks and address comparisons |
+| `internal/dnsproxy/` | Per-mapping DoH/TCP resolver and scoped TCP preference |
+| `internal/history/`, `internal/operations/`, `internal/debuglog/` | Bounded history, incidents, notifications and opt-in debug captures |
+| `web/src/`, `web/src/i18n/`, `web/dist/` | Vue UI, language catalog and committed embedded assets |
 | `script/`, `deploy/systemd/` | Privileged installation, management helpers and units |
 
 ## Configuration
@@ -73,10 +75,11 @@ Chinese editions use the script-based tags `zh-Hant` (繁體中文) and `zh-Hans
 ```bash
 # Build web/dist first. Requires local Chrome, Node.js 22+ and Python 3.
 node script/test_ui.mjs
+node script/test_auth_ui.mjs
 
 # Disposable Linux host only: requires PPP/L2TP kernel support and test dependencies.
 go test -c -o /tmp/s2l-l2tp.test ./internal/service
 sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
 ```
 
-The L2TP runner isolates mount, network and PID namespaces. It checks two fixed exits, DNS over TCP, active UDP rejection, process recovery and missing-rule repair against local fixtures. Browser checks cover desktop and 390/320-pixel layouts using mock APIs; they do not replace Linux data-plane tests.
+The L2TP runner isolates mount, network and PID namespaces. It checks two fixed exits, DNS over TCP, active UDP rejection, process recovery and missing-rule repair against local fixtures. Browser checks cover desktop and 390/320-pixel layouts, language switching and unsaved forms. The authentication runner uses the real backend with disposable data to test sign-in, session persistence and sign-out. These do not replace Linux data-plane tests.

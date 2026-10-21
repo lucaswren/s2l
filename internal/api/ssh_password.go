@@ -86,7 +86,9 @@ func (s *Server) handleSSHPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "SSH 密码更新失败，请检查系统账号和密码策略")
 		return
 	}
-	user, _, _ := r.BasicAuth()
+	s.authMu.RLock()
+	user := s.adminUser
+	s.authMu.RUnlock()
 	log.Printf("security: root password updated by management user %q", user)
 	writeJSON(w, 200, map[string]string{"message": "root 登录密码已更新，请保留当前连接并在新终端验证登录"})
 }

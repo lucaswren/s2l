@@ -21,6 +21,7 @@ try{
  async function evaluate(expression){const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value}
  async function wait(expression){for(let i=0;i<70;i++){if(await evaluate(expression))return;await pause(100)}throw Error('UI readiness timeout: '+expression+' BODY='+await evaluate('document.documentElement.outerHTML.slice(0,2500)')+' ERRORS='+JSON.stringify(errors))}
  await send('Page.enable');await send('Runtime.enable');
+ await send('Page.addScriptToEvaluateOnNewDocument',{source:"localStorage.setItem('s2l-language','zh-CN')"});
  const results=[];
  for(const width of [1440,390,320]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
@@ -36,6 +37,12 @@ try{
   if(previewBounds.left<0||previewBounds.right>previewBounds.viewport+2)throw Error('configuration preview overflow '+width);
   await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(b=>b.innerText==='返回编辑').click()`);await pause(350);
   await evaluate(`document.querySelector('.el-dialog .el-dialog__headerbtn').click()`);await pause(350);
+  await evaluate(`window.__batchPosts=0;window.__beforeBatchFetch=window.fetch;window.fetch=(path,options)=>{if(String(path).endsWith('/action')&&options?.method==='POST')window.__batchPosts++;return window.__beforeBatchFetch(path,options)};const button=[...document.querySelectorAll('button')].find(e=>e.innerText==='批量停止当前列表');button.click();button.click()`);
+  await wait(`!!document.querySelector('.el-message-box')`);
+  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.innerText==='执行').click()`);
+  await wait(`!!document.querySelector('.batch-results')&&document.querySelector('.batch-results').innerText.includes('成功')`);
+  if(await evaluate(`window.__batchPosts!==1`))throw Error('batch action duplicate or failed '+width);
+  await evaluate(`window.fetch=window.__beforeBatchFetch`);
   await evaluate(`document.querySelector('.el-collapse-item__header').click()`);
   await wait(`document.body.innerText.includes('首次观测') && document.body.innerText.includes('80.0%')`);
   await wait(`document.body.innerText.includes('故障事件与操作记录') && document.body.innerText.includes('节点转发异常 · 处理中')`);
@@ -89,14 +96,24 @@ try{
   await evaluate(`[...document.querySelectorAll('[role=tab]')].find(e=>e.innerText==='系统设置').click()`);
   await wait(`!!document.querySelector('details[aria-label="远程管理"] > summary')`);
   await evaluate(`document.querySelector('details[aria-label="远程管理"] > summary').click()`);
-  await wait(`!!document.querySelector('.ppp-management') && document.querySelector('.ppp-management').innerText.includes('51234')`);
-  await evaluate(`(()=>{const card=document.querySelector('.ppp-management');card.querySelector('.el-switch').click();const inputs=card.querySelectorAll('input');const ip=[...inputs].find(e=>e.placeholder.includes('公网'));ip.value='156.245.235.230';ip.dispatchEvent(new Event('input',{bubbles:true}));const subnet=card.querySelector('textarea');subnet.value='10.0.101.0/24';subnet.dispatchEvent(new Event('input',{bubbles:true}));[...card.querySelectorAll('button')].find(b=>b.innerText==='填入检测到的面板及 SSH 端口').click()})()`);
+  await wait(`!!document.querySelector('.ppp-management') && [...document.querySelectorAll('.ppp-management input')].some(e=>e.value.includes('51234'))`);
+  await evaluate(`(()=>{const card=document.querySelector('.ppp-management');card.querySelector('.el-switch').click();const subnet=card.querySelector('textarea');subnet.value='10.0.101.0/24';subnet.dispatchEvent(new Event('input',{bubbles:true}));[...card.querySelectorAll('button')].find(b=>b.innerText==='填入检测到的面板及 SSH 端口').click()})()`);
   await evaluate(`window.__managementPosts=0;window.__beforeManagementFetch=window.fetch;window.fetch=(path,options)=>{if(path==='/api/settings/ppp-management'&&options?.method==='POST'){window.__managementPosts++;window.__managementBody=JSON.parse(options.body);return new Promise(resolve=>setTimeout(()=>resolve(Response.json({access:window.__managementBody,message:'PPP 管理访问已更新'})),250))}return window.__beforeManagementFetch(path,options)};const b=[...document.querySelectorAll('.ppp-management button')].find(e=>e.innerText==='保存管理例外');b.click();b.click()`);
   await wait(`document.querySelector('.ppp-management').innerText.includes('PPP 管理访问已更新')`);
-  if(await evaluate(`window.__managementPosts!==1||!window.__managementBody.enabled||window.__managementBody.tcp_ports.join(',')!=='38866,51234'||window.__managementBody.source_cidrs[0]!=='10.0.101.0/24'`))throw Error('management save payload/concurrency '+width);
+  if(await evaluate(`window.__managementPosts!==1||!window.__managementBody.enabled||window.__managementBody.destination_ip!=='156.245.235.230'||window.__managementBody.tcp_ports.join(',')!=='38866,51234'||window.__managementBody.source_cidrs[0]!=='10.0.101.0/24'`))throw Error('management save payload/concurrency '+width);
   await evaluate(`window.fetch=window.__beforeManagementFetch`);
   const managementBounds=await evaluate(`(()=>{const e=document.querySelector('.ppp-management');return {width:e.clientWidth,scroll:e.scrollWidth}})()`);if(managementBounds.scroll>managementBounds.width+2)throw Error('management card overflow '+width);
   await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-management-${width}.png`,Buffer.from(r.data,'base64')));
+  // Switching languages must keep an open form and its unsaved values.
+  await evaluate(`(()=>{const e=document.querySelector('.ppp-management textarea');e.value='10.0.101.0/24\\n10.0.102.0/24';e.dispatchEvent(new Event('input',{bubbles:true}))})()`);
+  for(const [locale,label] of [['en','Server local IPv4'],['zh-TW','伺服器本機 IPv4'],['zh-CN','服务器本机 IPv4']]) {
+   await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);
+   await wait(`document.documentElement.lang===${JSON.stringify({'zh-CN':'zh-Hans','zh-TW':'zh-Hant',en:'en'}[locale])}&&document.querySelector('.ppp-management').innerText.includes(${JSON.stringify(label)})`);
+   if(locale==='en'&&!await evaluate(`document.querySelector('.ppp-management .el-alert--success').innerText.includes('Management access updated')`))throw Error('saved status did not translate');
+   if(await evaluate(`document.querySelector('.ppp-management textarea').value!=='10.0.101.0/24\\n10.0.102.0/24'`))throw Error('language switch discarded form '+width+' '+locale);
+   if(await evaluate(`document.documentElement.scrollWidth>innerWidth+2||(()=>{const e=document.querySelector('.ppp-management');return e.scrollWidth>e.clientWidth+2})()`))throw Error('translated form overflow '+width+' '+locale);
+   if(width===320)await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-management-${locale}-${width}.png`,Buffer.from(r.data,'base64')));
+  }
   results.push({width,overflow:false,sessions:true,history:true,mappingDiagnostic:true,httpsRestriction:true,incidents:true,connections:true,configurationPreview:true,notificationSaveGuard:true,closedConnectionGuard:true,googleComparison:true,googleSnapshot:true,managementException:true});
  }
  if(errors.length)throw Error(errors.join('\n'));

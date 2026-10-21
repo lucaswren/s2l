@@ -1,4 +1,8 @@
 <script setup>
+import { tr } from './i18n/index.js';
+import LanguageSelector from './components/LanguageSelector.vue';
+defineProps({authEnabled:{type:Boolean,default:false}});
+
 import {
   computed,
   defineAsyncComponent,
@@ -22,6 +26,14 @@ const status = ref({ uptime_sec: 0, tun_traffic: [], singbox_pids: {} });
 const error = ref("");
 const activeTab = ref("lines");
 const helpVisible = ref(false);
+const signingOut = ref(false);
+async function signOut() {
+  if (signingOut.value) return;
+  signingOut.value = true;
+  try { await api.logout(); window.dispatchEvent(new Event('s2l-auth-required')); }
+  catch (e) { pushToast({type:'err', message:e.message}); }
+  finally { signingOut.value = false; }
+}
 const q = ref("");
 let timer;
 const refreshing = ref(false);
@@ -66,7 +78,7 @@ const filteredMappings = computed(() => {
 function pushToast({ type = "info", message }) {
   ElMessage({
     type: type === "ok" ? "success" : type === "err" ? "error" : "info",
-    message,
+    message: tr(message),
     duration: 5000,
     showClose: true,
   });
@@ -139,40 +151,42 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
             v-if="activeTab === 'lines'"
             v-model="q"
             clearable
-            placeholder="搜索节点、接口或账号"
-            aria-label="搜索节点或映射"
+            :placeholder='tr("搜索节点、接口或账号")'
+            :aria-label='tr("搜索节点或映射")'
           />
           <div class="toolbar-buttons">
+            <LanguageSelector />
+            <el-button v-if="authEnabled" :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button>
             <el-button
               v-if="activeTab === 'lines'"
               :loading="refreshing"
               @click="refresh"
-              >刷新</el-button
+              >{{ tr("刷新") }}</el-button
             >
-            <el-button @click="helpVisible = true">帮助</el-button>
+            <el-button @click="helpVisible = true">{{ tr("帮助") }}</el-button>
           </div>
         </div>
       </header>
       <el-row v-if="activeTab==='lines'" :gutter="12" class="stats">
         <el-col :xs="12" :sm="6"
           ><el-card shadow="never"
-            ><el-statistic title="节点" :value="nodes.length" /></el-card
+            ><el-statistic :title='tr("节点")' :value="nodes.length" /></el-card
         ></el-col>
         <el-col :xs="12" :sm="6"
           ><el-card shadow="never"
-            ><el-statistic title="映射" :value="mappings.length" /></el-card
+            ><el-statistic :title='tr("映射")' :value="mappings.length" /></el-card
         ></el-col>
         <el-col :xs="12" :sm="6"
           ><el-card shadow="never"
             ><el-statistic
-              title="运行中"
+              :title='tr("运行中")'
               :value="runningCount"
               :value-style="{ color: 'var(--el-color-success)' }" /></el-card
         ></el-col>
         <el-col :xs="12" :sm="6"
           ><el-card shadow="never"
             ><el-statistic
-              title="异常"
+              :title='tr("异常")'
               :value="errCount"
               :value-style="{
                 color: errCount ? 'var(--el-color-danger)' : '',
@@ -190,7 +204,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
       <el-alert v-if="status.configuration_recovery" :title="status.configuration_recovery" type="warning" :closable="false" class="section-gap" />
       <el-card shadow="never" class="workspace">
         <el-tabs v-model="activeTab">
-          <el-tab-pane label="线路管理" name="lines">
+          <el-tab-pane :label='tr("线路管理")' name="lines">
             <Mapping
               :nodes="nodes"
               :mappings="filteredMappings"
@@ -206,20 +220,19 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
               @toast="pushToast"
             />
             <el-collapse class="monitor-collapse"
-              ><el-collapse-item title="运行监控" name="monitor"
+              ><el-collapse-item :title='tr("运行监控")' name="monitor"
                 ><Status :status="status" @changed="refresh" @toast="pushToast" /></el-collapse-item
             ></el-collapse>
           </el-tab-pane>
-          <el-tab-pane label="系统设置" name="settings" lazy
+          <el-tab-pane :label='tr("系统设置")' name="settings" lazy
             ><Settings :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"
           /></el-tab-pane>
         </el-tabs>
       </el-card>
-      <el-drawer v-model="helpVisible" title="使用说明" size="min(540px, 100vw)" destroy-on-close
+      <el-drawer v-model="helpVisible" :title='tr("使用说明")' size="min(540px, 100vw)" destroy-on-close
         ><Guide :mappings="mappings" :health="status.upstream_health"
       /></el-drawer>
-      <footer class="muted">
-        运行 {{ formatUptime(status.uptime_sec) }}
+      <footer class="muted"> {{ tr("运行") }} {{ formatUptime(status.uptime_sec) }}
       </footer>
     </div>
   </el-config-provider>

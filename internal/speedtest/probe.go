@@ -35,20 +35,16 @@ type TransferResult struct {
 	Error      string  `json:"error,omitempty"`
 }
 
-// Result 包含独立的上下行结果；旧速度字段保留为下载结果的兼容别名。
+// Result 包含独立的上下行结果。
 type Result struct {
-	OK         bool           `json:"ok"`
-	NodeID     string         `json:"node_id"`
-	Name       string         `json:"name"`
-	Addr       string         `json:"addr"`
-	LatencyMs  int64          `json:"latency_ms"`
-	Download   TransferResult `json:"download"`
-	Upload     TransferResult `json:"upload"`
-	Bytes      int64          `json:"bytes"`
-	DurationMs int64          `json:"duration_ms"`
-	SpeedBps   float64        `json:"speed_bps"`
-	SpeedMbps  float64        `json:"speed_mbps"`
-	Error      string         `json:"error,omitempty"`
+	OK        bool           `json:"ok"`
+	NodeID    string         `json:"node_id"`
+	Name      string         `json:"name"`
+	Addr      string         `json:"addr"`
+	LatencyMs int64          `json:"latency_ms"`
+	Download  TransferResult `json:"download"`
+	Upload    TransferResult `json:"upload"`
+	Error     string         `json:"error,omitempty"`
 }
 
 // Probe 经同一 SOCKS5 节点分别测量下载和上传，每个方向独立限时。
@@ -95,8 +91,6 @@ func probeDirections(ctx context.Context, node model.SocksNode, size int64, clie
 	result.Upload = upload(upCtx, client, upURL, size)
 	cancelUp()
 	result.OK = result.Download.OK && result.Upload.OK
-	result.Bytes, result.DurationMs = result.Download.Bytes, result.Download.DurationMs
-	result.SpeedBps, result.SpeedMbps = result.Download.SpeedBps, result.Download.SpeedMbps
 	var failures []string
 	if !result.Download.OK {
 		failures = append(failures, "download: "+result.Download.Error)

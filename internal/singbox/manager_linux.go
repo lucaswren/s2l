@@ -70,7 +70,7 @@ func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error
 	if previous != nil && previous.running() {
 		return fmt.Errorf("sing-box for %s already running", mapping.TunName)
 	}
-	resolver, err := dnsproxy.Start(node, mapping.EffectiveDNSMode())
+	resolver, err := dnsproxy.Start(node, mapping.EffectiveDNSMode(), mapping.EffectiveUDPPolicy())
 	if err != nil {
 		return fmt.Errorf("start DNS resolver: %w", err)
 	}

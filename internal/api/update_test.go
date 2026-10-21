@@ -27,7 +27,7 @@ func TestWebUpdateRequiresAuthenticatedSameOriginJSON(t *testing.T) {
 		r.Header.Set("Content-Type", tc.contentType)
 		r.Header.Set("Origin", tc.origin)
 		if tc.auth {
-			r.SetBasicAuth("admin", "test-password-123")
+			r.AddCookie(testLogin(t, s.Handler(), "admin", "test-password-123"))
 		}
 		w := httptest.NewRecorder()
 		s.Handler().ServeHTTP(w, r)

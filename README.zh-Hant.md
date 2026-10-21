@@ -2,7 +2,7 @@
 
 [English](README.md) · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
-S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與 iptables 將流量導向指定 SOCKS5 上游。Go 服務內嵌 Vue 3 / Element Plus 管理介面，支援節點與映射管理、批次匯入、啟停、重啟恢復、上下行測速與系統設定。介面及安裝訊息目前主要為簡體中文。
+S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與 iptables 將流量導向指定 SOCKS5 上游。Go 服務內嵌 Vue 3 / Element Plus 管理介面，支援節點與映射管理、批次匯入、啟停、重啟恢復、上下行測速與系統設定。管理介面支援簡體中文、繁體中文與英文，使用表單登入與工作階段驗證；安裝訊息為簡體中文。
 
 僅在取得授權的主機、網路與上游服務上使用。部署前閱讀[法律與合規說明](docs/zh-Hant/legal.md)，尤其涉及中國大陸或跨境連線時。軟體不提供監管許可，也不保證匿名性。
 

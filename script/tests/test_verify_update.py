@@ -1,5 +1,4 @@
 from pathlib import Path
-import base64
 import json
 import sys
 import tempfile
@@ -27,12 +26,35 @@ class UpdateVerificationTests(unittest.TestCase):
                     verify_update.preflight(path)
 
     def test_local_health_authentication_and_new_schema(self):
-        expected = "Basic " + base64.b64encode(b"admin:secret-password").decode()
         class Handler(BaseHTTPRequestHandler):
             modern = True
             redirect = False
+            omit_cookie = False
+            expire_once = False
+            logouts = 0
+            def do_POST(self):
+                if self.headers.get("Authorization") is not None:
+                    self.send_response(400)
+                    self.end_headers()
+                    return
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+                if self.path == "/api/auth/logout":
+                    type(self).logouts += 1
+                    self.send_response(200)
+                    self.end_headers()
+                    return
+                if self.path != "/api/auth/login" or body != {"username": "admin", "password": "secret-password"}:
+                    self.send_response(401)
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                if not self.omit_cookie:
+                    self.send_header("Set-Cookie", "s2l_session=test-session; Path=/; HttpOnly; SameSite=Strict")
+                self.end_headers()
+                self.wfile.write(b'{"authenticated":true}')
             def do_GET(self):
-                if self.path != "/api/status" or self.headers.get("Authorization") != expected:
+                if self.path != "/api/status" or self.headers.get("Cookie") != "s2l_session=test-session" or self.headers.get("Authorization") is not None or self.expire_once:
+                    type(self).expire_once = False
                     self.send_response(401)
                     self.end_headers()
                     return
@@ -56,6 +78,13 @@ class UpdateVerificationTests(unittest.TestCase):
             config = dict(listen=f"127.0.0.1:{server.server_port}", admin_user="admin", admin_pass="secret-password")
             with patch.dict("os.environ", {"http_proxy": "http://127.0.0.1:1"}):
                 verify_update.check_health(config, attempts=1)
+            self.assertEqual(Handler.logouts, 1)
+            Handler.expire_once = True
+            verify_update.check_health(config, attempts=2, delay=0)
+            Handler.omit_cookie = True
+            with self.assertRaises(ValueError):
+                verify_update.check_health(config, attempts=1)
+            Handler.omit_cookie = False
             Handler.redirect = True
             with self.assertRaises(ValueError):
                 verify_update.check_health(config, attempts=1)

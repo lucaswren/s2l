@@ -213,12 +213,21 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 		run("ip", "netns", "exec", ns, "python3", "-c", `import socket,struct,time
 q=b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x05probe\x04test\x00\x00\x01\x00\x01'
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,('1.1.1.1',53));r,_=s.recvfrom(4096);assert r[:2]==q[:2] and r[-4:]==bytes([198,18,0,9]);s.close()
-s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(2);s.connect(('198.18.0.9',9999));s.send(b'probe')
-try:
- s.recv(1024);raise AssertionError('UDP unexpectedly passed')
-except OSError as e:
- assert not isinstance(e,TimeoutError),'UDP was dropped instead of rejected'
+q=b'\x12\x35\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00'+b''.join(bytes([len(x)])+x for x in [b'gmail',b'googleapis',b'com'])+b'\x00\x00\x41\x00\x01'
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,('1.1.1.1',53));r,_=s.recvfrom(4096);assert r[:2]==q[:2] and r[3]&15==0 and r[6:8]==b'\x00\x00','Google HTTPS discovery was not suppressed';s.close()
+for port in [9999,443]:
+ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(2);s.connect(('198.18.0.9',port));s.send(b'probe')
+ try:
+  s.recv(1024);raise AssertionError('UDP unexpectedly passed')
+ except OSError as e:
+  assert not isinstance(e,TimeoutError),'UDP was dropped instead of rejected'
+ finally:s.close()
 `)
+		// A client that retries over TCP after UDP rejection keeps this exit.
+		output = run("ip", "netns", "exec", ns, "curl", "--noproxy", "*", "--silent", "--fail", "--max-time", "5", "--cacert", caPath, "https://198.18.0.9/")
+		if strings.TrimSpace(output) != fmt.Sprintf("node%d", i) {
+			t.Fatal("TCP retry changed fixed exit", output)
+		}
 	}
 	// Reusing an account must reject only the new excess session.
 	dupNS := "s2l-dial-duplicate"

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/lucaswren/s2l/internal/buildinfo"
@@ -106,7 +107,7 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 // Debug is memory-only and remains available while diagnosing an update.
 func (s *Server) withUpdateProtection(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if (r.Method != http.MethodPost && r.Method != http.MethodDelete) || r.URL.Path == "/api/settings/update" || r.URL.Path == "/api/debug" || filepath.Clean(s.configPath) != filepath.Clean("/opt/s2l/config.json") {
+		if (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasPrefix(r.URL.Path, "/api/auth/") || r.URL.Path == "/api/settings/update" || r.URL.Path == "/api/debug" || filepath.Clean(s.configPath) != filepath.Clean("/opt/s2l/config.json") {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -161,7 +161,7 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 				}
 			}
 		}
-		result["path"] = "服务器 → 各自固定 SOCKS5；不切换映射，不经过手机/Panabit"
+		result["path"] = "服务器 → 固定 SOCKS5 → 目标服务"
 	} else if body.Kind == "protocols" {
 		report := speedtest.HealthReport{}
 		if s.svc != nil {

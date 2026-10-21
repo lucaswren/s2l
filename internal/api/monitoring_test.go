@@ -63,7 +63,7 @@ func TestMetricsAndOperationsRequireAuthentication(t *testing.T) {
 			t.Fatal(path, w.Code)
 		}
 		r = httptest.NewRequest("GET", path, nil)
-		r.SetBasicAuth("admin", "private")
+		r.AddCookie(testLogin(t, h, "admin", "private"))
 		w = httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		if w.Code != 200 || strings.Contains(w.Body.String(), "private") {

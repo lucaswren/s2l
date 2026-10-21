@@ -13,7 +13,7 @@ Use only on authorized systems, networks and upstream services. Read the [legal 
 - Measure upstream download/upload throughput and connection latency from the server.
 - Manage web credentials, HTTPS/SSH ports, root login password and optional L2TP/IPsec.
 
-Tunnel operation requires Linux, systemd, root privileges, TUN support, xl2tpd, PPP, sing-box and iptables. The installer supports Ubuntu/Debian on amd64 and arm64; Ubuntu Server 24.04 LTS amd64 is the recommended baseline, not a guarantee for every host. Non-Linux builds use platform stubs and cannot provide the tunnel service. UI and installer messages are currently primarily Simplified Chinese.
+Tunnel operation requires Linux, systemd, root privileges, TUN support, xl2tpd, PPP, sing-box and iptables. The installer supports Ubuntu/Debian on amd64 and arm64; Ubuntu Server 24.04 LTS amd64 is the recommended baseline, not a guarantee for every host. Non-Linux builds use platform stubs and cannot provide the tunnel service. The management UI supports English, Traditional Chinese and Simplified Chinese with session-based sign-in. Installer messages use Simplified Chinese.
 
 **Plain L2TP is unencrypted and is the default.** Management HTTPS does not encrypt tunnel traffic. Optional IPsec uses IKEv1 with a shared PSK; validate client compatibility and your security policy. SOCKS5 alone provides no transport encryption. UDP capability depends on the upstream. PPP IPv4 forwarding is restricted to assigned TUNs and PPP IPv6 is blocked; validate client routing and firewall compatibility. No anonymity guarantee is provided.
 

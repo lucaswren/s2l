@@ -57,7 +57,7 @@ Debug 收集开关立即生效，不自动中断连接。现有 sing-box 进程�
 
 ## 节点网络测试
 
-节点列表的“网络测试”提供四种测试，并支持将当前结果导出为 JSON：
+节点列表的“网络测试”提供协议、TCPing、Ping、MTR、HTTPS、链路质量与 Google 专项测试，并支持将当前结果导出为 JSON：
 
 - 协议检测：分别检查 SOCKS5 的 TCP、UDP 与 DNS 能力，并同步运行监控。
 - TCPing：经所选 SOCKS5 节点建立目标 `host:port` 的 TCP 连接，连续测试 8 次，每次最多 6 秒；域名由 SOCKS5 节点解析，耗时包含代理握手。

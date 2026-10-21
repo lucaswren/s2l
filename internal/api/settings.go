@@ -210,6 +210,7 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	s.authMu.Lock()
 	s.adminUser, s.adminPass = body.Username, password
+	s.sessions = nil
 	s.authMu.Unlock()
 	writeJSON(w, 200, map[string]string{"message": "管理账号已更新，新凭据立即生效"})
 }

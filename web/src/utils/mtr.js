@@ -10,7 +10,7 @@ export function mtrHops(output = '') {
   const hop = hops.get(index);
   if (type === 'h' && /^[0-9a-fA-F:.%]+$/.test(value || '')) hop.addresses.add(value);
   if (type === 'x' && /^\d+$/.test(value || '')) hop.sent.add(value);
-  if (type === 'p' && /^\d+$/.test(value || '')) hop.replies.set(sequence ?? `legacy-${hop.replies.size}`, Number(value) / 1000);
+  if (type === 'p' && /^\d+$/.test(value || '') && /^\d+$/.test(sequence || '')) hop.replies.set(sequence, Number(value) / 1000);
  }
  const last = Math.max(-1, ...hops.keys());
  return Array.from({length:last+1}, (_,index) => {

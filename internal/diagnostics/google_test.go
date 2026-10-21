@@ -181,6 +181,55 @@ func TestPinnedTLSHTTP2AndCertificateFailure(t *testing.T) {
 	if row.TCP != "healthy" || row.TLS != "unavailable" || row.HTTP != "not_tested" || row.Stage != "tls" {
 		t.Fatalf("%+v", row)
 	}
+	if row.ErrorCode != "certificate_error" || row.Error == "" {
+		t.Fatalf("missing certificate diagnosis: %+v", row)
+	}
+}
+
+func TestGoogleAddressRetriesKeepExitAndFailureEvidence(t *testing.T) {
+	row := Target{Host: "gmail.googleapis.com", DOH: DNSResult{Addresses: []string{"192.0.2.1", "192.0.2.2", "192.0.2.3"}}, TCPDNS: DNSResult{Addresses: []string{"192.0.2.8", "192.0.2.1"}}}
+	var ips []string
+	probeAddresses(context.Background(), model.SocksNode{ID: "fixed"}, &row, func(_ context.Context, node model.SocksNode, ip string, target *Target) {
+		if node.ID != "fixed" || target.Host != "gmail.googleapis.com" {
+			t.Fatal("exit or SNI changed")
+		}
+		ips = append(ips, ip)
+		target.TCP = "healthy"
+		target.Stage = "tls"
+		target.TLS = "unavailable"
+		target.ErrorCode = "peer_closed"
+		target.Error = "EOF"
+		if ip == "192.0.2.8" {
+			target.TLS = "healthy"
+			target.HTTP = "responded"
+			target.Status = 404
+			target.ErrorCode = ""
+			target.Error = ""
+		}
+	})
+	if len(ips) != 2 || ips[0] != "192.0.2.1" || ips[1] != "192.0.2.8" || row.Status != 404 || row.IP != "192.0.2.8" || len(row.Attempts) != 2 || row.Attempts[0].Error != "EOF" || len(row.DOH.Addresses) != 3 {
+		t.Fatalf("%+v %v", row, ips)
+	}
+	row = Target{Host: "gmail.googleapis.com", DOH: DNSResult{Addresses: []string{"192.0.2.1", "192.0.2.2", "192.0.2.3", "192.0.2.4"}}, TCPDNS: DNSResult{Addresses: []string{"192.0.2.1", "192.0.2.2"}}}
+	probeAddresses(context.Background(), model.SocksNode{}, &row, func(_ context.Context, _ model.SocksNode, ip string, target *Target) {
+		target.TCP = "healthy"
+		target.TLS = "unavailable"
+		target.Stage = "tls"
+	})
+	if len(row.Attempts) != 3 || row.TCP != "healthy" || row.TLS != "unavailable" {
+		t.Fatalf("unbounded or lost stage: %+v", row)
+	}
+	code, message := probeError(errors.New("tls: peer secret-user private-password"), model.SocksNode{Username: "secret-user", Password: "private-password"})
+	if code != "tls_error" || message != "tls: peer [redacted] [redacted]" {
+		t.Fatal(code, message)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	row = Target{Host: "gmail.googleapis.com", DOH: DNSResult{Addresses: []string{"192.0.2.1"}}}
+	probeAddresses(ctx, model.SocksNode{}, &row, func(context.Context, model.SocksNode, string, *Target) { t.Fatal("cancelled check dialed") })
+	if !row.Cancelled || row.Stage != "cancelled" || len(row.Attempts) != 0 {
+		t.Fatalf("cancelled result lost: %+v", row)
+	}
 }
 
 func TestTLSDeadlinePreservesFailedStage(t *testing.T) {

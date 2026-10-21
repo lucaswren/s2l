@@ -83,7 +83,7 @@ func (w *auditWriter) Write(p []byte) (int, error) {
 }
 func (s *Server) withAudit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.svc == nil || !strings.HasPrefix(r.URL.Path, "/api/") || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasSuffix(r.URL.Path, "/network-test") || strings.HasSuffix(r.URL.Path, "/speedtest") {
+		if s.svc == nil || !strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/api/auth/") || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || strings.HasSuffix(r.URL.Path, "/network-test") || strings.HasSuffix(r.URL.Path, "/speedtest") {
 			next.ServeHTTP(w, r)
 			return
 		}

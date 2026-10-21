@@ -14,6 +14,7 @@ class Handler(SimpleHTTPRequestHandler):
  def reply(self,data):
   body=json.dumps(data).encode();self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
  def do_GET(self):
+  if self.path=='/api/auth/status':return self.reply(dict(enabled=False,authenticated=True))
   if self.path=='/api/settings/ppp-management':return self.reply(dict(available=True,access=dict(enabled=False,destination_ip='',source_cidrs=[],tcp_ports=[]),sources=[dict(id='m',subnet='10.0.101.0/24',name='account-a')],detected_ports=[38866,51234],configured_ports=[38866,51234],port_check_available=True,local_ipv4=['156.245.235.230']))
   if self.path=='/api/settings':return self.reply(dict(account_enabled=False,ssh_enabled=False,ssh_ports=[51234],ipsec=dict(available=False)))
   if self.path=='/api/settings/update':return self.reply(dict(available=False,current=dict(version='development')))
@@ -33,7 +34,7 @@ class Handler(SimpleHTTPRequestHandler):
     hosts=['www.google.com','accounts.google.com','oauth2.googleapis.com','gmail.googleapis.com','www.youtube.com','gemini.google.com','robinfrontend-pa.googleapis.com','oauthaccountmanager.googleapis.com']
     rows=[dict(host=h,a=dns,aaaa=dict(dns,state='no_address',addresses=[]),doh=dns,tcp_dns=dns,tcp='healthy',tls='healthy',http='responded',status=403,alpn='h2',stage='http',duration_ms=100) for h in hosts]
     if n=='n':rows[3].update(tls='unavailable',http='not_tested',status=0,stage='tls')
-    return dict(node_id=n,node_name='固定出口 A' if n=='n' else '对照出口 B',checked_at=now,targets=rows,exit=dict(healthy,exit_ip='203.0.113.5'),scope='服务器 → 固定 SOCKS5，不经过手机/Panabit',quic='未发送 UDP/QUIC；不证明 iPhone 已回退。')
+    return dict(node_id=n,node_name='固定出口 A' if n=='n' else '对照出口 B',checked_at=now,targets=rows,exit=dict(healthy,exit_ip='203.0.113.5'),scope='服务器 → 固定 SOCKS5，不经过手机/接入网络',quic='未发送 UDP/QUIC；不证明 客户端 已回退。')
    return self.reply(dict(kind='google',schema_version=1,ok=False,google=[report('n')]+([report('n2')] if body.get('compare_node') else []),mapping_policies=[dict(mapping_id='m',node_id='n',udp_policy='reject',dns_mode='auto',max_connections=0,max_sessions=0)]))
   if self.path=='/api/mappings?preview=1':return self.reply({'fields':['l2tp_pass','upload_kbps','download_kbps'],'affected':['m'],'message':'保存前已校验，测试配置预览。'})
   if self.path.startswith('/api/mappings/'):

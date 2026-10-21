@@ -4,12 +4,14 @@ package diagnostics
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptrace"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,22 +29,38 @@ type DNSResult struct {
 	DurationMS int64    `json:"duration_ms"`
 }
 type Target struct {
-	Host       string    `json:"host"`
-	A          DNSResult `json:"a"`
-	DOH        DNSResult `json:"doh"`
-	TCPDNS     DNSResult `json:"tcp_dns"`
-	AAAA       DNSResult `json:"aaaa"`
-	TCP        string    `json:"tcp"`
-	TLS        string    `json:"tls"`
-	HTTP       string    `json:"http"`
-	Status     int       `json:"status"`
-	ALPN       string    `json:"alpn"`
-	TCPMS      int64     `json:"tcp_ms"`
-	TLSMS      int64     `json:"tls_ms"`
-	TimedOut   bool      `json:"timed_out"`
-	Cancelled  bool      `json:"cancelled"`
-	Stage      string    `json:"stage"`
-	DurationMS int64     `json:"duration_ms"`
+	IP         string         `json:"ip,omitempty"`
+	ErrorCode  string         `json:"error_code,omitempty"`
+	Error      string         `json:"error,omitempty"`
+	Attempts   []ProbeAttempt `json:"attempts,omitempty"`
+	Host       string         `json:"host"`
+	A          DNSResult      `json:"a"`
+	DOH        DNSResult      `json:"doh"`
+	TCPDNS     DNSResult      `json:"tcp_dns"`
+	AAAA       DNSResult      `json:"aaaa"`
+	TCP        string         `json:"tcp"`
+	TLS        string         `json:"tls"`
+	HTTP       string         `json:"http"`
+	Status     int            `json:"status"`
+	ALPN       string         `json:"alpn"`
+	TCPMS      int64          `json:"tcp_ms"`
+	TLSMS      int64          `json:"tls_ms"`
+	TimedOut   bool           `json:"timed_out"`
+	Cancelled  bool           `json:"cancelled"`
+	Stage      string         `json:"stage"`
+	DurationMS int64          `json:"duration_ms"`
+}
+type ProbeAttempt struct {
+	IP         string `json:"ip"`
+	Stage      string `json:"stage"`
+	TCP        string `json:"tcp"`
+	TLS        string `json:"tls"`
+	HTTP       string `json:"http"`
+	Status     int    `json:"status"`
+	ALPN       string `json:"alpn,omitempty"`
+	ErrorCode  string `json:"error_code,omitempty"`
+	Error      string `json:"error,omitempty"`
+	DurationMS int64  `json:"duration_ms"`
 }
 type Report struct {
 	NodeID          string               `json:"node_id"`
@@ -71,8 +89,8 @@ type resolver interface {
 
 func google(ctx context.Context, node model.SocksNode, hosts []string, doh, tcp resolver, probeTarget func(context.Context, model.SocksNode, string, *Target), exit func(context.Context, model.SocksNode) model.ProtocolHealth) Report {
 	r := Report{NodeID: node.ID, NodeName: node.Name, CheckedAt: time.Now(), Targets: make([]Target, len(hosts)),
-		Scope: "服务器 → 固定 SOCKS5；独立 DoH/TCP DNS，解析所得首个 IPv4 → TCP/TLS/HTTP。未经过 Panabit/手机，不验证账号登录或 App 全部接口。",
-		QUIC:  "未发送 UDP/QUIC；TCP/TLS 成功仅证明存在 TCP 访问路径，不证明 iPhone 已回退。需对比 Panabit 手机入站侧拒绝 UDP/443 前后结果，并核对 ICMP 返回。"}
+		Scope: "服务器经固定节点检查 DNS、TCP/TLS、HTTP；失败时最多复测 3 个 IPv4 地址。不验证客户端连接和账号登录。",
+		QUIC:  "未发送 QUIC；TCP/TLS 可用不代表客户端已回退，需核对客户端行为与 ICMP 返回。"}
 
 	slots := make(chan struct{}, 4)
 	var wg sync.WaitGroup
@@ -99,7 +117,7 @@ func google(ctx context.Context, node model.SocksNode, hosts []string, doh, tcp 
 				row.AAAA = resolve(ctx, tcp, host, 28)
 			}
 			if len(row.A.Addresses) > 0 {
-				probeTarget(ctx, node, row.A.Addresses[0], &row)
+				probeAddresses(ctx, node, &row, probeTarget)
 			} else {
 				row.Stage = "dns"
 			}
@@ -117,6 +135,78 @@ func google(ctx context.Context, node model.SocksNode, hosts []string, doh, tcp 
 		r.Exit = exit(ctx, node)
 	}
 	return r
+}
+
+// Retry destination addresses only within this node. DNS answers are interleaved
+// so the independent TCP resolver gets a chance before a third DoH address.
+func probeAddresses(ctx context.Context, node model.SocksNode, row *Target, check func(context.Context, model.SocksNode, string, *Target)) {
+	var ips []string
+	seen := map[string]bool{}
+	for i := 0; len(ips) < 3; i++ {
+		added := false
+		for _, result := range []DNSResult{row.DOH, row.TCPDNS} {
+			if i >= len(result.Addresses) {
+				continue
+			}
+			added = true
+			ip := result.Addresses[i]
+			parsed := net.ParseIP(ip)
+			if !seen[ip] && parsed != nil && parsed.To4() != nil {
+				seen[ip] = true
+				ips = append(ips, ip)
+				if len(ips) == 3 {
+					break
+				}
+			}
+		}
+		if !added {
+			break
+		}
+	}
+	var attempts []ProbeAttempt
+	best := Target{Host: row.Host, TCP: "not_tested", TLS: "not_tested", HTTP: "not_tested"}
+	budget, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	started := time.Now()
+	for _, ip := range ips {
+		if budget.Err() != nil {
+			break
+		}
+		attemptCtx, done := context.WithTimeout(budget, 4*time.Second)
+		trial := Target{Host: row.Host, IP: ip, TCP: "not_tested", TLS: "not_tested", HTTP: "not_tested"}
+		check(attemptCtx, node, ip, &trial)
+		done()
+		attempts = append(attempts, ProbeAttempt{IP: ip, Stage: trial.Stage, TCP: trial.TCP, TLS: trial.TLS, HTTP: trial.HTTP, Status: trial.Status, ALPN: trial.ALPN, ErrorCode: trial.ErrorCode, Error: trial.Error, DurationMS: trial.DurationMS})
+		if len(attempts) == 1 || probeProgress(trial) >= probeProgress(best) {
+			best = trial
+		}
+		if trial.HTTP == "responded" {
+			break
+		}
+	}
+	best.A, best.AAAA, best.DOH, best.TCPDNS = row.A, row.AAAA, row.DOH, row.TCPDNS
+	best.Attempts = attempts
+	if best.HTTP != "responded" {
+		best.Cancelled = best.Cancelled || errors.Is(budget.Err(), context.Canceled)
+		best.TimedOut = best.TimedOut || errors.Is(budget.Err(), context.DeadlineExceeded)
+		if len(attempts) == 0 && budget.Err() != nil {
+			best.Stage = "cancelled"
+		}
+	}
+	best.DurationMS = time.Since(started).Milliseconds()
+	*row = best
+}
+func probeProgress(row Target) int {
+	if row.HTTP == "responded" {
+		return 3
+	}
+	if row.TLS == "healthy" {
+		return 2
+	}
+	if row.TCP == "healthy" {
+		return 1
+	}
+	return 0
 }
 
 func resolve(ctx context.Context, r resolver, host string, kind uint16) DNSResult {
@@ -258,8 +348,50 @@ func probeTLS(ctx context.Context, node model.SocksNode, ip string, row *Target,
 		if err == nil && readErr == nil {
 			row.HTTP = "responded"
 		}
+		if err == nil {
+			err = readErr
+		}
+	}
+	if err != nil {
+		row.ErrorCode, row.Error = probeError(err, node)
 	}
 	row.Cancelled = errors.Is(ctx.Err(), context.Canceled)
 	row.TimedOut = errors.Is(ctx.Err(), context.DeadlineExceeded)
 	row.DurationMS = time.Since(start).Milliseconds()
+}
+
+func probeError(err error, node model.SocksNode) (string, string) {
+	code := "connection_error"
+	var certificate *tls.CertificateVerificationError
+	var unknown x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	var network net.Error
+	switch {
+	case errors.As(err, &certificate) || errors.As(err, &unknown) || errors.As(err, &hostname):
+		code = "certificate_error"
+	case errors.Is(err, context.DeadlineExceeded):
+		code = "timeout"
+	case errors.Is(err, context.Canceled):
+		code = "cancelled"
+	case errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF):
+		code = "peer_closed"
+	case errors.As(err, &network) && network.Timeout():
+		code = "timeout"
+	case strings.Contains(strings.ToLower(err.Error()), "reset"):
+		code = "connection_reset"
+	case strings.Contains(err.Error(), "tls:"):
+		code = "tls_error"
+	}
+	message := err.Error()
+	for _, secret := range []string{node.Username, node.Password} {
+		if secret != "" {
+			message = strings.ReplaceAll(message, secret, "[redacted]")
+		}
+	}
+	message = strings.ToValidUTF8(message, "?")
+	runes := []rune(message)
+	if len(runes) > 512 {
+		message = string(runes[:512]) + "…"
+	}
+	return code, message
 }
