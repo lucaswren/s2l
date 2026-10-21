@@ -32,4 +32,4 @@ async function save(){if(busy.value)return;busy.value=true;error.value='';messag
   <details class="management-notes"><summary>{{ tr('检测范围与说明') }}</summary><p v-if="info.port_check_available">{{ tr("配置涉及端口：") }}{{info.configured_ports?.join(', ') || tr("未取得")}}{{ tr("；当前监听：") }}{{info.detected_ports?.join(', ') || tr("未发现匹配端口")}}</p><p class="muted">{{ tr("目标 IP 需绑定本机；公网 NAT 地址需另行核对。移除例外会中断对应管理连接。") }}</p></details>
  </el-card>
 </template>
-<style scoped>.ppp-management p{overflow-wrap:anywhere}.ppp-management .el-input,.ppp-management .el-select{width:100%}.management-notes{margin-top:20px}.field-hint{margin-top:6px;color:var(--el-text-color-secondary);font-size:13px;line-height:1.5}</style>
+<style scoped>.ppp-management p{overflow-wrap:anywhere}.ppp-management .el-input,.ppp-management .el-select{width:100%}.management-notes{margin-top:20px}.field-hint{margin-top:6px;color:var(--el-text-color-secondary);font-size:14px;line-height:1.5}</style>

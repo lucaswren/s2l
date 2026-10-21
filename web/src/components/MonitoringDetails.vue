@@ -41,7 +41,7 @@ const recent=computed(()=>history.value.slice(-12).reverse());
    <el-table-column :label='tr("拨号时间 / 首次观测")' min-width="175"><template #default="{row}">{{time(row.connected_at&&!row.connected_at.startsWith('0001')?row.connected_at:row.first_seen)}}</template></el-table-column>
    <el-table-column :label='tr("接收 / 发送")' min-width="160"><template #default="{row}">{{bytes(row.rx_bytes)}} / {{bytes(row.tx_bytes)}}</template></el-table-column>
    <el-table-column :label='tr("丢包 / 错误")'><template #default="{row}">{{row.dropped}} / {{row.errors}}<span v-if="row.error"> · {{row.error}}</span></template></el-table-column>
-<el-table-column :label='tr("会话管理")' width="110"><template #default="{row}"><el-button v-if="row.disconnectable" size="small" :loading="disconnecting===row.interface" @click="disconnect(row)">{{ tr("断开") }}</el-button></template></el-table-column>
+<el-table-column :label='tr("会话管理")' width="110"><template #default="{row}"><el-button v-if="row.disconnectable" :loading="disconnecting===row.interface" @click="disconnect(row)">{{ tr("断开") }}</el-button></template></el-table-column>
   </el-table>
   <div class="mobile-list"><el-empty v-if="!sessions.length" :description='tr("暂无已观测会话")'/><article v-for="row in sessions" :key="row.index" class="session-row"><strong>{{row.interface}} · {{name(row.mapping_id)}}</strong><p>{{row.peer_ip}} · MTU {{row.mtu}}</p><p>{{ tr("接收") }} {{bytes(row.rx_bytes)}} {{ tr("· 发送") }} {{bytes(row.tx_bytes)}}</p><p>{{ tr("丢包") }} {{row.dropped}} {{ tr("· 错误") }} {{row.errors}}</p><p>{{ tr("首次观测") }} {{time(row.connected_at&&!row.connected_at.startsWith('0001')?row.connected_at:row.first_seen)}}</p><p v-if="row.error">{{row.error}}</p><el-button v-if="row.disconnectable" :loading="disconnecting===row.interface" @click="disconnect(row)">{{ tr("断开会话") }}</el-button></article></div>
   <p class="muted">{{ tr("首次观测时间不等于拨号时间；一条隧道可能承载多台设备。") }}</p>
@@ -65,5 +65,5 @@ const recent=computed(()=>history.value.slice(-12).reverse());
 <Operations :mappings="mappings"/>
 </template>
 <style scoped>
-.history-controls{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}.history-controls .el-select{width:240px;max-width:100%}.session-row{padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter);overflow-wrap:anywhere}.session-row p{font-size:13px;margin:8px 0}.session-row:last-child{border:0}
+.history-controls{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}.history-controls .el-select{width:240px;max-width:100%}.session-row{padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter);overflow-wrap:anywhere}.session-row p{font-size:14px;margin:8px 0}.session-row:last-child{border:0}
 </style>

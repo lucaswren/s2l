@@ -20,10 +20,26 @@ try{
  function send(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error('CDP timeout '+method))}},10000).unref()})}
  async function evaluate(expression){const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value}
  async function wait(expression){for(let i=0;i<70;i++){if(await evaluate(expression))return;await pause(100)}throw Error('UI readiness timeout: '+expression+' BODY='+await evaluate('document.documentElement.outerHTML.slice(0,2500)')+' ERRORS='+JSON.stringify(errors))}
+ async function checkLayout(context) {
+  const faults=await evaluate(`(()=>{
+   const visible=e=>!!e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
+   const out=[];
+   for(const e of document.querySelectorAll('.el-button,.el-form-item__label,.el-radio__label,.el-checkbox__label,.el-tag__content,.el-collapse-item__header,.el-table .cell')) {
+    if(!visible(e))continue;
+    const r=e.getBoundingClientRect(),style=getComputedStyle(e);
+    if(e.scrollWidth>e.clientWidth+2||e.scrollHeight>e.clientHeight+2)out.push({text:e.innerText,kind:'clipped',class:e.className,width:e.clientWidth,scroll:e.scrollWidth,height:e.clientHeight,scrollHeight:e.scrollHeight});
+    if(e.classList.contains('el-button')&&(r.height<31||parseFloat(style.fontSize)!==14))out.push({text:e.innerText,kind:'nonstandard',height:r.height,font:style.fontSize});
+   }
+   if(document.documentElement.scrollWidth>innerWidth+2)out.push({kind:'page-overflow',width:innerWidth,scroll:document.documentElement.scrollWidth});
+   for(const e of document.querySelectorAll('.el-dialog,.el-message-box,.el-card,.el-dialog__body'))if(visible(e)&&e.scrollWidth>e.clientWidth+2)out.push({kind:'container-overflow',class:e.className,width:e.clientWidth,scroll:e.scrollWidth});
+   return out.slice(0,12);
+  })()`);
+  if(faults.length)throw Error('layout '+context+' '+JSON.stringify(faults));
+ }
  await send('Page.enable');await send('Runtime.enable');
  await send('Page.addScriptToEvaluateOnNewDocument',{source:"localStorage.setItem('s2l-language','zh-CN')"});
  const results=[];
- for(const width of [1440,390,320]){
+ for(const width of [1440,768,390,320]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
   await send('Page.navigate',{url:`http://127.0.0.1:${apiPort}/`});
   await wait(`!!document.querySelector('.el-collapse-item__header') && document.body.innerText.includes('固定出口 A')`);
@@ -92,6 +108,10 @@ try{
   const googleBounds=await evaluate(`(()=>{const e=document.querySelector('.network-test-dialog .el-dialog__body');return {width:e.clientWidth,scroll:e.scrollWidth}})()`);
   if(googleBounds.scroll>googleBounds.width+2)throw Error('Google diagnostic overflow '+width+' '+JSON.stringify(await evaluate(`(()=>{const b=document.querySelector('.network-test-dialog .el-dialog__body'),r=b.getBoundingClientRect();return [...b.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>r.right+1).slice(0,12).map(e=>({tag:e.tagName,cls:e.className,width:e.clientWidth,scroll:e.scrollWidth}))})()`)));
   await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-google-${width}.png`,Buffer.from(r.data,'base64')));
+  for(const locale of ['en','zh-TW','zh-CN']) {
+   await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);await pause(100);
+   await checkLayout(width+' '+locale+' Google dialog');
+  }
   await evaluate(`document.querySelector('.network-test-dialog .el-dialog__headerbtn').click()`);await pause(350);
   await evaluate(`[...document.querySelectorAll('[role=tab]')].find(e=>e.innerText==='系统设置').click()`);
   await wait(`!!document.querySelector('details[aria-label="远程管理"] > summary')`);
@@ -112,7 +132,27 @@ try{
    if(locale==='en'&&!await evaluate(`document.querySelector('.ppp-management .el-alert--success').innerText.includes('Management access updated')`))throw Error('saved status did not translate');
    if(await evaluate(`document.querySelector('.ppp-management textarea').value!=='10.0.101.0/24\\n10.0.102.0/24'`))throw Error('language switch discarded form '+width+' '+locale);
    if(await evaluate(`document.documentElement.scrollWidth>innerWidth+2||(()=>{const e=document.querySelector('.ppp-management');return e.scrollWidth>e.clientWidth+2})()`))throw Error('translated form overflow '+width+' '+locale);
+   await evaluate(`document.querySelectorAll('.settings-disclosure').forEach(e=>{e.open=true})`);await pause(250);
+   await checkLayout(width+' '+locale+' settings');
+   if(await evaluate(`document.querySelectorAll('.workspace.el-card,.settings-disclosure[style*="border"]').length>0`))throw Error('nested workspace frame');
+   if(width===320)await evaluate(`document.querySelector('.ppp-management').scrollIntoView({block:'start'})`);
    if(width===320)await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-management-${locale}-${width}.png`,Buffer.from(r.data,'base64')));
+  }
+  for(const locale of ['en','zh-TW','zh-CN']) {
+   await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);await pause(100);
+   await evaluate(`document.querySelectorAll('[role=tab]')[0].click()`);await pause(150);
+   await checkLayout(width+' '+locale+' lines');
+   await evaluate(`document.querySelectorAll('.section-head .actions button')[1].click()`);
+   await wait(`!!document.querySelector('.edit-dialog')`);await pause(150);
+   await checkLayout(width+' '+locale+' mapping form');
+   await evaluate(`document.querySelector('.edit-dialog details').open=true`);await pause(100);
+   await checkLayout(width+' '+locale+' advanced form');
+   await evaluate(`document.querySelector('.edit-dialog .el-dialog__headerbtn').click()`);await pause(250);
+   await evaluate(`document.querySelector('.monitor-collapse .el-collapse-item').classList.contains('is-active')||document.querySelector('.monitor-collapse .el-collapse-item__header').click()`);await pause(150);
+   await checkLayout(width+' '+locale+' monitoring');
+   await evaluate(`document.querySelector('.hero .el-button').click()`);await wait(`!!document.querySelector('.el-drawer')`);await pause(200);
+   await checkLayout(width+' '+locale+' help drawer');
+   await evaluate(`document.querySelector('.el-drawer__close-btn').click()`);await pause(250);
   }
   results.push({width,overflow:false,sessions:true,history:true,mappingDiagnostic:true,httpsRestriction:true,incidents:true,connections:true,configurationPreview:true,notificationSaveGuard:true,closedConnectionGuard:true,googleComparison:true,googleSnapshot:true,managementException:true});
  }

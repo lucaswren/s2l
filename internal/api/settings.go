@@ -19,7 +19,14 @@ import (
 	"github.com/lucaswren/s2l/internal/config"
 )
 
-func (s *Server) ConfigureSettings(path string) { s.configPath = path }
+func (s *Server) ConfigureSettings(path string) {
+	s.configPath = path
+	if cfg, err := config.Load(path); err == nil {
+		s.authMu.Lock()
+		s.uiLanguage = cfg.UILanguage
+		s.authMu.Unlock()
+	}
+}
 
 func (s *Server) settingsWrite(w http.ResponseWriter, r *http.Request) bool {
 	if r.Method != http.MethodPost {

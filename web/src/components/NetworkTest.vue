@@ -65,7 +65,7 @@ function download() {
   <div v-if="busy || result" class="network-test-result" aria-live="polite" :aria-busy="busy">
    <div class="network-test-summary"><el-tag :type="busy || stopped ? 'info' : result?.ok ? 'success' : 'warning'">{{ summary }}</el-tag><span v-if="result?.target">{{ result.target }}</span></div>
    <GoogleDiagnostic v-if="result?.google" :result="result" @baseline="comparisonSnapshot=$event" />
-   <div v-if="rows.length" class="network-protocols"><article v-for="row in rows" :key="row.name" class="network-protocol"><div><strong>{{ row.name }}</strong><el-tag :type="row.state === 'healthy' ? 'success' : 'warning'" size="small">{{ labels[row.state] || row.state }}</el-tag></div><span class="network-test-hint">{{ methods[row.method] || row.method }}</span><p>{{protocolSummary(row)}}</p><p v-if="row.error && !(row.state === 'restricted' && row.status_code)">{{ row.error }}</p><details v-if="row.attempts?.length"><summary>{{ tr("分目标结果") }}</summary><p v-for="attempt in row.attempts" :key="attempt.target">{{attempt.target}} · {{protocolSummary(attempt)}}</p></details></article></div>
+   <div v-if="rows.length" class="network-protocols"><article v-for="row in rows" :key="row.name" class="network-protocol"><div><strong>{{ row.name }}</strong><el-tag :type="row.state === 'healthy' ? 'success' : 'warning'">{{ labels[row.state] || row.state }}</el-tag></div><span class="network-test-hint">{{ methods[row.method] || row.method }}</span><p>{{protocolSummary(row)}}</p><p v-if="row.error && !(row.state === 'restricted' && row.status_code)">{{ row.error }}</p><details v-if="row.attempts?.length"><summary>{{ tr("分目标结果") }}</summary><p v-for="attempt in row.attempts" :key="attempt.target">{{attempt.target}} · {{protocolSummary(attempt)}}</p></details></article></div>
    <template v-if="result?.kind === 'mtr'">
     <p v-if="busy && !hops.length" class="network-test-hint">{{ tr("正在等待跳点响应…") }}</p>
     <div v-if="hops.length" class="network-hops"><article v-for="hop in hops" :key="hop.hop" class="network-hop"><span class="network-hop-number">{{ hop.hop }}</span><div><strong>{{ hop.address }}</strong><small>{{ tr("响应") }} {{ hop.received }}<template v-if="hop.sent"> / {{ hop.sent }}</template></small></div><div class="network-hop-latency"><strong>{{ hop.average }} <small>ms</small></strong><small>{{ tr("平均 · 最新") }} {{ hop.last }} ms</small></div></article></div>
@@ -87,30 +87,30 @@ function download() {
 .network-test-dialog .el-dialog__body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;max-height:none;padding-bottom:20px;}
 .network-test-dialog .el-dialog__footer{flex:none;padding-top:14px;}
 .network-test-node{display:flex;flex-wrap:wrap;gap:4px 16px;margin-bottom:16px;overflow-wrap:anywhere;}
-.network-test-node span,.network-test-hint{color:var(--el-text-color-secondary);font-size:13px;line-height:1.6;}
-.network-test-modes{display:flex;align-items:center;gap:12px}.network-test-modes label{flex:none;font-size:13px}.network-test-modes .el-select{flex:1;min-width:0}
+.network-test-node span,.network-test-hint{color:var(--el-text-color-secondary);font-size:14px;line-height:1.6;}
+.network-test-modes{display:flex;align-items:center;gap:12px}.network-test-modes label{flex:none;font-size:14px}.network-test-modes .el-select{flex:1;min-width:0}
 
 .network-test-options{display:grid;gap:8px;margin-top:16px;}
-.network-test-options>label{font-size:13px;font-weight:500;}
+.network-test-options>label{font-size:14px;font-weight:500;}
 .network-test-result{margin-top:16px;min-width:0;}
 .network-test-summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;overflow-wrap:anywhere;margin-bottom:16px;}
-.network-test-summary>span:last-child{font-size:12px;color:var(--el-text-color-secondary);}
+.network-test-summary>span:last-child{font-size:14px;color:var(--el-text-color-secondary);}
 .network-protocols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
 .network-protocol{padding:12px;border:1px solid var(--el-border-color-light);border-radius:8px;min-width:0;}
 .network-protocol>div{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
-.network-protocol p{overflow-wrap:anywhere;font-size:12px;margin:8px 0 0;}
+.network-protocol p{overflow-wrap:anywhere;font-size:14px;margin:8px 0 0;}
 .network-hop{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter);}
-.network-hop-number{flex:none;width:24px;color:var(--el-text-color-secondary);font-size:12px;}
+.network-hop-number{flex:none;width:24px;color:var(--el-text-color-secondary);font-size:14px;}
 .network-hop>div{min-width:0;flex:1;display:grid;gap:4px;}
-.network-hop strong{font-size:13px;font-weight:500;overflow-wrap:anywhere;}
-.network-hop small{font-size:11px;color:var(--el-text-color-secondary);font-weight:400;}
+.network-hop strong{font-size:14px;font-weight:500;overflow-wrap:anywhere;}
+.network-hop small{font-size:14px;color:var(--el-text-color-secondary);font-weight:400;}
 .network-hop .network-hop-latency{flex:none;text-align:right;max-width:46%;}
 .network-samples{padding-left:24px;line-height:1.9;}
-.network-raw{margin-top:12px;font-size:13px;}
+.network-raw{margin-top:12px;font-size:14px;}
 .network-raw summary{cursor:pointer;}
-.network-raw pre,.network-raw-output{max-height:280px;overflow:auto;white-space:pre;font-size:12px;line-height:1.6;padding:12px;background:var(--el-fill-color-light);border-radius:6px;}
-.network-test-footer{display:flex;justify-content:flex-end;gap:10px;}
-.network-test-footer .el-button{margin:0;min-height:40px;}
+.network-raw pre,.network-raw-output{max-height:280px;overflow:auto;white-space:pre;font-size:14px;line-height:1.6;padding:12px;background:var(--el-fill-color-light);border-radius:6px;}
+.network-test-footer{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+.network-test-footer .el-button{margin:0;}
 @media(max-width:600px){
  .network-test-dialog.el-dialog.is-fullscreen{width:100%;max-width:none;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;margin:0;border-radius:0;padding:16px;}
  .network-test-dialog .el-dialog__header{padding-top:env(safe-area-inset-top,0px);padding-right:32px;}

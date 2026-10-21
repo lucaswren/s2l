@@ -85,6 +85,6 @@ onMounted(() => perform(load));
 .backup-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter);}
 .backup-item p{margin:6px 0 0;}
 .backup-mobile details{min-width:0;overflow-wrap:anywhere;}
-.backup-mobile summary{cursor:pointer;font-size:13px;line-height:1.7;}
-.backup-mobile pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:var(--el-fill-color-light);padding:12px;border-radius:6px;}
+.backup-mobile summary{cursor:pointer;font-size:14px;line-height:1.7;}
+.backup-mobile pre{max-width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;background:var(--el-fill-color-light);padding:12px;border-radius:6px;}
 </style>

@@ -82,11 +82,11 @@ function formatBytes(n) {
       <el-table-column :label='tr("实际 DNS")' min-width="145"><template #default="{row}"><div>{{ row.resolver?.active === 'tcp' ? 'TCP DNS' : row.resolver?.active === 'doh' ? 'DoH':tr("等待启动") }}</div><div class="muted">{{ tr("备用成功") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</div></template></el-table-column>
       <el-table-column :label='tr("连接错误记录")' min-width="180"><template #default="{row}"><el-tooltip :content="tr(&quot;当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 &quot;) + (row.process?.network_errors || 0) + tr(&quot;，本次服务累计退出 &quot;) + (row.process?.exits || 0)"><span>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }}</span></el-tooltip></template></el-table-column>
       <el-table-column :label='tr("最近检测")'><template #default="{ row }">{{ row.checked_at && !row.checked_at.startsWith('0001') ? dateTime(row.checked_at) : tr("等待检测") }}</template></el-table-column>
-      <el-table-column :label='tr("说明 / 实测")' min-width="220"><template #default="{row}"><p>{{row.error}}</p><p v-if="row.udp_policy === 'reject'" class="muted">{{ tr("策略：拒绝非 DNS UDP") }}</p><el-button size="small" :disabled="!!diagnosing" @click="diagnose(row.id)">{{ tr("映射转发实测") }}</el-button></template></el-table-column>
+      <el-table-column :label='tr("说明 / 实测")' min-width="220"><template #default="{row}"><p>{{row.error}}</p><p v-if="row.udp_policy === 'reject'" class="muted">{{ tr("策略：拒绝非 DNS UDP") }}</p><el-button :disabled="!!diagnosing" @click="diagnose(row.id)">{{ tr("映射转发实测") }}</el-button></template></el-table-column>
       <el-table-column :label='tr("自动恢复")' min-width="230"><template #default="{row}">
         <div>{{ {closed:tr("正常重试"),open:tr("冷却中"),'half-open':tr("试探观察中")}[row.recovery?.circuit] || tr("待检查") }} {{ tr("· 尝试") }} {{ row.recovery?.attempts || 0 }} {{ tr("· 失败") }} {{ row.recovery?.failures || 0 }}</div>
         <div class="muted">{{ tr("下次重试") }} {{ date(row.recovery?.next_retry) }}</div>
-        <el-button v-if="row.local_state !== 'healthy'" size="small" :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">{{ tr("手动重试恢复") }}</el-button>
+        <el-button v-if="row.local_state !== 'healthy'" :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">{{ tr("手动重试恢复") }}</el-button>
       </template></el-table-column>
     </el-table>
     <div class="mobile-list health-mobile">
@@ -146,8 +146,8 @@ function formatBytes(n) {
 @media(max-width:600px){:global(.mapping-diagnostic){margin:12px auto!important;max-height:calc(100dvh - 24px);}}
 .monitor-item{padding:16px 0;border-bottom:1px solid var(--el-border-color-lighter);min-width:0;overflow-wrap:anywhere;}
 .monitor-item:last-child{border-bottom:0;}
-.monitor-item summary{cursor:pointer;font-size:13px;}
-.monitor-item p{font-size:13px;}
+.monitor-item summary{cursor:pointer;font-size:14px;}
+.monitor-item p{font-size:14px;}
 .monitor-protocols{display:grid;gap:10px;margin:12px 0;}
 .monitor-protocols summary strong{display:inline-block;width:48px;}
 .monitor-protocols details p{color:var(--el-text-color-secondary);}

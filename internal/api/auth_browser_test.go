@@ -32,6 +32,11 @@ func TestAuthBrowserFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := NewServer(st, nil, assets, "fixture-admin", "fixture-password-123")
+	configPath := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(configPath, []byte(`{"listen":"127.0.0.1:8080","admin_user":"fixture-admin","admin_pass":"fixture-password-123"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s.ConfigureSettings(configPath)
 	listener, err := net.Listen("tcp4", address)
 	if err != nil {
 		t.Fatal(err)

@@ -27,6 +27,7 @@ Omitting `-config` uses defaults. An explicitly specified file must exist and co
 
 | Key | Default / purpose |
 |---|---|
+| `ui_language` | Optional saved administrator UI language; initially uses the browser language |
 | `listen` | `127.0.0.1:8080`, backend HTTP listener |
 | `admin_user`, `admin_pass` | Empty in the example; configure both together, password at least 12 characters |
 | `singbox_bin` | Program default `sing-box`; example uses `/usr/local/bin/sing-box` |

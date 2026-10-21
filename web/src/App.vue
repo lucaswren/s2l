@@ -26,14 +26,6 @@ const status = ref({ uptime_sec: 0, tun_traffic: [], singbox_pids: {} });
 const error = ref("");
 const activeTab = ref("lines");
 const helpVisible = ref(false);
-const signingOut = ref(false);
-async function signOut() {
-  if (signingOut.value) return;
-  signingOut.value = true;
-  try { await api.logout(); window.dispatchEvent(new Event('s2l-auth-required')); }
-  catch (e) { pushToast({type:'err', message:e.message}); }
-  finally { signingOut.value = false; }
-}
 const q = ref("");
 let timer;
 const refreshing = ref(false);
@@ -155,19 +147,12 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
             :aria-label='tr("搜索节点或映射")'
           />
           <div class="toolbar-buttons">
-            <LanguageSelector />
-            <el-button v-if="authEnabled" :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button>
-            <el-button
-              v-if="activeTab === 'lines'"
-              :loading="refreshing"
-              @click="refresh"
-              >{{ tr("刷新") }}</el-button
-            >
+            <LanguageSelector persist />
             <el-button @click="helpVisible = true">{{ tr("帮助") }}</el-button>
           </div>
         </div>
       </header>
-      <el-row v-if="activeTab==='lines'" :gutter="12" class="stats">
+      <el-row v-if="activeTab==='lines'" :gutter="16" class="stats">
         <el-col :xs="12" :sm="6"
           ><el-card shadow="never"
             ><el-statistic :title='tr("节点")' :value="nodes.length" /></el-card
@@ -202,7 +187,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
         class="section-gap"
       />
       <el-alert v-if="status.configuration_recovery" :title="status.configuration_recovery" type="warning" :closable="false" class="section-gap" />
-      <el-card shadow="never" class="workspace">
+      <section class="workspace">
         <el-tabs v-model="activeTab">
           <el-tab-pane :label='tr("线路管理")' name="lines">
             <Mapping
@@ -213,7 +198,6 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
               @changed="refresh"
               @toast="pushToast"
             />
-            <el-divider />
             <Node
               :nodes="filteredNodes"
               @changed="refresh"
@@ -225,10 +209,10 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
             ></el-collapse>
           </el-tab-pane>
           <el-tab-pane :label='tr("系统设置")' name="settings" lazy
-            ><Settings :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"
+            ><Settings :auth-enabled="authEnabled" :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"
           /></el-tab-pane>
         </el-tabs>
-      </el-card>
+      </section>
       <el-drawer v-model="helpVisible" :title='tr("使用说明")' size="min(540px, 100vw)" destroy-on-close
         ><Guide :mappings="mappings" :health="status.upstream_health"
       /></el-drawer>

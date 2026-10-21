@@ -11,7 +11,14 @@ import SoftwareUpdate from "./SoftwareUpdate.vue";
 import TimeSettings from "./TimeSettings.vue";
 import Backups from "./Backups.vue";
 import DebugSettings from "./DebugSettings.vue";
-defineProps({active:{type:Boolean,default:true}});
+defineProps({active:{type:Boolean,default:true},authEnabled:Boolean});
+const signingOut=ref(false);
+async function signOut() {
+ if(signingOut.value)return;signingOut.value=true;
+ try {await api.logout();window.dispatchEvent(new Event('s2l-auth-required'));}
+ catch(e){emit('toast',{type:'err',message:e.message});}
+ finally{signingOut.value=false;}
+}
 const emit = defineEmits(["toast", "changed"]);
 const settings = ref({
   account_enabled: false,
@@ -252,10 +259,6 @@ onMounted(load);
 </script>
 <template>
  <section class="system-settings">
-  <div class="section-head">
-
-   <el-button :loading="loading" :disabled="!!busy" @click="load">{{ tr("刷新设置") }}</el-button>
-  </div>
   <el-alert v-if="error" :title="error" type="error" :closable="false" class="section-gap" />
   <div class="settings-stack">
    <details class="settings-group settings-disclosure" :aria-label='tr("接入与账号")'><summary>{{ tr("接入与账号") }}<span>{{ tr("L2TP、IPsec、管理员") }}</span></summary>
@@ -386,6 +389,7 @@ onMounted(load);
             >{{ tr("保存账号") }}</el-button
           >
         </el-form>
+        <div v-if="authEnabled" class="actions section-gap"><el-button :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button></div>
       </el-card></div>
    </details>
    <details class="settings-group settings-disclosure" :aria-label='tr("远程管理")'><summary>{{ tr("远程管理") }}<span>{{ tr("面板、SSH、L2TP 管理访问") }}</span></summary>
@@ -471,6 +475,7 @@ onMounted(load);
             >{{ tr("修改 SSH 端口") }}</el-button
           >
         </el-form>
+        <div v-if="authEnabled" class="actions section-gap"><el-button :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button></div>
       </el-card></div><el-card shadow="never" class="settings-card ssh-password-card">
         <template #header>{{ tr("SSH 登录密码") }}</template>
         <el-alert
@@ -538,6 +543,7 @@ onMounted(load);
             >{{ tr("修改 SSH 密码") }}</el-button
           >
         </el-form>
+        <div v-if="authEnabled" class="actions section-gap"><el-button :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button></div>
       </el-card></div>
    </details>
    <details class="settings-disclosure" :aria-label='tr("时间与更新")' @toggle="updateOpen=$event.target.open"><summary>{{ tr("时间与更新") }}<span>{{ tr("时区、同步、软件版本") }}</span></summary><div class="settings-grid">
@@ -552,10 +558,10 @@ onMounted(load);
  </section>
 </template>
 <style scoped>
-.settings-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; align-items:start; }
-.settings-stack { display:grid; gap:20px; min-width:0; }
+.settings-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--section-gap); align-items:start; }
+.settings-stack { display:grid; gap:var(--section-gap); min-width:0; }
 .settings-grid :deep(.el-card) { min-width:0; margin-bottom:0; }
 .settings-grid :deep(.form-grid) { grid-template-columns:1fr; }
-.settings-group { min-width:0; }.settings-disclosure{border:1px solid var(--el-border-color-light);border-radius:8px;padding:0 16px}.settings-disclosure>summary{cursor:pointer;padding:16px 0;font-weight:600;min-height:24px}.settings-disclosure>summary span{display:block;margin-top:6px;font-size:13px;font-weight:400;color:var(--el-text-color-secondary)}.settings-disclosure[open]{padding-bottom:16px}
+.settings-group { min-width:0; }.settings-disclosure{border:0;padding:0}.settings-disclosure>summary{cursor:pointer;padding:12px 0;font-weight:600;min-height:24px}.settings-disclosure>summary span{display:block;margin-top:6px;font-size:14px;font-weight:400;color:var(--el-text-color-secondary)}.settings-disclosure[open]{padding-bottom:0}
 @media(max-width:900px) { .settings-grid { grid-template-columns:1fr; } }
 </style>

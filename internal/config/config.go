@@ -13,6 +13,7 @@ import (
 
 // Config 运行时配置
 type Config struct {
+	UILanguage    string                 `json:"ui_language,omitempty"`
 	PPPManagement model.ManagementAccess `json:"ppp_management"`
 	Listen        string                 `json:"listen"`       // 如 :8080
 	AdminUser     string                 `json:"admin_user"`   // 管理用户名；网页登录与脚本认证共用
@@ -90,6 +91,9 @@ func (c Config) ShouldAutoRestore() bool {
 // Validate prevents exposing the unauthenticated management API on a network
 // interface. Loopback-only deployments may omit credentials for local use.
 func (c Config) Validate() error {
+	if c.UILanguage != "" && c.UILanguage != "zh-CN" && c.UILanguage != "zh-TW" && c.UILanguage != "en" {
+		return fmt.Errorf("invalid ui_language")
+	}
 	if err := c.PPPManagement.Validate(); err != nil {
 		return err
 	}

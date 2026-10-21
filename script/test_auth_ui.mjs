@@ -35,6 +35,8 @@ try {
       await evaluate(`(()=>{const s=document.querySelector('.language-selector');s.value=${JSON.stringify(language)};s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
       await wait(`document.documentElement.lang===${JSON.stringify(htmlLanguage(language))}&&document.querySelector('.login-submit').innerText===${JSON.stringify(login)}`);
       if(await evaluate(`document.documentElement.scrollWidth>innerWidth+2`))throw Error('login overflow '+width+' '+language);
+      const controlSizes=await evaluate(`(()=>{const b=document.querySelector('.login-submit'),u=document.querySelector('.login-card .el-input__wrapper');return [b.getBoundingClientRect().height,u.getBoundingClientRect().height,getComputedStyle(b).fontSize]})()`);
+      if(controlSizes[0]!==32||controlSizes[1]!==32||controlSizes[2]!=='14px')throw Error('nonstandard login controls '+JSON.stringify(controlSizes));
       await evaluate(`(()=>{for(const[id,value]of [['login-user','fixture-admin'],['login-password','wrong']]){const e=document.getElementById(id);e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}))}document.querySelector('.login-submit').click()})()`);
       await wait(`!!document.querySelector('.login-card .el-alert')`);
       if(await evaluate(`!!document.querySelector('.workspace')`))throw Error('bad password opened management');
@@ -46,10 +48,24 @@ try {
       if(!secure.ok||secure.popup)throw Error('cookie authentication failed');
       if(await evaluate(`document.documentElement.scrollWidth>innerWidth+2`))throw Error('management language overflow '+width+' '+language);
       await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-auth-${language}-${width}.png`,Buffer.from(r.data,'base64')));
+      for(let i=0;i<40;i++) {
+        if(await evaluate(`(async()=>{const s=await(await fetch('/api/auth/status')).json();return s.language===${JSON.stringify(language)}})()`))break;
+        if(i===39)throw Error('server language was not persisted '+language);
+        await pause(100);
+      }
+      // Clearing browser storage must recover the server-side language.
+      await evaluate(`localStorage.removeItem('s2l-language')`);
       // Reload retains a valid server-side session, including language selection.
       await send('Page.reload');await wait(`!!document.querySelector('.workspace')`);
       if(!await evaluate(`document.documentElement.lang===${JSON.stringify(htmlLanguage(language))}`))throw Error('language persistence failed');
-      await evaluate(`(async()=>{await fetch('/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});await fetch('/api/nodes',{}).then(r=>{if(r.status!==401||r.headers.get('WWW-Authenticate'))throw Error('logout bypass')});window.dispatchEvent(new Event('s2l-auth-required'))})()`);
+      if(await evaluate(`document.querySelectorAll('.hero .el-button').length!==1`))throw Error('unexpected refresh/sign-out in header');
+      await evaluate(`document.querySelectorAll('[role=tab]')[1].click()`);
+      await wait(`!!document.querySelector('.system-settings')`);
+      await evaluate(`document.querySelector('.system-settings details').open=true`);
+      const signOutLabel={en:'Sign out','zh-TW':'登出','zh-CN':'退出登录'}[language];
+      await wait(`[...document.querySelectorAll('.system-settings button')].some(e=>e.innerText===${JSON.stringify(signOutLabel)})`);
+      await evaluate(`[...document.querySelectorAll('.system-settings button')].find(e=>e.innerText===${JSON.stringify(signOutLabel)}).click()`);
+
       await wait(`!!document.querySelector('#login-user')`);
       await send('Page.reload');await wait(`!!document.querySelector('#login-user')`);
       results.push({width,language,login:true,logout:true,cookie:true,overflow:false});

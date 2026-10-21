@@ -28,7 +28,7 @@ func equalCredential(a, b string) bool {
 	return subtle.ConstantTimeCompare(x[:], y[:]) == 1
 }
 
-// authMu protects credentials, sessions and bounded login throttling state.
+// authMu protects credentials, language preference, sessions and login throttling.
 func (s *Server) credentialKey() [32]byte {
 	return sha256.Sum256([]byte(s.adminUser + "\x00" + s.adminPass))
 }
@@ -78,7 +78,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	if ok {
 		user = s.adminUser
 	}
-	writeJSON(w, 200, map[string]any{"enabled": s.adminUser != "" && s.adminPass != "", "authenticated": ok, "username": user})
+	writeJSON(w, 200, map[string]any{"enabled": s.adminUser != "" && s.adminPass != "", "authenticated": ok, "username": user, "language": s.uiLanguage, "language_available": s.configPath != "" && s.adminUser != "" && s.adminPass != ""})
 }
 
 func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token string, age int) {

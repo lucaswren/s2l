@@ -2,13 +2,13 @@
   box-sizing: border-box;
 }
 :root {
+  --section-gap: 16px;
   font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
   font-size: 14px;
   color: #253247;
   background: #f3f6fa;
   --el-color-primary: #3267d6;
   --el-font-size-base: 14px;
-  --el-component-size: 38px;
   line-height: 1.6;
 }
 body {
@@ -47,7 +47,7 @@ p {
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: var(--section-gap);
 }
 .toolbar {
   display: flex;
@@ -73,19 +73,20 @@ p {
   margin: 0;
 }
 .stats .el-col {
-  margin-bottom: 12px;
+  margin-bottom: var(--section-gap);
 }
 .el-card {
   border-radius: 12px;
 }
-.workspace {
-  margin-top: 12px;
-}
+.workspace { margin-top: var(--section-gap); min-width: 0; }
+.workspace .el-tabs__content { padding-top: var(--section-gap); }
+.workspace #pane-lines { display: grid; gap: var(--section-gap); }
+.workspace .el-tabs__header { margin-bottom: 0; }
 .section-gap {
   margin-bottom: 16px;
 }
 .section-head {
-  margin: 12px 0 20px;
+  margin: 0 0 var(--section-gap);
 }
 .section-head p {
   margin: 6px 0 0;
@@ -157,7 +158,19 @@ p {
 .el-form-item__content { min-width: 0; }
 .el-select { max-width: 100%; }
 .el-textarea__inner { line-height: 1.6; padding: 10px 12px; }
-.el-button:not(.is-circle) { white-space: normal; height: auto; min-height: 38px; line-height: 1.5; }
+/* Default controls stay at the library's standard size. Translated labels
+   can wrap and grow vertically without clipping or shrinking their font. */
+.el-button:not(.is-circle) { max-width: 100%; min-width: 0; min-height: var(--el-component-size); height: auto; white-space: normal; }
+.el-button > span { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+.el-form-item__label { overflow-wrap: anywhere; }
+.el-alert__content { min-width: 0; overflow-wrap: anywhere; }
+.el-collapse-item__header { min-height: var(--el-collapse-header-height, 48px); height: auto; padding: 8px 0; line-height: 1.5; overflow-wrap: anywhere; }
+.el-collapse-item__title { min-width: 0; }
+.el-tag { max-width: 100%; height: auto; min-height: var(--el-tag-height, 24px); white-space: normal; }
+.el-tag__content { min-width: 0; overflow-wrap: anywhere; }
+.el-dialog__header { overflow-wrap: anywhere; }
+.el-radio { max-width: 100%; height: auto; min-height: var(--el-component-size); }
+.el-radio__label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .el-alert__title { line-height: 1.6; }
 .el-dialog__title,.el-drawer__title { line-height: 1.5; font-size: 18px; }
 .el-dialog__body { padding-top: 16px; padding-bottom: 20px; }
@@ -211,9 +224,6 @@ footer {
   .toolbar {
     width: 100%;
   }
-  .workspace > .el-card__body {
-    padding: 12px;
-  }
   .stats .el-card__body {
     padding: 16px;
   }
@@ -222,7 +232,7 @@ footer {
   }
   .mobile-list {
     display: grid;
-    gap: 12px;
+    gap: var(--section-gap);
   }
   .mobile-list .el-card__body {
     padding: 16px;
@@ -252,11 +262,15 @@ footer {
   color: var(--el-text-color-secondary);
 }
 .monitor-collapse {
-  margin-top: 24px;
+  margin-top: var(--section-gap);
 }
-.el-table .cell {
-  line-height: 1.6;
-}
+.el-table .cell { padding: 0 16px; line-height: 1.6; white-space: normal; word-break: normal; overflow-wrap: anywhere; }
+.el-table th.el-table__cell, .el-table td.el-table__cell { padding: 12px 0; vertical-align: top; }
+.el-table .cell p { margin: 4px 0; }
+.el-table .cell .actions { gap: 8px; }
+.el-radio-group, .el-checkbox-group { max-width: 100%; flex-wrap: wrap; row-gap: 8px; }
+.el-checkbox { max-width: 100%; height: auto; min-height: var(--el-component-size); }
+.el-checkbox__label { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .el-table th.el-table__cell {
   background: var(--el-fill-color-light);
   font-weight: 600;
@@ -313,18 +327,20 @@ footer {
 
 
 /* Keep nested cards and long values inside their own responsive containers. */
-.language-selector { max-width: 140px; min-width: 0; min-height: 40px; padding: 6px 10px; border: 1px solid var(--el-border-color); border-radius: 6px; color: var(--el-text-color-primary); background: var(--el-fill-color-blank); font: inherit; }
+.language-selector { max-width: 140px; min-width: 0; height: 32px; padding: 0 11px; border: 1px solid var(--el-border-color); border-radius: 6px; color: var(--el-text-color-primary); background: var(--el-fill-color-blank); font: inherit; }
 .toolbar-buttons { flex-wrap: wrap; }
+.card-heading, .toolbar-buttons, .actions, .item-title { min-width: 0; }
+.actions { align-items: flex-start; }
+.card-heading > *, .item-title > * { min-width: 0; overflow-wrap: anywhere; }
 .login-page { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 20px; box-sizing: border-box; }
 .login-card { width: min(100%, 380px); min-width: 0; padding: 24px; box-sizing: border-box; background: var(--el-bg-color); border: 1px solid var(--el-border-color); border-radius: 12px; }
 .login-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .login-card h1 { margin: 0; }
 .login-card h2 { font-size: 20px; margin: 24px 0; }
 .login-card form { display: grid; gap: 12px; }
-.login-card input { min-width: 0; width: 100%; box-sizing: border-box; min-height: 44px; padding: 10px; border: 1px solid var(--el-border-color); border-radius: 6px; font: inherit; font-size: 16px; }
+.login-card .el-input { min-width: 0; width: 100%; }
 .login-card .el-alert { margin-bottom: 16px; }
-.login-submit { min-height: 44px; margin-top: 8px; border: 0; border-radius: 6px; background: var(--el-color-primary); color: white; font: inherit; cursor: pointer; }
-.login-submit:disabled { opacity: .6; cursor: wait; }
+.login-submit { margin-top: 8px; width: 100%; }
 .el-card__body, .el-drawer__body, .settings-grid > *, .item-details > * { min-width: 0; }
 .item-title, .item-details, .settings-card p, .settings-card details { overflow-wrap: anywhere; }
 .settings-card details > summary { cursor: pointer; }
@@ -333,15 +349,16 @@ footer {
  .el-dialog { max-width: calc(100vw - 24px); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); margin: 12px auto; display: flex; flex-direction: column; }
  .el-dialog__header, .el-dialog__footer { flex: none; }
  .el-dialog__body { flex: 1; min-height: 0; max-height: none; overflow-y: auto; overscroll-behavior: contain; }
- .el-button:not(.is-circle) { min-height: 40px; }
- .el-input__inner, .el-textarea__inner { font-size: 16px; }
- .el-input__wrapper, .el-select__wrapper { min-height: 40px; }
- .el-dialog__headerbtn, .el-drawer__close-btn { min-width: 40px; min-height: 40px; }
  .card-heading { flex-wrap: wrap; }
  .settings-card > .el-card__body { padding: 16px; }
  .settings-card .el-radio-group { flex-wrap: wrap; row-gap: 8px; }
  .settings-card .el-radio { margin-right: 16px; }
- .settings-card .actions { gap: 10px; }
+ .settings-card .actions { gap: 8px; }
 }
 
 @media(max-width:767px){.hero.compact{flex-direction:column;align-items:stretch}.hero.compact .toolbar{width:100%}.hero.compact .toolbar-buttons{margin-left:0}.toolbar-buttons{width:100%;justify-content:flex-end;gap:8px}.toolbar-buttons .el-button{margin-left:0}.el-form-item{margin-bottom:24px}.el-card__body{padding:16px}.el-dialog__title,.el-drawer__title{font-size:17px}}
+
+/* Each content area has a single frame; section groups are unboxed. */
+.settings-group > .ppp-management { margin-bottom: var(--section-gap); }
+.settings-disclosure[open] > summary { margin-bottom: 4px; }
+.workspace .el-card .el-card { border: 0; box-shadow: none; }

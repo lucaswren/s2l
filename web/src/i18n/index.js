@@ -19,6 +19,7 @@ function initialLanguage() {
   return normalizeLanguage(globalThis.navigator?.language);
 }
 export const language = ref(initialLanguage());
+export const serverLanguage = ref(''), canPersistLanguage = ref(false);
 const htmlLanguages = {en:'en','zh-CN':'zh-Hans','zh-TW':'zh-Hant'};
 export function setLanguage(value) {
   language.value = normalizeLanguage(value);

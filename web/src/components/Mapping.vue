@@ -333,7 +333,7 @@ const editingActive = computed(() => {
             {{ row.error_msg }}
           </div></template
         ></el-table-column
-      ><el-table-column :label='tr("操作")' width="290" fixed="right"
+      ><el-table-column :label='tr("操作")' min-width="280"
         ><template #default="{ row }"
           ><MappingActions
             :mapping="row"
@@ -524,4 +524,4 @@ const editingActive = computed(() => {
   </section>
 </template>
 
-<style scoped>.mapping-advanced>summary{cursor:pointer;min-height:44px;line-height:44px;font-size:14px}.mapping-advanced>.form-grid{margin-top:8px}</style>
+<style scoped>.mapping-advanced>summary{cursor:pointer;min-height:32px;line-height:1.6;padding:4px 0;font-size:14px}.mapping-advanced>.form-grid{margin-top:8px}</style>

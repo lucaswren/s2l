@@ -3137,5 +3137,9 @@
   "更新失败：程序编译阶段未完成，请检查构建环境。": {
     "en": "Update failed: compilation did not complete; check the build environment.",
     "tw": "更新失敗：程式編譯階段未完成，請檢查建置環境。"
+  },
+  "语言设置保存失败，请重试": {
+    "en": "Could not save language; try again",
+    "tw": "語言設定儲存失敗，請重試"
   }
 }

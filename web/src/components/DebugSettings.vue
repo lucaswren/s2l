@@ -58,9 +58,9 @@ onBeforeUnmount(()=>{disposed=true;stopPolling();});
 <style scoped>
 .debug-summary {display:flex;gap:16px 32px;flex-wrap:wrap;margin:16px 0;}
 .debug-summary div {display:grid;gap:6px;}
-.debug-summary span {color:var(--el-text-color-secondary);font-size:12px;}
+.debug-summary span {color:var(--el-text-color-secondary);font-size:14px;}
 .debug-summary strong {font-size:14px;font-weight:500;}
-.debug-help {color:var(--el-text-color-secondary);font-size:13px;line-height:1.7;}
+.debug-help {color:var(--el-text-color-secondary);font-size:14px;line-height:1.7;}
 .debug-help summary {cursor:pointer;width:fit-content;}
 .debug-analysis {margin-top:18px;border-top:1px solid var(--el-border-color-lighter);padding-top:18px;}
 </style>

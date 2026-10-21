@@ -49,7 +49,7 @@ onMounted(load);
 </template>
 
 <style scoped>
-.zone-help {margin-top:-12px;font-size:12px;}
-.time-help {margin-bottom:16px;font-size:13px;line-height:1.7;}
+.zone-help {margin-top:-12px;font-size:14px;}
+.time-help {margin-bottom:16px;font-size:14px;line-height:1.7;}
 .time-help summary {cursor:pointer;}
 </style>

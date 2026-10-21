@@ -86,3 +86,10 @@ test('speed tests require independent download and upload results',async t=>{
  t.mock.method(globalThis,'fetch',async()=>Response.json(result));
  assert.deepEqual(await api.speedTestNode('n'),result);
 });
+
+test('language save requires the server to acknowledge the chosen language',async t=>{
+ t.mock.method(globalThis,'fetch',async()=>Response.json({}));
+ await assert.rejects(api.saveLanguage('en'),/语言设置/);t.mock.restoreAll();
+ t.mock.method(globalThis,'fetch',async()=>Response.json({language:'en'}));
+ assert.deepEqual(await api.saveLanguage('en'),{language:'en'});
+});

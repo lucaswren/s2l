@@ -24,6 +24,7 @@ type Server struct {
 	authMu          sync.RWMutex
 	configPath      string
 	adminUser       string
+	uiLanguage      string
 	adminPass       string
 	sessions        map[[32]byte]webSession
 	loginAttempts   map[string]loginAttempt
@@ -72,6 +73,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/metrics", s.handleMetrics)
 	mux.HandleFunc("/api/settings/ppp-management", s.handlePPPManagement)
 	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/settings/language", s.handleLanguage)
 	mux.HandleFunc("/api/settings/time", s.handleTimeSettings)
 	mux.HandleFunc("/api/settings/update", s.handleUpdate)
 	mux.HandleFunc("/api/settings/account", s.handleAccount)

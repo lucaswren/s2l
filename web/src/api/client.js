@@ -89,6 +89,11 @@ async function streamNetworkTest(id, body, signal, onEvent) {
 }
 
 export const api = {
+  saveLanguage: async language => {
+    const result=await request('/api/settings/language',{method:'POST',body:JSON.stringify({language})});
+    if(result.language!==language)throw new Error(tr('语言设置保存失败，请重试'));
+    return result;
+  },
   authStatus: () => request('/api/auth/status'),
   login: body => authRequest('/api/auth/login', body, true),
   logout: () => authRequest('/api/auth/logout', {}, false),

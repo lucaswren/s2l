@@ -192,7 +192,7 @@ async function speedTest(n) {
         ><template #default="{ row }"
           ><SpeedResult
             :result="speedResults[row.id]" /></template></el-table-column
-      ><el-table-column :label='tr("操作")' width="410" fixed="right"
+      ><el-table-column :label='tr("操作")' min-width="340"
         ><template #default="{ row }"
           ><NodeActions
             :node="row"
