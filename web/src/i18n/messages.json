@@ -3109,5 +3109,33 @@
   "PPP 管理访问已更新": {
     "en": "Management access updated",
     "tw": "PPP 管理存取已更新"
+  },
+  "更新完成，请刷新页面": {
+    "en": "Update complete; refresh the page",
+    "tw": "更新完成，請重新整理頁面"
+  },
+  "更新失败，请核对服务状态和升级备份": {
+    "en": "Update failed; check service status and upgrade backups",
+    "tw": "更新失敗，請核對服務狀態與升級備份"
+  },
+  "更新失败：Go 构建缓存不可用，请检查目录权限。": {
+    "en": "Update failed: Go build cache is unavailable; check directory permissions.",
+    "tw": "更新失敗：Go 建置快取無法使用，請檢查目錄權限。"
+  },
+  "更新失败：Go 工具链不可用，请检查版本和下载连接。": {
+    "en": "Update failed: Go toolchain is unavailable; check its version and download connection.",
+    "tw": "更新失敗：Go 工具鏈無法使用，請檢查版本與下載連線。"
+  },
+  "更新失败：磁盘空间不足。": {
+    "en": "Update failed: insufficient disk space.",
+    "tw": "更新失敗：磁碟空間不足。"
+  },
+  "更新失败：源码或工具链下载失败，请检查服务器网络。": {
+    "en": "Update failed: source or toolchain download failed; check server connectivity.",
+    "tw": "更新失敗：原始碼或工具鏈下載失敗，請檢查伺服器網路。"
+  },
+  "更新失败：程序编译阶段未完成，请检查构建环境。": {
+    "en": "Update failed: compilation did not complete; check the build environment.",
+    "tw": "更新失敗：程式編譯階段未完成，請檢查建置環境。"
   }
 }

@@ -58,6 +58,16 @@ trap finish EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# A transient system service can have no login HOME/XDG environment. Keep
+# Go's required writable cache and workspace inside this private build dir.
+# Preserve normal SSH/custom caches when their environment is available.
+if [[ -z "${GOCACHE:-}" && -z "${HOME:-}" && -z "${XDG_CACHE_HOME:-}" ]]; then
+  export GOCACHE="$work/go-build"
+fi
+if [[ -z "${GOPATH:-}" && -z "${HOME:-}" ]]; then
+  export GOPATH="$work/go"
+fi
+
 report_web_update building
 echo "[INFO] 编译 S2L，现有服务继续运行..."
 S2L_BUILD_VERSION="${S2L_VERSION:-${S2L_REF:-source}}"

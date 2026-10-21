@@ -165,7 +165,7 @@ def start(body):
     save('job.json', job)
     try:
         command('systemd-run', '--quiet', '--collect', '--unit=' + UNIT,
-                '--property=Type=exec', '--property=KillMode=control-group', '--property=UMask=0077', '--property=RuntimeMaxSec=1800',
+                '--property=Type=exec', '--property=User=root', '--property=WorkingDirectory=' + str(APP), '--property=KillMode=control-group', '--property=UMask=0077', '--property=RuntimeMaxSec=1800',
                 '--property=TimeoutStopSec=90', '--property=StandardOutput=null', '--property=StandardError=null',
                 '/usr/bin/python3', str(APP / 'manage_update.py'), 'run', job['id'])
     except Exception:
@@ -184,6 +184,43 @@ def phase(job_id, value):
         save('job.json', job)
 
 
+FAILURE_MESSAGES = {
+    'build_cache': '更新失败：Go 构建缓存不可用，请检查目录权限。',
+    'toolchain': '更新失败：Go 工具链不可用，请检查版本和下载连接。',
+    'disk_full': '更新失败：磁盘空间不足。',
+    'network': '更新失败：源码或工具链下载失败，请检查服务器网络。',
+    'build_failed': '更新失败：程序编译阶段未完成，请检查构建环境。',
+    'update_failed': '更新失败，请核对服务状态和升级备份',
+}
+
+
+def execute_update(env):
+    # Drain output without retaining credentials, compiler paths or unbounded
+    # logs. Only a fixed diagnostic code is persisted with the job result.
+    tail = bytearray()
+    with subprocess.Popen(('bash', str(APP / 'remote_update.sh')), env=env,
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as process:
+        while True:
+            chunk = process.stdout.read(4096)
+            if not chunk:
+                break
+            tail.extend(chunk)
+            del tail[:-16384]
+        code = process.wait()
+    text = tail.decode('utf-8', errors='replace').lower()
+    reason = 'update_failed'
+    for name, markers in (
+        ('disk_full', ('no space left on device', 'disk quota exceeded')),
+        ('build_cache', ('build cache is required', 'failed to initialize build cache', 'gocache is not defined')),
+        ('toolchain', ('requires go >=', 'go.mod requires go', 'toolchain not available', 'cannot find goroot')),
+        ('network', ('could not resolve host', 'failed to connect', 'connection timed out', 'tls handshake timeout', 'curl: (')),
+    ):
+        if any(marker in text for marker in markers):
+            reason = name
+            break
+    return code, reason
+
+
 def run(job_id):
     # Independent systemd unit survives stopping s2l.service.
     with lock('worker.lock', nonblocking=True):
@@ -195,18 +232,21 @@ def run(job_id):
                 raise RuntimeError('更新任务版本无效')
             job.update(status='running', phase='preparing')
             save('job.json', job)
-        code = -1
+        code, reason = -1, 'update_failed'
         try:
             env = {**os.environ, 'S2L_REF': job['commit'], 'S2L_COMMIT': job['commit'],
                    'S2L_VERSION': job['tag'], 'S2L_WEB_UPDATE_ID': job_id}
-            code = subprocess.run(('bash', str(APP / 'remote_update.sh')), env=env,
-                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False).returncode
+            code, reason = execute_update(env)
         finally:
             with lock('control.lock'):
                 latest = read('job.json')
                 if latest.get('id') == job_id:
+                    if code != 0 and reason == 'update_failed' and latest.get('phase') == 'building':
+                        reason = 'build_failed'
                     latest.update(status='succeeded' if code == 0 else 'failed', exit_code=code, finished_at=now(),
-                                  message='更新完成，请刷新页面' if code == 0 else '更新失败，请核对服务状态和升级备份')
+                                  message='更新完成，请刷新页面' if code == 0 else FAILURE_MESSAGES[reason])
+                    if code != 0:
+                        latest['error_code'] = reason
                     save('job.json', latest)
         if code != 0:
             raise RuntimeError('后台更新未完成，请检查服务与备份')
@@ -230,8 +270,12 @@ def main():
             body = json.loads(data) if len(data) <= 4096 else None
             if not isinstance(body, dict):
                 raise ValueError('invalid request')
+            # Probe the previous worker while holding control.lock, then release
+            # worker.lock BEFORE systemd starts the new worker. Otherwise its
+            # nonblocking acquisition races this request and can fail instantly.
             with lock('worker.lock', nonblocking=True):
-                result = {'job': start(body), 'release': read('release.json')}
+                pass
+            result = {'job': start(body), 'release': read('release.json')}
         elif action == 'phase' and len(sys.argv) == 4:
             phase(sys.argv[2], sys.argv[3])
             result = {}

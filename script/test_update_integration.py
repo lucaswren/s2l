@@ -17,6 +17,7 @@ def main():
     umount = shutil.which("umount")
     if not umount:
         raise SystemExit("requires umount")
+    go_root = Path(os.environ.get('S2L_TEST_GOROOT') or subprocess.check_output(['go', 'env', 'GOROOT'], text=True).strip())
     repository = Path(__file__).resolve().parents[1]
     if not (repository / "script/update.sh").is_file():
         raise SystemExit("missing update script in source checkout")
@@ -30,6 +31,14 @@ def main():
         script = checkout / "script/update.sh"
         mounted = []
         try:
+            # Keep the actual Go toolchain available after hiding /opt. The
+            # no-HOME case must compile real Go, not just exercise a mock.
+            toolchain = root / 'go-toolchain'
+            toolchain.mkdir()
+            subprocess.run(['mount', '--bind', str(go_root), str(toolchain)], check=True)
+            mounted.append(str(toolchain))
+            go_source = root / 'probe.go'
+            go_source.write_text('package main\nfunc main() {}\n')
             for target in ("/opt", "/root", "/etc", "/run", "/usr/local/bin"):
                 source = root / target.lstrip("/")
                 source.mkdir(parents=True, exist_ok=True)
@@ -42,6 +51,9 @@ def main():
             mocks = {
                 "go": r'''echo build-attempt >> "$S2L_TEST_LOG"
 [[ "${FAIL_BUILD:-0}" != 1 ]] || exit 1
+if [[ -n "${S2L_TEST_REAL_GO:-}" ]]; then
+  "$S2L_TEST_REAL_GO" build -o "$S2L_TEST_GO_OUTPUT" "$S2L_TEST_GO_SOURCE"
+fi
 for ((i=1; i<=$#; i++)); do if [[ "${!i}" == -o ]]; then j=$((i+1)); target="${!j}"; break; fi; done
 cat > "$target" <<'BINARY'
 #!/bin/bash
@@ -69,7 +81,7 @@ exec /usr/bin/install "$@"''',
             state.mkdir()
             log = root / "commands.log"
             env = dict(os.environ, PATH=f"{tools}:/usr/bin:/bin", S2L_TEST_STATE=str(state), S2L_TEST_LOG=str(log))
-            for scenario in ("build_failure", "success_stopped", "install_failure"):
+            for scenario in ("build_failure", "success_stopped", "success_no_home", "install_failure"):
                 units = Path("/etc/systemd/system")
                 for child in units.iterdir():
                     if child.is_dir():
@@ -96,20 +108,32 @@ exec /usr/bin/install "$@"''',
                 case_env = env.copy()
                 if scenario == "build_failure":
                     case_env["FAIL_BUILD"] = "1"
+                elif scenario == "success_no_home":
+                    for key in ('HOME', 'XDG_CACHE_HOME', 'GOCACHE', 'GOPATH', 'GOENV'):
+                        case_env.pop(key, None)
+                    case_env.update(S2L_TEST_REAL_GO=str(toolchain / 'bin/go'), GOROOT=str(toolchain),
+                                    GOTOOLCHAIN='local', S2L_TEST_GO_SOURCE=str(go_source),
+                                    S2L_TEST_GO_OUTPUT=str(root / 'probe'))
+                    control = subprocess.run([str(toolchain / 'bin/go'), 'build', '-o', str(root / 'uncached-probe'), str(go_source)],
+                                             env=case_env, capture_output=True, text=True)
+                    assert control.returncode != 0 and 'GOCACHE' in control.stderr, \
+                        'missing-HOME control did not reproduce the build-cache failure: ' + control.stdout + control.stderr
                 elif scenario == "install_failure":
                     case_env["FAIL_INSTALL"] = "1"
                     (state / "s2l").touch()
                     (state / "xl2tpd").touch()
                 result = subprocess.run(["bash", str(script)], env=case_env, capture_output=True, text=True)
-                assert (result.returncode == 0) == (scenario == "success_stopped"), result.stdout + result.stderr
+                assert (result.returncode == 0) == (scenario in ('success_stopped', 'success_no_home')), result.stdout + result.stderr
                 assert (app / "config.json").read_bytes() == original
                 assert json.loads((app / "data/state.json").read_text()) == {"nodes": [], "mappings": []}
                 if scenario == "build_failure":
                     assert "build-attempt" in log.read_text(), "failure did not reach the build step: " + result.stdout + result.stderr
                     assert "stop" not in log.read_text(), "build failure stopped live services"
                     assert binary.read_bytes() == old_binary
-                elif scenario == "success_stopped":
+                elif scenario in ('success_stopped', 'success_no_home'):
                     assert log.read_text().index("guard-only") < log.read_text().index("stop xl2tpd"), "PPP was stopped before guards were installed"
+                    if scenario == 'success_no_home':
+                        assert (root / 'probe').is_file(), 'real compilation was not exercised'
                     assert binary.read_bytes() != old_binary
                     assert not (state / "s2l").exists(), "stopped service was started"
                     assert not (state / "xl2tpd").exists()

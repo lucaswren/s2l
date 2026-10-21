@@ -1,6 +1,11 @@
 import contextlib
 import copy
 import importlib.util
+import io
+import json
+import os
+import sys
+import tempfile
 from pathlib import Path
 import subprocess
 import unittest
@@ -9,6 +14,7 @@ from unittest.mock import patch
 spec = importlib.util.spec_from_file_location('manage_update', Path(__file__).resolve().parents[1] / 'manage_update.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+real_lock = module.lock
 COMMIT = 'a' * 40
 
 
@@ -45,6 +51,8 @@ class WebUpdateTests(unittest.TestCase):
             self.assertEqual(self.disk['job.json']['status'], 'queued')
             self.assertEqual(args[0], 'systemd-run')
             self.assertIn('--collect', args)
+            self.assertIn('--property=User=root', args)
+            self.assertIn('--property=WorkingDirectory=' + str(module.APP), args)
             self.assertIn('--property=StandardOutput=null', args)
             self.assertIn('--property=StandardError=null', args)
             self.assertIn('--unit=s2l-web-update.service', args)
@@ -70,22 +78,61 @@ class WebUpdateTests(unittest.TestCase):
             module.start(body)
         self.assertEqual(self.disk['job.json']['status'], 'failed')
 
-    def test_worker_runs_exact_approved_commit_and_suppresses_output(self):
+    def test_worker_runs_exact_approved_commit_and_keeps_only_result(self):
         self.disk['job.json'] = {'id': 'job', 'status': 'queued', 'commit': COMMIT, 'tag': 'v1.3.0'}
-        with patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as run:
+        with patch.object(module, 'execute_update', return_value=(0, 'update_failed')) as run:
             module.run('job')
-        self.assertEqual(run.call_args.kwargs['env']['S2L_REF'], COMMIT)
-        self.assertEqual(run.call_args.kwargs['env']['S2L_VERSION'], 'v1.3.0')
-        self.assertEqual(run.call_args.kwargs['stdout'], subprocess.DEVNULL)
-        self.assertEqual(run.call_args.kwargs['stderr'], subprocess.DEVNULL)
+        self.assertEqual(run.call_args.args[0]['S2L_REF'], COMMIT)
+        self.assertEqual(run.call_args.args[0]['S2L_VERSION'], 'v1.3.0')
         self.assertEqual(self.disk['job.json']['status'], 'succeeded')
+        self.assertNotIn('error_code', self.disk['job.json'])
 
     def test_worker_failure_is_persisted_and_fails_the_unit(self):
         self.disk['job.json'] = {'id': 'job', 'status': 'queued', 'commit': COMMIT, 'tag': 'v1.3.0'}
-        with patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1)), self.assertRaises(RuntimeError):
+        with patch.object(module, 'execute_update', return_value=(1, 'build_cache')), self.assertRaises(RuntimeError):
             module.run('job')
         self.assertEqual(self.disk['job.json']['status'], 'failed')
         self.assertEqual(self.disk['job.json']['exit_code'], 1)
+        self.assertEqual(self.disk['job.json']['error_code'], 'build_cache')
+        self.assertIn('Go', self.disk['job.json']['message'])
+
+    def test_output_is_bounded_and_never_saved_as_failure_message(self):
+        for output, reason in (
+            (b'build cache is required: GOCACHE is not defined', 'build_cache'),
+            (b'go.mod requires go >= 1.22', 'toolchain'),
+            (b'no space left on device', 'disk_full'),
+            (b'curl: (28) Connection timed out', 'network'),
+            (b'password=private-host-secret custom compilation error', 'update_failed'),
+            (b'build cache is required' + b'x' * 20000, 'update_failed'),
+        ):
+            process = unittest.mock.MagicMock()
+            process.__enter__.return_value = process
+            process.stdout = io.BytesIO(b'x' * 32768 + output)
+            process.wait.return_value = 1
+            with patch.object(module.subprocess, 'Popen', return_value=process) as spawn:
+                self.assertEqual(module.execute_update({'S2L_REF': COMMIT}), (1, reason))
+            self.assertEqual(spawn.call_args.args[0], ('bash', str(module.APP / 'remote_update.sh')))
+            self.assertEqual(spawn.call_args.kwargs['stderr'], subprocess.STDOUT)
+        self.assertFalse(self.disk)
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux flock process behavior')
+    def test_start_releases_worker_lock_before_systemd_executes_worker(self):
+        self.release()
+        with tempfile.TemporaryDirectory() as temporary:
+            worker_path = str(Path(temporary) / 'worker.lock')
+            def launch(*args):
+                probe = subprocess.run([sys.executable, '-c',
+                    'import fcntl,sys; f=open(sys.argv[1],"a"); fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB)',
+                    worker_path], capture_output=True)
+                self.assertEqual(probe.returncode, 0, 'worker started while request still owned worker.lock')
+            with patch.object(module, 'ROOT', Path(temporary)), patch.object(module, 'lock', real_lock), \
+                    patch.object(module, 'preflight'), patch.object(module, 'unit_active', return_value=False), \
+                    patch.object(module.time, 'time', return_value=101), patch.object(module, 'command', side_effect=launch), \
+                    patch.object(sys, 'argv', ['manage_update.py', 'start']), \
+                    patch.object(sys, 'stdin', io.StringIO(json.dumps({'tag':'v1.3.0','commit':COMMIT}))), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                module.main()
+        self.assertEqual(self.disk['job.json']['status'], 'queued')
 
     def test_foreign_worker_and_phase_cannot_replace_active_job(self):
         self.disk['job.json'] = {'id': 'current', 'status': 'running', 'phase': 'building'}

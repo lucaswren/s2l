@@ -215,3 +215,7 @@ The management UI supports English, Traditional Chinese and Simplified Chinese, 
 Management exceptions offer a list of local IPv4 addresses. The current panel IP is suggested only when confirmed local by the server; a sole local address is filled automatically, while multiple addresses require selection. Public NAT addresses need separate verification. Exceptions are never enabled automatically.
 
 Under reject / reject-quic, the mapping resolver returns NOERROR with no answers for Google service HTTPS (type 65) queries, reducing DNS advertisement of HTTP/3. A/AAAA and DoH/TCP through the fixed node are unchanged. DNSSEC, signed, special or malformed queries bypass this policy, as do UDP-allow mappings and independent diagnostic resolvers. The counter is resolver.google_https_suppressed. This does not clear client Alt-Svc caches, control private App DNS, convert QUIC to TCP or prove client fallback. It also omits other optional HTTPS record metadata, including ECH hints; it is not a fix for TLS or account access failures.
+
+## Web update failures
+
+Web updates run in an independent systemd unit. Without a login environment, Go receives disposable build-cache and workspace directories. Failure status records the phase, exit code and a safe category (cache, toolchain, disk or download), never raw command output. Compilation failures normally precede service shutdown and installation; check final job and service status.

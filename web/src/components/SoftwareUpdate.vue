@@ -53,7 +53,7 @@ onBeforeUnmount(()=>{disposed=true;stop();});
   <div v-if="info.job?.id" class="update-status">
    <el-tag :type="info.job.status==='succeeded'?'success':['failed','interrupted'].includes(info.job.status)?'danger':'warning'">{{ statuses[info.job.status] || info.job.status }}</el-tag>
    <span>{{ info.job.tag }} · {{ info.job.status === 'succeeded' ? tr("服务已通过验证") : (running ? '' : tr("最后阶段：")) + (phases[info.job.phase] || tr("准备更新")) }}</span>
-   <p v-if="info.job.message">{{ info.job.message }}</p>
+   <p v-if="info.job.message">{{ tr(info.job.message) }}</p>
   </div>
   <div class="actions">
    <el-button :loading="busy" :disabled="running || !info.available" @click="perform({action:'check'})">{{ tr("检查更新") }}</el-button>
