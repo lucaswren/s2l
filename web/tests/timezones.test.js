@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLanguage } from '../src/i18n/index.js';
+
+// Assertions must not depend on the host operating system language.
+test.beforeEach(() => setLanguage('zh-CN'));
 import { timezoneGroups } from '../src/api/timezones.js';
 const options = (...args) => timezoneGroups(...args).flatMap(g => g.options);
 test('timezone options are unique, grouped and keep the current server zone', () => {

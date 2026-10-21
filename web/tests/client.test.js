@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLanguage } from '../src/i18n/index.js';
+
+// Assertions must not depend on the host operating system language.
+test.beforeEach(() => setLanguage('zh-CN'));
 import {api} from '../src/api/client.js';
 
 test('malformed successful responses cannot report a successful save', async t => {

@@ -1,5 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setLanguage } from '../src/i18n/index.js';
+
+// Assertions must not depend on the host operating system language.
+test.beforeEach(() => setLanguage('zh-CN'));
 import {compareGoogle,readGoogleSnapshot,rejectEvidence} from '../src/utils/google-diagnostic.js';
 const hosts=['www.google.com','accounts.google.com','oauth2.googleapis.com','gmail.googleapis.com','www.youtube.com','gemini.google.com','robinfrontend-pa.googleapis.com','oauthaccountmanager.googleapis.com'];
 const dns=()=>({state:'healthy',addresses:['203.0.113.1'],duration_ms:1});
