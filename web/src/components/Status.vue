@@ -17,6 +17,7 @@ async function diagnose(id){
 }
 const emit = defineEmits(["changed", "toast"]);
 const retrying = ref("");
+const tableView = ref(false);
 async function retry(id) {
   if (retrying.value) return;
   retrying.value = id;
@@ -63,25 +64,21 @@ function formatBytes(n) {
 }
 </script>
 <template>
-  <div class="section-head">
-    <div>
-      <h2>{{ tr("运行监控") }}</h2>
-
-    </div>
-  </div>
-  <p v-if="status.collected_at" class="muted">{{ tr("采集于") }} {{date(status.collected_at)}}</p>
+ <section class="runtime-monitor" :class="{'show-tables':tableView}">
+  <div class="mobile-table-toggle"><el-switch v-model="tableView" :active-text="tr('表格视图')" /></div>
+  <p v-if="status.collected_at" class="muted">{{tr('采集于')}} {{date(status.collected_at)}}</p>
   <el-card shadow="never" class="section-gap">
     <template #header>{{ tr("映射健康状态") }}</template>
-    <el-table class="desktop-list" :data="health" :empty-text='tr("暂无活动映射")'>
-      <el-table-column prop="tun_name" :label='tr("接口")' />
-      <el-table-column :label='tr("链路状态")'><template #default="{ row }">{{ healthLabels[row.state] || row.state }}</template></el-table-column>
+    <el-table scrollbar-always-on class="desktop-list" :data="health" :empty-text='tr("暂无活动映射")'>
+      <el-table-column min-width="130" prop="tun_name" :label='tr("接口")' />
+      <el-table-column min-width="130" :label='tr("链路状态")'><template #default="{ row }">{{ healthLabels[row.state] || row.state }}</template></el-table-column>
       <el-table-column v-for="protocol in ['tcp', 'udp', 'dns']" :key="protocol" :label="protocol.toUpperCase()" min-width="100">
         <template #default="{ row }"><el-tooltip :content="protocolDetail(row[protocol])"><span>{{ protocolLabel(row[protocol]) }}</span></el-tooltip></template>
       </el-table-column>
       <el-table-column :label='tr("本地链路")' min-width="100"><template #default="{row}"><el-tooltip :content="row.recovery_error || tr(&quot;独立检查进程和 TUN，不受上游探测退避影响&quot;)"><span>{{ healthLabels[row.local_state] || tr("检测中") }}</span></el-tooltip></template></el-table-column>
       <el-table-column :label='tr("实际 DNS")' min-width="145"><template #default="{row}"><div>{{ row.resolver?.active === 'tcp' ? 'TCP DNS' : row.resolver?.active === 'doh' ? 'DoH':tr("等待启动") }}</div><div class="muted">{{ tr("备用成功") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</div></template></el-table-column>
       <el-table-column :label='tr("连接错误记录")' min-width="180"><template #default="{row}"><el-tooltip :content="tr(&quot;当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 &quot;) + (row.process?.network_errors || 0) + tr(&quot;，本次服务累计退出 &quot;) + (row.process?.exits || 0)"><span>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }}</span></el-tooltip></template></el-table-column>
-      <el-table-column :label='tr("最近检测")'><template #default="{ row }">{{ row.checked_at && !row.checked_at.startsWith('0001') ? dateTime(row.checked_at) : tr("等待检测") }}</template></el-table-column>
+      <el-table-column min-width="130" :label='tr("最近检测")'><template #default="{ row }">{{ row.checked_at && !row.checked_at.startsWith('0001') ? dateTime(row.checked_at) : tr("等待检测") }}</template></el-table-column>
       <el-table-column :label='tr("说明 / 实测")' min-width="220"><template #default="{row}"><p>{{row.error}}</p><p v-if="row.udp_policy === 'reject'" class="muted">{{ tr("策略：拒绝非 DNS UDP") }}</p><el-button :disabled="!!diagnosing" @click="diagnose(row.id)">{{ tr("映射转发实测") }}</el-button></template></el-table-column>
       <el-table-column :label='tr("自动恢复")' min-width="230"><template #default="{row}">
         <div>{{ {closed:tr("正常重试"),open:tr("冷却中"),'half-open':tr("试探观察中")}[row.recovery?.circuit] || tr("待检查") }} {{ tr("· 尝试") }} {{ row.recovery?.attempts || 0 }} {{ tr("· 失败") }} {{ row.recovery?.failures || 0 }}</div>
@@ -108,18 +105,15 @@ function formatBytes(n) {
   </el-card>
   <MonitoringDetails :status="status"/>
   <el-dialog :model-value="!!diagnosing || !!diagnostic || !!diagnosticError" :title='tr("映射转发实测")' class="mapping-diagnostic" width="min(640px, calc(100vw - 24px))" append-to-body :close-on-click-modal="false" @close="closeDiagnostic"><p v-if="diagnosing">{{ tr("正在通过隔离入口检测映射转发…") }}</p><el-alert v-if="diagnosticError" :title="diagnosticError" type="error" :closable="false"/><template v-if="diagnostic"><el-tag :type="diagnostic.ok ? 'success' : 'warning'">{{diagnostic.ok ? tr("映射转发正常") : tr("检测完成，请查看分项")}}</el-tag><p>{{ tr("规则检查：") }}{{healthLabels[diagnostic.rules.state]}}</p><p>{{ tr("HTTPS 转发：") }}{{healthLabels[diagnostic.forwarding.state]}} · {{diagnostic.forwarding.duration_ms}} ms</p><p v-if="diagnostic.forwarding.exit_ip">{{ tr("映射出口 IP：") }}{{diagnostic.forwarding.exit_ip}}</p><p v-if="diagnostic.node?.exit_ip">{{ tr("节点出口 IP：") }}{{diagnostic.node.exit_ip}}</p><p v-if="diagnostic.exit_comparison === 'different'">{{ tr("两次出口观测不同；上游可能采用动态出口，请结合节点配置核对。") }}</p><p v-if="diagnostic.node?.error">{{diagnostic.node.error}}</p><p v-if="diagnostic.forwarding.error">{{diagnostic.forwarding.error}}</p><p class="muted">{{diagnostic.scope}}</p></template><template #footer><el-button @click="closeDiagnostic">{{diagnosing ? tr("停止检测") : tr("关闭")}}</el-button></template></el-dialog>
-  <el-row :gutter="16"
-    ><el-col :xs="24" :md="8"
-      ><el-card shadow="never" class="section-gap"
+  <div class="monitor-secondary"><section><el-card shadow="never" class="section-gap"
         ><template #header>{{ tr("运行进程") }}</template
-        ><el-table :data="pids" :empty-text='tr("无运行实例")'
-          ><el-table-column prop="tun" :label='tr("接口")' /><el-table-column
+        ><el-table scrollbar-always-on :data="pids" :empty-text='tr("无运行实例")'
+          ><el-table-column min-width="130" prop="tun" :label='tr("接口")' /><el-table-column min-width="130"
             prop="pid"
-            label="PID" /></el-table></el-card></el-col
-    ><el-col :xs="24" :md="16"
-      ><el-card shadow="never"
+            label="PID" /></el-table></el-card></section
+    ><section><el-card shadow="never"
         ><template #header>{{ tr("接口流量") }}</template
-        ><el-table class="desktop-list" :data="status.tun_traffic" :empty-text='tr("暂无流量")'
+        ><el-table scrollbar-always-on class="desktop-list" :data="status.tun_traffic" :empty-text='tr("暂无流量")'
           ><el-table-column
             prop="tun_name"
             :label='tr("接口")'
@@ -136,12 +130,23 @@ function formatBytes(n) {
         >
         <div class="mobile-list"><el-empty v-if="!status.tun_traffic?.length" :description='tr("暂无流量")' /><article v-for="row in status.tun_traffic" :key="row.tun_name" class="monitor-item"><strong>{{ row.tun_name }}</strong><div class="item-details"><span>{{ tr("接收") }}</span><span>{{ formatBytes(row.rx_bytes) }}</span><span>{{ tr("发送") }}</span><span>{{ formatBytes(row.tx_bytes) }}</span><span>{{ tr("丢包 / 错误") }}</span><span>{{ (row.rx_dropped || 0) + (row.tx_dropped || 0) }} / {{ (row.rx_errors || 0) + (row.tx_errors || 0) }}</span></div><p v-if="row.error" class="error-text">{{ row.error }}</p></article></div>
         </el-card
-      ></el-col
-    ></el-row
+      ></section
+    ></div
   >
+ </section>
 </template>
 
 <style scoped>
+.runtime-monitor { display:grid;grid-template-columns:minmax(0,1fr);gap:var(--section-gap);min-width:0;max-width:100%; }
+.runtime-monitor > *, .monitor-secondary > * { min-width:0;max-width:100%; }
+.monitor-secondary { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:var(--section-gap); }
+@media(max-width:991px){.monitor-secondary{grid-template-columns:minmax(0,1fr)}}
+.runtime-monitor > .el-card { margin:0; }
+.mobile-table-toggle { display:none; }
+@media(max-width:767px){.mobile-table-toggle{display:flex;justify-content:flex-end}.show-tables :deep(.desktop-list){display:block}.show-tables :deep(.mobile-list){display:none}}
+:deep(.el-scrollbar__wrap){overscroll-behavior-x:contain;}
+:deep(.el-scrollbar__bar.is-horizontal){height:8px;}
+
 :global(.mapping-diagnostic){max-height:calc(100dvh - 32px);overflow:auto;overflow-wrap:anywhere;}
 @media(max-width:600px){:global(.mapping-diagnostic){margin:12px auto!important;max-height:calc(100dvh - 24px);}}
 .monitor-item{padding:16px 0;border-bottom:1px solid var(--el-border-color-lighter);min-width:0;overflow-wrap:anywhere;}

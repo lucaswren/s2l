@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/buildinfo"
 	"github.com/lucaswren/s2l/internal/model"
 )
 
@@ -30,6 +31,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		pids = map[string]int{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"build":                  buildinfo.Current(),
 		"host_stats":             st.HostStats,
 		"collected_at":           st.CollectedAt,
 		"sessions":               st.Sessions,

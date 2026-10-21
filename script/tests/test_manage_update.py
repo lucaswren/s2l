@@ -45,6 +45,21 @@ class WebUpdateTests(unittest.TestCase):
                 module.check()
         self.assertFalse(self.disk)
 
+    def test_release_notes_and_phase_history_are_bounded(self):
+        with patch.object(module, 'job_status', return_value={}), patch.object(module, 'github', side_effect=[{'tag_name':'v1.3.0','body':'更新'*10000},{'sha':COMMIT}]):
+            result = module.check()
+        self.assertEqual(len(result['notes']), 1200)
+        self.assertLess(len(json.dumps(result)), 16384)
+        self.disk['job.json'] = {'id':'active','status':'running'}
+        for index in range(30):
+            module.phase('active', 'building' if index%2 else 'verifying')
+        history = self.disk['job.json']['phases']
+        self.assertEqual(len(history), 16)
+        module.phase('active', 'building')
+        self.assertEqual(self.disk['job.json']['phases'], history)
+        module.phase('old', 'installing')
+        self.assertEqual(self.disk['job.json']['phases'], history)
+
     def test_start_detaches_from_service_and_persists_before_launch(self):
         body = self.release()
         def launch(*args):

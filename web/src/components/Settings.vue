@@ -11,14 +11,7 @@ import SoftwareUpdate from "./SoftwareUpdate.vue";
 import TimeSettings from "./TimeSettings.vue";
 import Backups from "./Backups.vue";
 import DebugSettings from "./DebugSettings.vue";
-defineProps({active:{type:Boolean,default:true},authEnabled:Boolean});
-const signingOut=ref(false);
-async function signOut() {
- if(signingOut.value)return;signingOut.value=true;
- try {await api.logout();window.dispatchEvent(new Event('s2l-auth-required'));}
- catch(e){emit('toast',{type:'err',message:e.message});}
- finally{signingOut.value=false;}
-}
+defineProps({active:{type:Boolean,default:true}});
 const emit = defineEmits(["toast", "changed"]);
 const settings = ref({
   account_enabled: false,
@@ -389,7 +382,6 @@ onMounted(load);
             >{{ tr("保存账号") }}</el-button
           >
         </el-form>
-        <div v-if="authEnabled" class="actions section-gap"><el-button :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button></div>
       </el-card></div>
    </details>
    <details class="settings-group settings-disclosure" :aria-label='tr("远程管理")'><summary>{{ tr("远程管理") }}<span>{{ tr("面板、SSH、L2TP 管理访问") }}</span></summary>
@@ -475,7 +467,6 @@ onMounted(load);
             >{{ tr("修改 SSH 端口") }}</el-button
           >
         </el-form>
-        <div v-if="authEnabled" class="actions section-gap"><el-button :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button></div>
       </el-card></div><el-card shadow="never" class="settings-card ssh-password-card">
         <template #header>{{ tr("SSH 登录密码") }}</template>
         <el-alert
@@ -543,7 +534,6 @@ onMounted(load);
             >{{ tr("修改 SSH 密码") }}</el-button
           >
         </el-form>
-        <div v-if="authEnabled" class="actions section-gap"><el-button :loading="signingOut" @click="signOut">{{ tr('退出登录') }}</el-button></div>
       </el-card></div>
    </details>
    <details class="settings-disclosure" :aria-label='tr("时间与更新")' @toggle="updateOpen=$event.target.open"><summary>{{ tr("时间与更新") }}<span>{{ tr("时区、同步、软件版本") }}</span></summary><div class="settings-grid">
@@ -558,7 +548,7 @@ onMounted(load);
  </section>
 </template>
 <style scoped>
-.settings-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--section-gap); align-items:start; }
+.settings-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--section-gap); align-items:stretch; }
 .settings-stack { display:grid; gap:var(--section-gap); min-width:0; }
 .settings-grid :deep(.el-card) { min-width:0; margin-bottom:0; }
 .settings-grid :deep(.form-grid) { grid-template-columns:1fr; }

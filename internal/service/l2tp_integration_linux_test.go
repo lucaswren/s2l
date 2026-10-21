@@ -238,7 +238,7 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 q=b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x05probe\x04test\x00\x00\x01\x00\x01'
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,('1.1.1.1',53));r,_=s.recvfrom(4096);assert r[:2]==q[:2] and r[-4:]==bytes([198,18,0,9]);s.close()
 q=b'\x12\x35\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00'+b''.join(bytes([len(x)])+x for x in [b'gmail',b'googleapis',b'com'])+b'\x00\x00\x41\x00\x01'
-s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,('1.1.1.1',53));r,_=s.recvfrom(4096);assert r[:2]==q[:2] and r[3]&15==0 and r[6:8]==b'\x00\x00','Google HTTPS discovery was not suppressed';s.close()
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,('1.1.1.1',53));r,_=s.recvfrom(4096);assert r[:2]==q[:2] and r[3]&15==0 and r[6:8]==b'\x00\x01' and r.endswith(b'\x00\x01\x00\x00\x01\x00\x06\x02h2\x02h3'),'Google HTTPS record was altered or suppressed';s.close()
 for port in [9999,443]:
  s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(2);s.connect(('198.18.0.9',port));s.send(b'probe')
  try:
@@ -296,6 +296,19 @@ for port in [9999,443]:
 		}
 	}
 	status := svc.Status()
+	// The specialized report must use the live mapping listener. Its HTTPS RR
+	// must survive the same fixed SOCKS upstream as real PPP client DNS above.
+	dnsCtx, dnsCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	dnsReport, dnsErr := svc.ProbeGoogleMapping(dnsCtx, "m0", "node0")
+	dnsCancel()
+	if dnsErr != nil {
+		t.Fatal(dnsErr)
+	}
+	for _, row := range dnsReport.Targets {
+		if row.A.State != "healthy" || row.HTTPS.State != "healthy" || row.HTTPS.Records != 1 || row.DOH.State != "not_tested" || row.TCPDNS.State != "not_tested" {
+			t.Fatalf("mapping DNS diagnostic bypassed runtime: %+v", row)
+		}
+	}
 	if status.SessionsError != "" || len(status.Sessions) != 2 {
 		t.Fatalf("PPP snapshot: %+v %s interfaces=%s", status.Sessions, status.SessionsError, run("ip", "-j", "address", "show"))
 	}
@@ -592,7 +605,11 @@ func integrationSOCKS(t *testing.T, id string, cert tls.Certificate) (string, fu
 					q[9] = 0
 					q[10] = 0
 					q[11] = 0
-					q = append(q, []byte{0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 198, 18, 0, 9}...)
+					if binary.BigEndian.Uint16(q[len(q)-4:]) == 65 {
+						q = append(q, []byte{0xc0, 0x0c, 0, 65, 0, 1, 0, 0, 0, 60, 0, 13, 0, 1, 0, 0, 1, 0, 6, 2, 'h', '2', 2, 'h', '3'}...)
+					} else {
+						q = append(q, []byte{0xc0, 0x0c, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 198, 18, 0, 9}...)
+					}
 					binary.BigEndian.PutUint16(size[:], uint16(len(q)))
 					c.Write(size[:])
 					c.Write(q)

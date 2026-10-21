@@ -184,6 +184,40 @@ func (s *Store) CreateBackup() (BackupInfo, error) {
 	return s.createBackupLocked(s.state)
 }
 
+// DeleteBackups removes only explicitly selected managed files. Validate the
+// complete request before unlinking anything; newly created backups are untouched.
+func (s *Store) DeleteBackups(ids []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(ids) == 0 || len(ids) > backupLimit {
+		return fmt.Errorf("invalid backup selection")
+	}
+	dir, err := s.backupDir()
+	if err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if !backupName.MatchString(id) || seen[id] {
+			return fmt.Errorf("invalid backup selection")
+		}
+		seen[id] = true
+		info, err := os.Lstat(filepath.Join(dir, id))
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("invalid backup file")
+		}
+	}
+	for _, id := range ids {
+		if err := os.Remove(filepath.Join(dir, id)); err != nil {
+			return err
+		}
+	}
+	return syncDirectory(dir)
+}
+
 func (s *Store) ReadBackup(id string) (Backup, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

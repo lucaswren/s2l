@@ -29,7 +29,7 @@ func (m *Manager) ResolveDNS(ctx context.Context, name string, query []byte) ([]
 	if p == nil || p.resolver == nil || !p.running() {
 		return nil, fmt.Errorf("mapping DNS resolver is not running")
 	}
-	return p.resolver.Resolver.Resolve(ctx, query)
+	return p.resolver.Query(ctx, query)
 }
 
 type managedProc struct {
@@ -70,7 +70,7 @@ func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error
 	if previous != nil && previous.running() {
 		return fmt.Errorf("sing-box for %s already running", mapping.TunName)
 	}
-	resolver, err := dnsproxy.Start(node, mapping.EffectiveDNSMode(), mapping.EffectiveUDPPolicy())
+	resolver, err := dnsproxy.Start(node, mapping.EffectiveDNSMode())
 	if err != nil {
 		return fmt.Errorf("start DNS resolver: %w", err)
 	}

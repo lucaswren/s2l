@@ -58,13 +58,13 @@ try {
       // Reload retains a valid server-side session, including language selection.
       await send('Page.reload');await wait(`!!document.querySelector('.workspace')`);
       if(!await evaluate(`document.documentElement.lang===${JSON.stringify(htmlLanguage(language))}`))throw Error('language persistence failed');
-      if(await evaluate(`document.querySelectorAll('.hero .el-button').length!==1`))throw Error('unexpected refresh/sign-out in header');
+      if(await evaluate(`document.querySelectorAll('.hero .el-button').length!==2 || !document.querySelector('.toolbar-buttons').lastElementChild.classList.contains('header-signout')`))throw Error('header sign-out missing or misplaced');
       await evaluate(`document.querySelectorAll('[role=tab]')[1].click()`);
       await wait(`!!document.querySelector('.system-settings')`);
       await evaluate(`document.querySelector('.system-settings details').open=true`);
       const signOutLabel={en:'Sign out','zh-TW':'登出','zh-CN':'退出登录'}[language];
-      await wait(`[...document.querySelectorAll('.system-settings button')].some(e=>e.innerText===${JSON.stringify(signOutLabel)})`);
-      await evaluate(`[...document.querySelectorAll('.system-settings button')].find(e=>e.innerText===${JSON.stringify(signOutLabel)}).click()`);
+      await wait(`[...document.querySelectorAll('.hero button')].some(e=>e.innerText===${JSON.stringify(signOutLabel)})`);
+      await evaluate(`[...document.querySelectorAll('.hero button')].find(e=>e.innerText===${JSON.stringify(signOutLabel)}).click()`);
 
       await wait(`!!document.querySelector('#login-user')`);
       await send('Page.reload');await wait(`!!document.querySelector('#login-user')`);

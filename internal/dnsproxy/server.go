@@ -1,6 +1,7 @@
 package dnsproxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"io"
@@ -21,21 +22,56 @@ type Server struct {
 }
 
 // Only sing-box connects here over loopback TCP; no public DNS listener.
-func Start(node model.SocksNode, mode string, udpPolicy ...string) (*Server, error) {
+func Start(node model.SocksNode, mode string) (*Server, error) {
 	l, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Server{Resolver: New(node, mode), listener: l, ctx: ctx, cancel: cancel}
-	if len(udpPolicy) > 0 {
-		s.Resolver.googleTCP = udpPolicy[0] == "reject" || udpPolicy[0] == "reject-quic"
-	}
 	s.wg.Add(1)
 	go s.serve()
 	return s, nil
 }
 func (s *Server) Address() string { return s.listener.Addr().String() }
+
+// Query exercises the same loopback TCP listener used by sing-box. It does not
+// bypass the running mapping's resolver or fall back to host DNS.
+func (s *Server) Query(ctx context.Context, query []byte) ([]byte, error) {
+	if _, err := question(query); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp4", s.Address())
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	defer stop()
+	if deadline, ok := ctx.Deadline(); ok {
+		conn.SetDeadline(deadline)
+	}
+	frame := make([]byte, len(query)+2)
+	binary.BigEndian.PutUint16(frame, uint16(len(query)))
+	copy(frame[2:], query)
+	if _, err := io.Copy(conn, bytes.NewReader(frame)); err != nil {
+		return nil, err
+	}
+	var size [2]byte
+	if _, err := io.ReadFull(conn, size[:]); err != nil {
+		return nil, err
+	}
+	answer := make([]byte, binary.BigEndian.Uint16(size[:]))
+	if _, err := io.ReadFull(conn, answer); err != nil {
+		return nil, err
+	}
+	if err := ValidateResponse(query, answer); err != nil {
+		return nil, err
+	}
+	return answer, nil
+}
 func (s *Server) Close() {
 	s.once.Do(func() { s.cancel(); s.listener.Close(); s.wg.Wait(); s.Resolver.Close() })
 }

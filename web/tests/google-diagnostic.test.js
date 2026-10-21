@@ -26,3 +26,13 @@ test('missing or reset reject counters never imply zero rejections',()=>{
  assert.match(rejectEvidence({reject_before:a,reject_after:{...a,udp:0}}),/计数已重置/);
  assert.match(rejectEvidence({reject_before:a,reject_after:{...a,udp_found:false}}),/规则未找到/);
 });
+
+test('HTTPS DNS differences survive safe snapshot import',()=>{
+ const a=report(),b=report();
+ for(const row of a.targets)row.https={state:'healthy',records:1};
+ for(const row of b.targets)row.https={state:'no_address',records:0};
+ const imported=readGoogleSnapshot(JSON.stringify({schema_version:1,kind:'google',google:[b]}));
+ assert.deepEqual(compareGoogle(a,imported)[0].fields,['https']);
+ b.targets[0].https.records=-1;
+ assert.throws(()=>readGoogleSnapshot(JSON.stringify({schema_version:1,kind:'google',google:[b]})));
+});

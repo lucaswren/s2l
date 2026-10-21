@@ -135,18 +135,46 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		}
 		before := network.ReadRejectCounters(ctx, selected)
 		reports := make([]diagnostics.Report, len(nodes))
+		mappingReports := make([]map[string]any, len(selected))
+		mappingSlots := make(chan struct{}, 2)
 		var wg sync.WaitGroup
 		for i, n := range nodes {
 			wg.Add(1)
 			go func(i int, n model.SocksNode) { defer wg.Done(); reports[i] = diagnostics.Google(ctx, n) }(i, n)
 		}
+		for i, m := range selected {
+			wg.Add(1)
+			go func(i int, m model.TunnelMapping) {
+				defer wg.Done()
+				mappingReports[i] = map[string]any{"state": "unavailable"}
+				if s.svc == nil || m.Status != model.StatusRunning {
+					return
+				}
+				select {
+				case mappingSlots <- struct{}{}:
+					defer func() { <-mappingSlots }()
+				case <-ctx.Done():
+					return
+				}
+				report, err := s.svc.ProbeGoogleMapping(ctx, m.ID, m.NodeID)
+				if err != nil {
+					return
+				}
+				state := "healthy"
+				if !report.Healthy() {
+					state = "unavailable"
+				}
+				mappingReports[i] = map[string]any{"state": state, "report": report}
+			}(i, m)
+		}
 		wg.Wait()
 		after := network.ReadRejectCounters(ctx, selected)
 		policies := []map[string]any{}
-		for _, m := range selected {
+		for i, m := range selected {
 			for _, n := range nodes {
 				if m.NodeID == n.ID {
 					policies = append(policies, map[string]any{"mapping_id": m.ID, "node_id": m.NodeID, "udp_policy": m.EffectiveUDPPolicy(), "dns_mode": m.EffectiveDNSMode(), "status": m.Status, "max_connections": m.MaxConnections, "max_sessions": m.MaxSessions, "upload_kbps": m.UploadKbps, "download_kbps": m.DownloadKbps, "reject_before": before[m.ID], "reject_after": after[m.ID]})
+					policies[len(policies)-1]["mapping_dns"] = mappingReports[i]
 				}
 			}
 		}
@@ -154,11 +182,15 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		result["google"] = reports
 		result["mapping_policies"] = policies
 		result["ok"] = ctx.Err() == nil
+		for _, report := range mappingReports {
+			if report["state"] != "healthy" {
+				result["ok"] = false
+			}
+		}
+		result["client_path"] = "unverified"
 		for _, report := range reports {
-			for _, target := range report.Targets {
-				if target.TCP != "healthy" || target.TLS != "healthy" || target.HTTP != "responded" {
-					result["ok"] = false
-				}
+			if !report.Healthy() {
+				result["ok"] = false
 			}
 		}
 		result["path"] = "服务器 → 固定 SOCKS5 → 目标服务"

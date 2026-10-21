@@ -20,6 +20,51 @@ import (
 
 type resolverFunc func(context.Context, []byte) ([]byte, error)
 
+func TestMappingDNSSelectsActualAddressesAndPreservesHTTPSFailure(t *testing.T) {
+	for _, failHTTPS := range []bool{false, true} {
+		lookup := resolverFunc(func(_ context.Context, q []byte) ([]byte, error) {
+			switch binary.BigEndian.Uint16(q[len(q)-4:]) {
+			case 1:
+				return answer(q, 0, net.ParseIP("203.0.113.55")), nil
+			case 65:
+				if failHTTPS {
+					return nil, errors.New("upstream down")
+				}
+				b := answer(q, 0, nil)
+				b[7] = 1
+				return append(b, 0xc0, 12, 0, 65, 0, 1, 0, 0, 0, 30, 0, 3, 0, 1, 0), nil
+			default:
+				return answer(q, 0, nil), nil
+			}
+		})
+		var calls atomic.Int32
+		check := func(_ context.Context, node model.SocksNode, ip string, row *Target) {
+			if node.ID != "fixed" || ip != "203.0.113.55" {
+				t.Errorf("wrong mapping exit/address: %s %s", node.ID, ip)
+			}
+			calls.Add(1)
+			row.TCP, row.TLS, row.HTTP = "healthy", "healthy", "responded"
+			row.Stage = "http"
+		}
+		// Nil independent resolvers prove this cannot silently use node-only DNS.
+		r := google(context.Background(), model.SocksNode{ID: "fixed"}, []string{"gmail.googleapis.com"}, nil, nil, check,
+			func(context.Context, model.SocksNode) model.ProtocolHealth { return model.ProtocolHealth{} }, lookup)
+		if calls.Load() != 1 || r.Healthy() == failHTTPS || r.ClientFallback != "unverified" {
+			t.Fatal(r)
+		}
+		if !failHTTPS && (r.Targets[0].HTTPS.Records != 1 || r.Targets[0].HTTPS.State != "healthy") {
+			t.Fatal(r)
+		}
+		if r.Targets[0].DOH.State != "not_tested" || r.Targets[0].TCPDNS.State != "not_tested" {
+			t.Fatal("mapping test claimed independent DNS results")
+		}
+	}
+	bad := resolverFunc(func(context.Context, []byte) ([]byte, error) { return []byte{1}, nil })
+	if got := resolve(context.Background(), bad, "gmail.googleapis.com", 65); got.State != "unavailable" {
+		t.Fatal(got)
+	}
+}
+
 func (f resolverFunc) Resolve(c context.Context, q []byte) ([]byte, error) { return f(c, q) }
 func answer(q []byte, rcode byte, ip net.IP) []byte {
 	b := append([]byte(nil), q...)

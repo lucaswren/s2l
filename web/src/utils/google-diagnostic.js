@@ -12,17 +12,19 @@ export function readGoogleSnapshot(raw){
   if(!string(t.host)||hosts.has(t.host)||!['www.google.com','accounts.google.com','oauth2.googleapis.com','gmail.googleapis.com','www.youtube.com','gemini.google.com','robinfrontend-pa.googleapis.com','oauthaccountmanager.googleapis.com'].includes(t.host))throw Error(tr("对照检测目标不匹配"));
   hosts.add(t.host);
   for(const k of ['a','aaaa','doh','tcp_dns'])if(!t[k]||!states.has(t[k].state)||!Array.isArray(t[k].addresses)||t[k].addresses.length>4096||t[k].addresses.some(a=>!string(a,64)))throw Error(tr("对照 DNS 结果无效"));
+  if(t.https && (!states.has(t.https.state)||!Number.isInteger(t.https.records)||t.https.records<0||t.https.records>65535))throw Error(tr("对照 DNS 结果无效"));
   for(const k of ['tcp','tls','http'])if(!states.has(t[k]))throw Error(tr("对照阶段结果无效"));
   if(!Number.isInteger(t.status)||t.status<0||t.status>599||!string(t.alpn,32)||!string(t.stage,64))throw Error(tr("对照响应格式无效"));
  }
  // Keep only fields rendered by the comparison. Imported data never triggers a request.
- return {node_id:r.node_id,node_name:r.node_name,checked_at:r.checked_at,targets:r.targets.map(t=>({host:t.host,a:t.a,aaaa:t.aaaa,doh:t.doh,tcp_dns:t.tcp_dns,tcp:t.tcp,tls:t.tls,http:t.http,status:t.status,alpn:t.alpn,stage:t.stage})),snapshot:true};
+ return {node_id:r.node_id,node_name:r.node_name,checked_at:r.checked_at,targets:r.targets.map(t=>({host:t.host,a:t.a,aaaa:t.aaaa,doh:t.doh,tcp_dns:t.tcp_dns,https:t.https?{state:t.https.state,records:t.https.records}:undefined,tcp:t.tcp,tls:t.tls,http:t.http,status:t.status,alpn:t.alpn,stage:t.stage})),snapshot:true};
 }
 export function compareGoogle(a,b){
  if(!a||!b)return [];
  return a.targets.map(x=>{const y=b.targets.find(t=>t.host===x.host);
   const fields=y?['tcp','tls','http','status','alpn'].filter(k=>x[k]!==y[k]):['missing'];
   if(y)for(const k of ['a','aaaa','doh','tcp_dns'])if(x[k]?.state!==y[k]?.state)fields.push(k);
+  if(y && (x.https?.state!==y.https?.state || x.https?.records!==y.https?.records))fields.push('https');
   const dnsDifferent=!!y&&['a','aaaa'].some(k=>JSON.stringify([...(x[k]?.addresses||[])].sort())!==JSON.stringify([...(y[k]?.addresses||[])].sort()));
   return {host:x.host,a:x,b:y,different:fields.length>0,fields,dnsDifferent};
  });

@@ -6,11 +6,40 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/diagnostics"
 	"github.com/lucaswren/s2l/internal/lockutil"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/network"
 	"github.com/lucaswren/s2l/internal/speedtest"
 )
+
+// ProbeGoogleMapping observes one stable lifecycle without starting or repairing
+// the mapping. A node change must not silently change the selected fixed exit.
+func (s *MappingService) ProbeGoogleMapping(ctx context.Context, id, nodeID string) (diagnostics.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	if err := lockutil.RLock(ctx, &s.stateGate); err != nil {
+		return diagnostics.Report{}, err
+	}
+	defer s.stateGate.RUnlock()
+	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	if err := lockutil.Lock(ctx, mu); err != nil {
+		return diagnostics.Report{}, err
+	}
+	defer mu.Unlock()
+	m, ok := s.store.GetMapping(id)
+	if !ok || m.NodeID != nodeID || m.Status != model.StatusRunning {
+		return diagnostics.Report{}, fmt.Errorf("mapping is not running on selected node")
+	}
+	node, ok := s.store.GetNode(m.NodeID)
+	if !ok || s.singbox == nil {
+		return diagnostics.Report{}, fmt.Errorf("mapping runtime unavailable")
+	}
+	return diagnostics.GoogleMapping(ctx, node, id, func(ctx context.Context, q []byte) ([]byte, error) {
+		return s.singbox.ResolveDNS(ctx, m.TunName, q)
+	}), nil
+}
 
 // ProbeMapping serializes only this mapping's lifecycle. It neither repairs nor
 // restarts anything: a diagnostic must observe the failure it was asked to test.

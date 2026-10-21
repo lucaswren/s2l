@@ -8,6 +8,7 @@ function checkAuthentication(res, path, revision) {
 async function request(path, options = {}) {
   const revisionAtStart = authRevision;
   const res = await fetch(path, {
+    cache: 'no-store',
     ...options,
     credentials: 'same-origin',
     headers: {
@@ -114,6 +115,7 @@ export const api = {
   saveTimeSettings: (body) => request("/api/settings/time", {method:"POST", body:JSON.stringify(body)}),
   backups: () => request("/api/backups"),
   createBackup: () => request("/api/backups", {method:"POST",body:"{}"}),
+  deleteBackups: (ids) => request("/api/backups", {method:"DELETE",body:JSON.stringify({ids})}),
   previewBackup: (id) => request("/api/backups/preview", {method:"POST",body:JSON.stringify({id})}),
   restoreBackup: (body) => request("/api/backups/restore", {method:"POST",body:JSON.stringify(body)}),
   debugAnalysis: () => request("/api/debug/analysis"),

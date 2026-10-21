@@ -23,6 +23,9 @@ func TestGoogleComparisonValidationAndCancelledReadOnlyReports(t *testing.T) {
 		}
 	}
 	s := NewServer(st, nil, nil)
+	if err := st.UpsertMapping(model.TunnelMapping{ID: "m", NodeID: "a", Status: model.StatusStopped}); err != nil {
+		t.Fatal(err)
+	}
 	for _, id := range []string{"a", "missing"} {
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("POST", "/", strings.NewReader(`{"kind":"google","compare_node":"`+id+`"}`))
@@ -41,6 +44,13 @@ func TestGoogleComparisonValidationAndCancelledReadOnlyReports(t *testing.T) {
 		t.Fatal(w.Code, w.Body.String())
 	}
 	var result struct {
+		OK         bool   `json:"ok"`
+		ClientPath string `json:"client_path"`
+		Policies   []struct {
+			DNS struct {
+				State string `json:"state"`
+			} `json:"mapping_dns"`
+		} `json:"mapping_policies"`
 		Schema int `json:"schema_version"`
 		Google []struct {
 			NodeID  string `json:"node_id"`
@@ -50,6 +60,9 @@ func TestGoogleComparisonValidationAndCancelledReadOnlyReports(t *testing.T) {
 		} `json:"google"`
 	}
 	if json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Schema != 1 || len(result.Google) != 2 || result.Google[0].NodeID != "a" || result.Google[1].NodeID != "b" {
+		t.Fatal(w.Body.String())
+	}
+	if result.OK || result.ClientPath != "unverified" || len(result.Policies) != 1 || result.Policies[0].DNS.State != "unavailable" {
 		t.Fatal(w.Body.String())
 	}
 	for _, report := range result.Google {

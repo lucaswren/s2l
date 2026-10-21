@@ -43,7 +43,7 @@ try{
  for(const width of [1440,768,390,320]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
   await send('Page.navigate',{url:`http://127.0.0.1:${apiPort}/`});
-  await wait(`!!document.querySelector('.el-collapse-item__header') && document.body.innerText.includes('固定出口 A')`);
+  await wait(`!!document.querySelector('.monitor-disclosure > summary') && document.body.innerText.includes('固定出口 A')`);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='新建映射').click()`);
   await wait(`!!document.querySelector('.el-dialog input[type=password]')`);
   await evaluate(`(()=>{const p=document.querySelector('.el-dialog input[type=password]');p.value='fixture-password';p.dispatchEvent(new Event('input',{bubbles:true}));})()`);
@@ -60,7 +60,7 @@ try{
   await wait(`!!document.querySelector('.batch-results')&&document.querySelector('.batch-results').innerText.includes('成功')`);
   if(await evaluate(`window.__batchPosts!==1`))throw Error('batch action duplicate or failed '+width);
   await evaluate(`window.fetch=window.__beforeBatchFetch`);
-  await evaluate(`document.querySelector('.el-collapse-item__header').click()`);
+  await evaluate(`document.querySelector('.monitor-disclosure > summary').click()`);
   await wait(`document.body.innerText.includes('首次观测') && document.body.innerText.includes('80.0%')`);
   await wait(`document.body.innerText.includes('故障事件与操作记录') && document.body.innerText.includes('节点转发异常 · 处理中')`);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText.includes('查看连接')).click()`);
@@ -102,7 +102,8 @@ try{
   await evaluate(`[...document.querySelectorAll('.el-select-dropdown__item')].find(e=>e.innerText==='对照出口 B').click()`);
   await evaluate(`[...document.querySelectorAll('.network-test-dialog button')].find(b=>b.innerText==='开始测试').click()`);
   await wait(`!!document.querySelector('.google-comparison') && document.querySelector('.google-diagnostic').innerText.includes('阶段差异：tls')`);
-  if(await evaluate(`document.querySelectorAll('.google-target').length!==16`))throw Error('Google comparison missing targets '+width);
+  if(await evaluate(`document.querySelectorAll('.google-target').length!==24`))throw Error('Google node/mapping results missing targets '+width);
+  await evaluate(`(()=>{const rows=[...document.querySelectorAll('.google-target')];for(const row of rows)row.open=true})()`);
   await evaluate(`document.querySelector('.google-tools summary').click()`);
   await evaluate(`(async()=>{const d=await(await fetch('/api/nodes/n/network-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind:'google'})})).json();d.google[0].node_name='历史正常线路';const dt=new DataTransfer();dt.items.add(new File([JSON.stringify(d)],'google.json',{type:'application/json'}));const input=document.querySelector('.google-diagnostic input[type=file]');input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   await wait(`document.querySelector('.google-diagnostic').innerText.includes('历史对照：历史正常线路')`);
@@ -128,6 +129,25 @@ try{
   await evaluate(`window.fetch=window.__beforeManagementFetch`);
   const managementBounds=await evaluate(`(()=>{const e=document.querySelector('.ppp-management');return {width:e.clientWidth,scroll:e.scrollWidth}})()`);if(managementBounds.scroll>managementBounds.width+2)throw Error('management card overflow '+width);
   await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-management-${width}.png`,Buffer.from(r.data,'base64')));
+  // Running updates must continue polling while their disclosure is closed.
+  await evaluate(`window.__updateReads=0;window.__updateFetch=window.fetch;window.fetch=(path,options)=>{if(path==='/api/settings/update'&&!options?.method){const n=++window.__updateReads;return Promise.resolve(Response.json({available:true,current:{version:n>=3?'v1.3.6':'v1.3.5',revision:'a'.repeat(40),release_notes:{en:'Installed notes','zh-CN':'当前构建说明','zh-TW':'目前建置說明'}},release:{tag:'v1.3.6',commit:'a'.repeat(40),notes:'Release notes'},job:{id:'ui-test',tag:'v1.3.6',status:n>=3?'succeeded':'running',phase:n>=2?'verifying':'building',phases:[{phase:'building',at:new Date().toISOString()}]}}))}return window.__updateFetch(path,options)};document.querySelector('details[aria-label="时间与更新"]').open=true`);
+  await wait(`window.__updateReads>=1`);
+  await evaluate(`document.querySelector('details[aria-label="时间与更新"]').open=false`);
+  await wait(`window.__updateReads>=3 && document.querySelector('.software-update').textContent.includes('更新完成') && document.querySelector('.software-update').textContent.includes('v1.3.6')`);
+  await evaluate(`window.fetch=window.__updateFetch`);
+  // Backup cleanup must require confirmation and keep the newest listed file.
+  await evaluate(`window.__cleanupCalls=0;window.__backupFetch=window.fetch;window.fetch=(path,options)=>{if(path==='/api/backups'&&options?.method==='DELETE'){window.__cleanupCalls++;window.__cleanupIDs=JSON.parse(options.body).ids;return Promise.resolve(Response.json({deleted:window.__cleanupIDs.length}))}return window.__backupFetch(path,options)};document.querySelector('details[aria-label="备份与排障"]').open=true`);
+  await wait(`[...document.querySelectorAll('button')].some(e=>e.innerText==='清理旧备份'&&!e.disabled)`);
+  await evaluate(`[...document.querySelectorAll('button')].find(e=>e.innerText==='清理旧备份').click()`);
+  await wait(`!!document.querySelector('.el-message-box')`);
+  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.innerText==='取消').click()`);await pause(200);
+  if(await evaluate(`window.__cleanupCalls!==0`))throw Error('backup cleanup ran without confirmation');
+  await evaluate(`[...document.querySelectorAll('button')].find(e=>e.innerText==='清理旧备份').click()`);
+  await wait(`!!document.querySelector('.el-message-box')`);
+  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.innerText==='删除').click()`);
+  await wait(`window.__cleanupCalls===1`);
+  if(await evaluate(`JSON.stringify(window.__cleanupIDs)!=='["backup-1-1.json"]'`))throw Error('backup cleanup included newest backup');
+  await evaluate(`window.fetch=window.__backupFetch`);
   // Switching languages must keep an open form and its unsaved values.
   await evaluate(`(()=>{const e=document.querySelector('.ppp-management textarea');e.value='10.0.101.0/24\\n10.0.102.0/24';e.dispatchEvent(new Event('input',{bubbles:true}))})()`);
   for(const [locale,label] of [['en','Server local IPv4'],['zh-TW','伺服器本機 IPv4'],['zh-CN','服务器本机 IPv4']]) {
@@ -138,6 +158,8 @@ try{
    if(await evaluate(`document.documentElement.scrollWidth>innerWidth+2||(()=>{const e=document.querySelector('.ppp-management');return e.scrollWidth>e.clientWidth+2})()`))throw Error('translated form overflow '+width+' '+locale);
    await evaluate(`document.querySelectorAll('.settings-disclosure').forEach(e=>{e.open=true})`);await pause(250);
    await checkLayout(width+' '+locale+' settings');
+   if(await evaluate(`(()=>{const e=document.querySelector('.ssh-password-card .el-input-group');return e && e.getBoundingClientRect().height>34})()`))throw Error('password generation control wrapped '+width+' '+locale);
+
    if(await evaluate(`document.querySelectorAll('.workspace.el-card,.settings-disclosure[style*="border"]').length>0`))throw Error('nested workspace frame');
    if(width===320)await evaluate(`document.querySelector('.ppp-management').scrollIntoView({block:'start'})`);
    if(width===320)await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-management-${locale}-${width}.png`,Buffer.from(r.data,'base64')));
@@ -152,8 +174,16 @@ try{
    await evaluate(`document.querySelector('.edit-dialog details').open=true`);await pause(100);
    await checkLayout(width+' '+locale+' advanced form');
    await evaluate(`document.querySelector('.edit-dialog .el-dialog__headerbtn').click()`);await pause(250);
-   await evaluate(`document.querySelector('.monitor-collapse .el-collapse-item').classList.contains('is-active')||document.querySelector('.monitor-collapse .el-collapse-item__header').click()`);await pause(150);
+   await evaluate(`document.querySelector('.monitor-disclosure').open=true`);await pause(150);
    await checkLayout(width+' '+locale+' monitoring');
+   if(await evaluate(`(()=>{const p=document.querySelector('.workspace').getBoundingClientRect();return [...document.querySelectorAll('.runtime-monitor,.runtime-monitor .el-card,.runtime-monitor .el-table')].some(e=>{if(!e.offsetParent)return false;const r=e.getBoundingClientRect();return r.right>p.right+1||r.left<p.left-1})})()`))throw Error('expanded monitoring exceeds workspace '+width+' '+locale);
+
+   if(width<768){await evaluate(`document.querySelector('.mobile-table-toggle .el-switch').click()`);await pause(150);}
+   const horizontal=await evaluate(`(()=>{const e=document.querySelector('.runtime-monitor .el-table .el-scrollbar__wrap');if(!e||e.scrollWidth<=e.clientWidth)return false;e.scrollLeft=80;return e.scrollLeft>0})()`);
+   if(!horizontal)throw Error('monitor table cannot scroll horizontally '+width);
+   await checkLayout(width+' '+locale+' scrolling tables');
+   if(width<768){await evaluate(`document.querySelector('.mobile-table-toggle .el-switch').click()`);await pause(100);}
+
    await evaluate(`document.querySelector('.hero .el-button').click()`);await wait(`!!document.querySelector('.el-drawer')`);await pause(200);
    await checkLayout(width+' '+locale+' help drawer');
    await evaluate(`document.querySelector('.el-drawer__close-btn').click()`);await pause(250);

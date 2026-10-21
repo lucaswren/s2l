@@ -24,6 +24,11 @@ async function perform(fn) {
 async function inspect(id) {
   await perform(async () => { preview.value = null; selected.value = id; preview.value = await api.previewBackup(id); });
 }
+async function cleanup(ids) {
+ if(busy.value || !ids.length)return;
+ try { await ElMessageBox.confirm(tr('删除所选 {0} 份备份？此操作无法撤销，当前配置保持不变。',ids.length),tr('清理备份'),{type:'warning',confirmButtonText:tr('删除'),cancelButtonText:tr('取消')}); } catch { return; }
+ await perform(async()=>{ await api.deleteBackups(ids); if(ids.includes(selected.value)){preview.value=null;selected.value='';} await load(); message.value=tr('备份已清理'); });
+}
 async function restore() {
   if (!preview.value || busy.value) return;
   const body = {id:selected.value,revision:preview.value.revision,backup_revision:preview.value.backup_revision};
@@ -48,14 +53,16 @@ onMounted(() => perform(load));
     <div class="actions section-gap">
       <el-button :loading="busy" @click="perform(async () => { await api.createBackup(); await load(); message = tr(&quot;备份已创建&quot;); })">{{ tr("立即备份") }}</el-button>
       <el-button :disabled="busy" @click="perform(load)">{{ tr("刷新备份") }}</el-button>
+      <el-button type="danger" plain :disabled="busy || items.length<2" @click="cleanup(items.slice(1).map(row=>row.id))">{{tr('清理旧备份')}}</el-button>
     </div>
+    <p class="muted">{{tr("清理旧备份会保留最新一份配置备份。")}}</p>
     <el-table class="desktop-list" :data="items" :empty-text='tr("暂无备份")'>
       <el-table-column :label='tr("时间")' min-width="180"><template #default="{row}">{{ dateTime(row.created_at) }}</template></el-table-column>
       <el-table-column prop="nodes" :label='tr("节点")' />
       <el-table-column prop="mappings" :label='tr("映射")' />
-      <el-table-column :label='tr("操作")'><template #default="{row}"><el-button :disabled="busy" @click="inspect(row.id)">{{ tr("预览回滚") }}</el-button></template></el-table-column>
+      <el-table-column :label='tr("操作")' min-width="210"><template #default="{row}"><div class="actions"><el-button :disabled="busy" @click="inspect(row.id)">{{ tr("预览回滚") }}</el-button><el-button type="danger" plain :disabled="busy" @click="cleanup([row.id])">{{tr('删除')}}</el-button></div></template></el-table-column>
     </el-table>
-    <div class="mobile-list backup-mobile"><el-empty v-if="!items.length" :description='tr("暂无备份")' /><article v-for="row in items" :key="row.id" class="backup-item"><div><strong>{{ dateTime(row.created_at) }}</strong><p class="muted">{{ tr("节点") }} {{ row.nodes }} {{ tr("· 映射") }} {{ row.mappings }}</p></div><el-button :disabled="busy" @click="inspect(row.id)">{{ tr("预览") }}</el-button></article></div>
+    <div class="mobile-list backup-mobile"><el-empty v-if="!items.length" :description='tr("暂无备份")' /><article v-for="row in items" :key="row.id" class="backup-item"><div><strong>{{ dateTime(row.created_at) }}</strong><p class="muted">{{ tr("节点") }} {{ row.nodes }} {{ tr("· 映射") }} {{ row.mappings }}</p></div><div class="actions"><el-button :disabled="busy" @click="inspect(row.id)">{{ tr("预览") }}</el-button><el-button type="danger" plain :disabled="busy" @click="cleanup([row.id])">{{tr("删除")}}</el-button></div></article></div>
     <template v-if="preview">
       <h4>{{ tr("回滚差异") }}</h4>
       <el-alert v-if="!preview.can_restore" :title='tr("请先停止全部映射，再重新预览。")' type="warning" :closable="false" />

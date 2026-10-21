@@ -28,6 +28,22 @@ func (s *Server) handleBackups(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, item)
+	case http.MethodDelete:
+		r.Body = http.MaxBytesReader(w, r.Body, 4096)
+		var body struct {
+			IDs []string `json:"ids"`
+		}
+		if decodeJSON(r, &body) != nil || len(body.IDs) == 0 || len(body.IDs) > 10 {
+			writeError(w, 400, "invalid backup selection")
+			return
+		}
+		s.mutationMu.Lock()
+		defer s.mutationMu.Unlock()
+		if err := s.store.DeleteBackups(body.IDs); err != nil {
+			writeError(w, 409, "备份清理失败，请刷新列表后重试")
+			return
+		}
+		writeJSON(w, 200, map[string]any{"deleted": len(body.IDs)})
 	default:
 		w.WriteHeader(405)
 	}

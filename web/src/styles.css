@@ -7,7 +7,6 @@
   font-size: 14px;
   color: #253247;
   background: #f3f6fa;
-  --el-color-primary: #3267d6;
   --el-font-size-base: 14px;
   line-height: 1.6;
 }
@@ -80,7 +79,8 @@ p {
 }
 .workspace { margin-top: var(--section-gap); min-width: 0; }
 .workspace .el-tabs__content { padding-top: var(--section-gap); }
-.workspace #pane-lines { display: grid; gap: var(--section-gap); }
+.workspace #pane-lines { display:grid;grid-template-columns:minmax(0,1fr);gap:var(--section-gap);min-width:0; }
+.workspace .el-tabs,.workspace .el-tabs__content,.workspace .el-tab-pane { min-width:0;max-width:100%; }
 .workspace .el-tabs__header { margin-bottom: 0; }
 .section-gap {
   margin-bottom: 16px;
@@ -327,7 +327,8 @@ body .el-checkbox__label { min-width: 0; white-space: normal; overflow-wrap: any
 
 
 /* Keep nested cards and long values inside their own responsive containers. */
-.language-selector { max-width: 140px; min-width: 0; height: 32px; padding: 0 11px; border: 1px solid var(--el-border-color); border-radius: 6px; color: var(--el-text-color-primary); background: var(--el-fill-color-blank); font: inherit; }
+.language-selector { appearance:none; width:132px; max-width:100%; min-width:0; height:32px; padding:0 32px 0 11px; border:1px solid var(--el-border-color); border-radius:var(--el-border-radius-base); color:var(--el-text-color-primary); background:var(--el-fill-color-blank) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23606a78' stroke-width='1.5'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E") no-repeat right 10px center / 14px; font:inherit; }
+.language-selector:focus-visible { outline:2px solid var(--el-color-primary-light-5); outline-offset:2px; }
 .toolbar-buttons { flex-wrap: wrap; }
 .card-heading, .toolbar-buttons, .actions, .item-title { min-width: 0; }
 .actions { align-items: flex-start; }
@@ -362,3 +363,29 @@ body .el-checkbox__label { min-width: 0; white-space: normal; overflow-wrap: any
 .settings-group > .ppp-management { margin-bottom: var(--section-gap); }
 .settings-disclosure[open] > summary { margin-bottom: 4px; }
 .workspace .el-card .el-card { border: 0; box-shadow: none; }
+
+/* Shared disclosure rhythm, one padded surface per content area. */
+.settings-disclosure { min-width:0; }
+.settings-disclosure > summary { cursor:pointer; padding:12px 0; font-weight:600; min-height:44px; color:var(--el-text-color-primary); }
+.settings-disclosure > summary::marker { color:var(--el-color-primary); }
+.monitor-content { display:grid; gap:var(--section-gap); min-width:0; margin-top:8px; }
+.monitor-content > .el-card { margin:0; }
+.content-section { min-width:0; padding:20px; background:var(--el-bg-color); border:1px solid var(--el-border-color-light); border-radius:12px; }
+.stats .el-card { border-top:3px solid var(--el-color-primary); background:var(--el-color-primary-light-9); }
+.stats .el-col:nth-child(2) .el-card { border-color:var(--el-color-warning); background:var(--el-color-warning-light-9); }
+.stats .el-col:nth-child(3) .el-card { border-color:var(--el-color-success); background:var(--el-color-success-light-9); }
+.stats .el-col:nth-child(4) .el-card { border-color:var(--el-color-danger); background:var(--el-color-danger-light-9); }
+.settings-card > .el-card__header { background:var(--el-color-primary-light-9); }
+.el-table .actions { align-items:center; }
+.settings-grid > .settings-card { align-self:stretch; }
+.settings-grid .settings-card { display:flex; flex-direction:column; }
+.settings-grid .settings-card > .el-card__body { display:flex; flex-direction:column; flex:1; }
+.settings-grid .settings-card > .el-card__body > .el-form:not(.form-grid) { display:flex; flex-direction:column; flex:1; }
+.settings-grid .settings-card > .el-card__body > .el-form > .el-button[type=submit] { align-self:flex-start; margin-top:auto; }
+body .el-input-group__append { flex-shrink:0; padding:0 12px; }
+body .el-input-group__append .el-button { margin:0 -12px; padding:0 12px; white-space:nowrap; min-width:max-content; border-radius:0; }
+body .el-input-group__append .el-button > span { white-space:nowrap; overflow-wrap:normal; }
+body .el-input-group { min-width:0; }
+body .el-input-group .el-input__wrapper { min-width:0; }
+.header-signout { order:3; }
+@media(max-width:767px) { .content-section { padding:16px; } .toolbar-buttons .language-selector { margin-right:0;flex:1;min-width:100px;width:auto; } .toolbar-buttons .el-button { flex-shrink:0; } }

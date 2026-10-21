@@ -26,6 +26,13 @@ const status = ref({ uptime_sec: 0, tun_traffic: [], singbox_pids: {} });
 const error = ref("");
 const activeTab = ref("lines");
 const helpVisible = ref(false);
+const signingOut = ref(false);
+async function signOut() {
+ if(signingOut.value)return; signingOut.value=true;
+ try { await api.logout(); window.dispatchEvent(new Event("s2l-auth-required")); }
+ catch(e) { pushToast({type:"err",message:e.message}); }
+ finally { signingOut.value=false; }
+}
 const q = ref("");
 let timer;
 const refreshing = ref(false);
@@ -94,6 +101,7 @@ async function refresh() {
     mappings.value = Array.isArray(m) ? m : [];
     status.value = {
       uptime_sec: st?.uptime_sec || 0,
+	  build: st?.build || {},
       tun_traffic: Array.isArray(st?.tun_traffic) ? st.tun_traffic : [],
       singbox_pids: st?.singbox_pids || {},
       upstream_health: st?.upstream_health || {},
@@ -149,6 +157,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
           <div class="toolbar-buttons">
             <LanguageSelector persist />
             <el-button @click="helpVisible = true">{{ tr("帮助") }}</el-button>
+            <el-button v-if="authEnabled" class="header-signout" :loading="signingOut" @click="signOut">{{tr("退出登录")}}</el-button>
           </div>
         </div>
       </header>
@@ -190,7 +199,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
       <section class="workspace">
         <el-tabs v-model="activeTab">
           <el-tab-pane :label='tr("线路管理")' name="lines">
-            <Mapping
+            <section class="content-section"><Mapping
               :nodes="nodes"
               :mappings="filteredMappings"
               :all-mappings="mappings"
@@ -198,18 +207,17 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
               @changed="refresh"
               @toast="pushToast"
             />
-            <Node
+            </section><section class="content-section"><Node
               :nodes="filteredNodes"
               @changed="refresh"
               @toast="pushToast"
             />
-            <el-collapse class="monitor-collapse"
-              ><el-collapse-item :title='tr("运行监控")' name="monitor"
-                ><Status :status="status" @changed="refresh" @toast="pushToast" /></el-collapse-item
-            ></el-collapse>
+            </section><details class="settings-disclosure monitor-disclosure"><summary>{{tr("运行监控")}}</summary>
+              <div class="monitor-content"><Status :status="status" @changed="refresh" @toast="pushToast" /></div>
+            </details>
           </el-tab-pane>
           <el-tab-pane :label='tr("系统设置")' name="settings" lazy
-            ><Settings :auth-enabled="authEnabled" :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"
+            ><Settings :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"
           /></el-tab-pane>
         </el-tabs>
       </section>
@@ -217,6 +225,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
         ><Guide :mappings="mappings" :health="status.upstream_health"
       /></el-drawer>
       <footer class="muted"> {{ tr("运行") }} {{ formatUptime(status.uptime_sec) }}
+       <span v-if="status.build?.version"> · {{status.build.version}}<span v-if="status.build.revision"> · {{status.build.revision.slice(0,12)}}</span><span v-if="status.build.modified"> {{tr('· 含本地修改')}}</span></span>
       </footer>
     </div>
   </el-config-provider>

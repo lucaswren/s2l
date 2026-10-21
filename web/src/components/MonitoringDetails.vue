@@ -35,12 +35,12 @@ const recent=computed(()=>history.value.slice(-12).reverse());
  <el-card shadow="never" class="section-gap">
   <template #header>{{ tr("PPP 在线会话") }}</template>
   <el-alert v-if="status.sessions_error" :title="status.sessions_error+tr(&quot;；下方保留上次采集结果&quot;)" type="warning" :closable="false"/>
-  <el-table class="desktop-list" :data="sessions" :empty-text='tr("暂无已观测会话")'>
-   <el-table-column prop="interface" :label='tr("接口")'/><el-table-column :label='tr("映射")'><template #default="{row}">{{name(row.mapping_id)}}</template></el-table-column>
-   <el-table-column prop="peer_ip" :label='tr("隧道地址")'/><el-table-column prop="mtu" :label='tr("实际 MTU")'/>
+  <el-table scrollbar-always-on class="desktop-list" :data="sessions" :empty-text='tr("暂无已观测会话")'>
+   <el-table-column min-width="130" prop="interface" :label='tr("接口")'/><el-table-column min-width="130" :label='tr("映射")'><template #default="{row}">{{name(row.mapping_id)}}</template></el-table-column>
+   <el-table-column min-width="130" prop="peer_ip" :label='tr("隧道地址")'/><el-table-column min-width="130" prop="mtu" :label='tr("实际 MTU")'/>
    <el-table-column :label='tr("拨号时间 / 首次观测")' min-width="175"><template #default="{row}">{{time(row.connected_at&&!row.connected_at.startsWith('0001')?row.connected_at:row.first_seen)}}</template></el-table-column>
    <el-table-column :label='tr("接收 / 发送")' min-width="160"><template #default="{row}">{{bytes(row.rx_bytes)}} / {{bytes(row.tx_bytes)}}</template></el-table-column>
-   <el-table-column :label='tr("丢包 / 错误")'><template #default="{row}">{{row.dropped}} / {{row.errors}}<span v-if="row.error"> · {{row.error}}</span></template></el-table-column>
+   <el-table-column min-width="130" :label='tr("丢包 / 错误")'><template #default="{row}">{{row.dropped}} / {{row.errors}}<span v-if="row.error"> · {{row.error}}</span></template></el-table-column>
 <el-table-column :label='tr("会话管理")' width="110"><template #default="{row}"><el-button v-if="row.disconnectable" :loading="disconnecting===row.interface" @click="disconnect(row)">{{ tr("断开") }}</el-button></template></el-table-column>
   </el-table>
   <div class="mobile-list"><el-empty v-if="!sessions.length" :description='tr("暂无已观测会话")'/><article v-for="row in sessions" :key="row.index" class="session-row"><strong>{{row.interface}} · {{name(row.mapping_id)}}</strong><p>{{row.peer_ip}} · MTU {{row.mtu}}</p><p>{{ tr("接收") }} {{bytes(row.rx_bytes)}} {{ tr("· 发送") }} {{bytes(row.tx_bytes)}}</p><p>{{ tr("丢包") }} {{row.dropped}} {{ tr("· 错误") }} {{row.errors}}</p><p>{{ tr("首次观测") }} {{time(row.connected_at&&!row.connected_at.startsWith('0001')?row.connected_at:row.first_seen)}}</p><p v-if="row.error">{{row.error}}</p><el-button v-if="row.disconnectable" :loading="disconnecting===row.interface" @click="disconnect(row)">{{ tr("断开会话") }}</el-button></article></div>
@@ -51,7 +51,7 @@ const recent=computed(()=>history.value.slice(-12).reverse());
   <div class="history-controls"><el-select v-model="selected" :aria-label='tr("历史记录映射")' :placeholder='tr("选择映射")'><el-option v-for="m in mappings" :key="m.id" :label="m.tun_name" :value="m.id"/></el-select><el-button :loading="busy" @click="load">{{ tr("刷新") }}</el-button></div>
   <el-alert v-if="warning" :title="warning" type="warning" :closable="false"/>
   <p>{{ tr("TCP 探测成功率") }} {{passRate(totals)}} {{ tr("· 成功") }} {{totals.pass}} {{ tr("· 失败") }} {{totals.fail}} {{ tr("· 目标限制") }} {{totals.restricted}}</p>
-  <el-table class="desktop-list" :data="recent" :empty-text='tr("暂无历史采样")'>
+  <el-table scrollbar-always-on class="desktop-list" :data="recent" :empty-text='tr("暂无历史采样")'>
    <el-table-column :label='tr("时段")' min-width="180"><template #default="{row}">{{time(row.at*1000)}}</template></el-table-column>
    <el-table-column :label='tr("TCP / DNS 成功率")' min-width="160"><template #default="{row}">{{passRate(row.tcp)}} / {{passRate(row.dns)}}</template></el-table-column>
    <el-table-column :label='tr("平均 HTTPS 耗时")' min-width="145"><template #default="{row}">{{row.latency_samples?Math.round(row.latency_total_ms/row.latency_samples)+' ms':'—'}}</template></el-table-column>

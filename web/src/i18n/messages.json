@@ -3141,5 +3141,81 @@
   "语言设置保存失败，请重试": {
     "en": "Could not save language; try again",
     "tw": "語言設定儲存失敗，請重試"
+  },
+  "无记录": {
+    "en": "No records",
+    "tw": "無記錄"
+  },
+  "映射 DNS 路径": {
+    "en": "Mapping DNS path",
+    "tw": "映射 DNS 路徑"
+  },
+  "通过映射实际 DNS 监听器检测；TCP/TLS 从服务器发起，手机与 PPP 路径未验证。": {
+    "en": "Uses the live mapping DNS listener. TCP/TLS starts at the server; the phone and PPP path are unverified.",
+    "tw": "透過映射實際 DNS 監聽器檢測；TCP/TLS 從伺服器發起，手機與 PPP 路徑未驗證。"
+  },
+  "映射 DNS 监听器 → 固定节点 → 目标；TCP/TLS 从服务器发起，未验证手机、PPP 转发与账号登录。": {
+    "en": "Mapping DNS listener → fixed node → target; TCP/TLS starts at the server. Phone, PPP forwarding and account sign-in are unverified.",
+    "tw": "映射 DNS 監聽器 → 固定節點 → 目標；TCP/TLS 從伺服器發起，未驗證手機、PPP 轉送與帳號登入。"
+  },
+  "备份清理失败，请刷新列表后重试": {
+    "en": "Backup cleanup failed. Refresh the list and retry.",
+    "tw": "備份清理失敗，請重新整理列表後再試"
+  },
+  "删除所选 {0} 份备份？此操作无法撤销，当前配置保持不变。": {
+    "en": "Delete {0} selected backups? This cannot be undone. The current configuration is unchanged.",
+    "tw": "刪除所選 {0} 份備份？此操作無法復原，目前設定保持不變。"
+  },
+  "清理备份": {
+    "en": "Clean up backups",
+    "tw": "清理備份"
+  },
+  "备份已清理": {
+    "en": "Backups deleted",
+    "tw": "備份已清理"
+  },
+  "清理旧备份": {
+    "en": "Clean up older backups",
+    "tw": "清理舊備份"
+  },
+  "清理旧备份会保留最新一份配置备份。": {
+    "en": "Cleaning up older backups keeps the newest configuration backup.",
+    "tw": "清理舊備份會保留最新一份設定備份。"
+  },
+  "状态刷新于": {
+    "en": "Status refreshed at",
+    "tw": "狀態重新整理於"
+  },
+  "每秒更新": {
+    "en": "Updated every second",
+    "tw": "每秒更新"
+  },
+  "每 10 秒更新": {
+    "en": "Updated every 10 seconds",
+    "tw": "每 10 秒更新"
+  },
+  "已安装版本说明": {
+    "en": "Installed build notes",
+    "tw": "已安裝版本說明"
+  },
+  "当前构建暂无发布说明，以版本号和提交号为准。": {
+    "en": "No notes are available for this build. Refer to its version and revision.",
+    "tw": "目前建置暫無發佈說明，以版本號與提交編號為準。"
+  },
+  "查看发布记录": {
+    "en": "View release",
+    "tw": "查看發佈記錄"
+  },
+  "最新版本说明（发布原文）": {
+    "en": "Latest release notes (original text)",
+    "tw": "最新版本說明（發佈原文）"
+  },
+  "检查于": {
+    "en": "Checked at",
+    "tw": "檢查於"
+  },
+  "表格视图": {
+    "en": "Table view",
+    "tw": "表格檢視"
   }
 }

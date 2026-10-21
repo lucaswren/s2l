@@ -137,6 +137,9 @@ def check():
         raise RuntimeError('更新提交信息无效')
     result = {'tag': tag, 'commit': commit, 'checked_at': now(), 'checked_epoch': time.time(),
               'url': 'https://github.com/lucaswren/s2l/releases/tag/' + tag}
+    # Keep the private state below its 16 KiB bound, including JSON escaping.
+    notes = release.get('body')
+    result['notes'] = notes[:1200] if isinstance(notes, str) else ''
     save('release.json', result)
     return result
 
@@ -181,6 +184,11 @@ def phase(job_id, value):
     job = read('job.json')
     if job.get('id') == job_id and job.get('status') == 'running':
         job['phase'] = value
+        job['updated_at'] = now()
+        history = job.get('phases', [])
+        if not history or history[-1].get('phase') != value:
+            history = history[-15:] + [{'phase': value, 'at': job['updated_at']}]
+        job['phases'] = history
         save('job.json', job)
 
 

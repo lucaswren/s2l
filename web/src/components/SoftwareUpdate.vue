@@ -1,12 +1,14 @@
 <script setup>
-import { tr } from '../i18n/index.js';
+import { tr, language, dateTime, clockTime } from '../i18n/index.js';
 
-import {computed,ref,watch,onBeforeUnmount} from 'vue';
+import {computed,ref,watch,onMounted,onBeforeUnmount} from 'vue';
 import {ElMessageBox} from 'element-plus';
 import {api} from '../api/client';
 const props=defineProps({active:Boolean});
 const info=ref({current:{},job:{},release:{}}), busy=ref(false), error=ref('');
 const running=computed(()=>['queued','running'].includes(info.value.job?.status));
+const refreshedAt=ref('');
+const installedNotes=computed(()=>info.value.current?.release_notes?.[language.value] || '');
 const phases={get preparing() { return tr("准备更新"); },get building() { return tr("编译程序"); },get backup() { return tr("备份与停止服务"); },get installing() { return tr("安装更新"); },get restarting() { return tr("重启服务"); },get verifying() { return tr("验证服务"); },get rolling_back() { return tr("执行失败恢复"); }};
 const statuses={get queued() { return tr("已排队"); },get running() { return tr("更新中"); },get succeeded() { return tr("更新完成"); },get failed() { return tr("更新失败"); },get interrupted() { return tr("任务已中断"); }};
 const sameVersion=computed(()=>{const r=info.value.release,c=info.value.current;return r?.commit && !c?.modified && (c?.revision===r.commit || (c?.version===r.tag && !c?.revision));});
@@ -17,17 +19,17 @@ const olderRelease=computed(()=>{
 });
 let timer,controller,version=0,disposed=false;
 function stop(){version++;clearTimeout(timer);controller?.abort();}
-function schedule(){if(props.active&&!disposed)timer=setTimeout(load,5000);}
+function schedule(){if((props.active||running.value)&&!disposed)timer=setTimeout(load,running.value?1000:10000);}
 async function load(){
  stop();const ticket=version;controller=new AbortController();
- try{const result=await api.updateStatus(controller.signal);if(ticket===version){info.value=result;error.value='';}}
+ try{const result=await api.updateStatus(controller.signal);if(ticket===version&&!disposed){info.value=result;refreshedAt.value=new Date().toISOString();error.value='';}}
  catch(e){if(ticket===version&&e.name!=='AbortError')error.value=running.value?tr("网页暂时不可达，正在重连；更新失败时可能需要通过 SSH 检查服务。"):e.message;}
  finally{if(ticket===version&&!busy.value)schedule();}
 }
 async function perform(body){
  if(busy.value)return;
  stop();busy.value=true;error.value='';
- try{info.value=await api.updateSoftware(body);}
+ try{const result=await api.updateSoftware(body);if(!disposed){info.value=result;refreshedAt.value=new Date().toISOString();}}
  catch(e){error.value=e.message;}
  finally{busy.value=false;schedule();}
 }
@@ -40,20 +42,27 @@ async function start(){
  await perform(body);
 }
 function reload(){window.location.reload();}
-watch(()=>props.active,active=>{stop();if(active&&!busy.value)load();},{immediate:true});
-onBeforeUnmount(()=>{disposed=true;stop();});
+function resume(){if(!document.hidden&&!busy.value&&(props.active||running.value))load();}
+watch(()=>props.active,active=>{stop();if((active||running.value)&&!busy.value)load();},{immediate:true});
+onMounted(()=>document.addEventListener('visibilitychange',resume));
+onBeforeUnmount(()=>{disposed=true;stop();document.removeEventListener('visibilitychange',resume);});
 </script>
 <template>
- <el-card shadow="never" class="settings-card">
+ <el-card shadow="never" class="settings-card software-update">
   <template #header><div class="card-heading"><span>{{ tr("软件更新") }}</span><el-tag v-if="running" type="warning">{{ tr("更新中") }}</el-tag></div></template>
   <p>{{ tr("当前版本：") }}<strong>{{ info.current?.version || tr("未知") }}</strong><span v-if="info.current?.revision"> · {{ info.current.revision.slice(0,12) }}</span><span v-if="info.current?.modified"> {{ tr("· 含本地修改") }}</span></p>
   <p v-if="info.release?.tag">{{ tr("最新稳定版：") }}<el-link :href="info.release.url" target="_blank" rel="noopener noreferrer">{{ info.release.tag }}</el-link><span v-if="sameVersion"> {{ tr("· 已是该版本") }}</span><span v-else-if="olderRelease"> {{ tr("· 当前版本较新") }}</span></p>
+  <p v-if="refreshedAt" class="muted">{{tr('状态刷新于')}} {{clockTime(refreshedAt)}} · {{running?tr('每秒更新'):tr('每 10 秒更新')}}</p>
+  <details class="release-notes"><summary>{{tr('已安装版本说明')}}</summary><p v-if="installedNotes">{{installedNotes}}</p><p v-else class="muted">{{tr('当前构建暂无发布说明，以版本号和提交号为准。')}}</p><el-link v-if="info.current?.release_url" :href="info.current.release_url" target="_blank" rel="noopener noreferrer">{{tr('查看发布记录')}}</el-link></details>
+  <details v-if="info.release?.notes" class="release-notes"><summary>{{tr('最新版本说明（发布原文）')}}</summary><p class="release-body">{{info.release.notes}}</p><p v-if="info.release.checked_at" class="muted">{{tr('检查于')}} {{dateTime(info.release.checked_at)}}</p></details>
   <el-alert v-if="info.available===false" :title="info.message" type="info" :closable="false" class="section-gap" />
   <el-alert v-if="error" :title="error" type="error" :closable="false" class="section-gap" />
   <div v-if="info.job?.id" class="update-status">
    <el-tag :type="info.job.status==='succeeded'?'success':['failed','interrupted'].includes(info.job.status)?'danger':'warning'">{{ statuses[info.job.status] || info.job.status }}</el-tag>
    <span>{{ info.job.tag }} · {{ info.job.status === 'succeeded' ? tr("服务已通过验证") : (running ? '' : tr("最后阶段：")) + (phases[info.job.phase] || tr("准备更新")) }}</span>
    <p v-if="info.job.message">{{ tr(info.job.message) }}</p>
+   <ol v-if="info.job.phases?.length" class="update-phases"><li v-for="(entry,index) in info.job.phases" :key="index"><span>{{phases[entry.phase] || tr('准备更新')}}</span><time>{{clockTime(entry.at)}}</time></li></ol>
+   <p v-if="info.job.finished_at" class="muted">{{dateTime(info.job.finished_at)}}</p>
   </div>
   <div class="actions">
    <el-button :loading="busy" :disabled="running || !info.available" @click="perform({action:'check'})">{{ tr("检查更新") }}</el-button>
@@ -66,4 +75,5 @@ onBeforeUnmount(()=>{disposed=true;stop();});
 </template>
 <style scoped>
 .update-status{margin:16px 0;line-height:1.8;}.update-status>span{margin-right:12px;}
+.release-notes{margin:12px 0}.release-body{white-space:pre-wrap;overflow-wrap:anywhere}.update-phases{padding-left:20px;border-left:2px solid var(--el-color-primary-light-5);list-style:none}.update-phases li{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:4px 0}.update-phases time{color:var(--el-text-color-secondary)}
 </style>

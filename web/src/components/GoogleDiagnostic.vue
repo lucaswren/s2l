@@ -30,6 +30,7 @@ const visibleComparisons=computed(()=>showAll.value?comparisons.value:difference
     <p>DoH A：{{text(row.doh?.state)}} {{row.doh?.addresses?.join(', ') || '—'}} · {{row.doh?.duration_ms}} ms / TCP DNS A：{{text(row.tcp_dns?.state)}} {{row.tcp_dns?.addresses?.join(', ') || '—'}} · {{row.tcp_dns?.duration_ms}} ms</p>
     <p>A：{{text(row.a.state)}} · {{row.a.addresses?.join(', ') || '—'}} · {{row.a.duration_ms}} ms</p>
     <p>AAAA：{{text(row.aaaa.state)}} · {{row.aaaa.addresses?.join(', ') || '—'}} · {{row.aaaa.duration_ms}} ms</p>
+    <p>HTTPS DNS：{{row.https?.state==='no_address'?tr('无记录'):text(row.https?.state)}} · {{row.https?.records ?? '—'}}</p>
     <p>TCP {{text(row.tcp)}} {{row.tcp_ms ?? '—'}} ms · TLS {{text(row.tls)}} {{row.tls_ms ?? '—'}} ms · HTTP {{row.status || text(row.http)}} · {{row.alpn || tr("未协商 ALPN")}}</p>
     <p v-if="row.ip">IP {{row.ip}}</p>
     <p v-if="row.error" class="error-text">{{row.error_code}} · {{row.error}}</p>
@@ -40,6 +41,18 @@ const visibleComparisons=computed(()=>showAll.value?comparisons.value:difference
    <p><strong>{{ tr("QUIC 回退：待客户端验证") }}</strong> {{ tr("· TCP/TLS 替代路径") }} {{report.tcp_alternatives ?? report.targets.filter(t=>t.tcp==='healthy'&&t.tls==='healthy').length}} / {{report.targets.length}}</p>
   </section>
   <details><summary>{{ tr("映射策略与共享连接证据") }}</summary><p v-if="!result.mapping_policies?.length">{{ tr("所选节点暂无映射。") }}</p><p v-for="m in result.mapping_policies" :key="m.mapping_id">{{m.mapping_id}} · {{m.node_id}} · UDP {{m.udp_policy}} · DNS {{m.dns_mode}} · {{m.status}}<br />{{ tr("TCP 连接上限") }} {{m.max_connections || tr("不限")}}{{ tr("（映射网段合计） · PPP 会话上限") }} {{m.max_sessions || tr("不限")}} {{ tr("· 上/下行") }} {{m.upload_kbps || 0}} / {{m.download_kbps || 0}} {{ tr("Kbps（0 为不限）") }}<br />{{rejectEvidence(m)}}</p></details>
+  <section v-for="m in result.mapping_policies" :key="'dns-'+m.mapping_id" class="google-line">
+   <h4>{{tr('映射 DNS 路径')}} · {{m.mapping_id}}</h4>
+   <p>{{text(m.mapping_dns?.state)}}</p>
+   <p class="muted">{{tr('通过映射实际 DNS 监听器检测；TCP/TLS 从服务器发起，手机与 PPP 路径未验证。')}}</p>
+   <details v-for="row in m.mapping_dns?.report?.targets" :key="row.host" class="google-target"><summary><strong>{{row.host}}</strong><span>{{state(row)}}</span></summary>
+    <p>A：{{text(row.a?.state)}} · {{row.a?.addresses?.join(', ') || '—'}}</p>
+    <p>AAAA：{{text(row.aaaa?.state)}} · {{row.aaaa?.addresses?.join(', ') || '—'}}</p>
+    <p>HTTPS DNS：{{row.https?.state==='no_address'?tr('无记录'):text(row.https?.state)}} · {{row.https?.records ?? '—'}}</p>
+    <p>TCP {{text(row.tcp)}} · TLS {{text(row.tls)}} · HTTP {{row.status || text(row.http)}} · {{row.ip || '—'}}</p>
+    <p v-for="attempt in row.attempts" :key="attempt.ip">{{attempt.ip}} · TCP {{text(attempt.tcp)}} · TLS {{text(attempt.tls)}} · {{attempt.error || attempt.status}}</p>
+   </details>
+  </section>
   <details class="google-scope"><summary>{{ tr("检测范围与说明") }}</summary><p>{{ tr("HTTP 状态码仅作诊断参考，不代表账号或 App 可用。") }}</p><p>{{tr(result.google?.[0]?.scope || '')}}</p><p>{{tr(result.google?.[0]?.quic || '')}}</p>
   <p>{{ tr("计数为映射合计，仅表示规则命中；客户端是否收到 ICMP 需另行验证。") }}</p>
   <p>{{ tr("多设备可共享出口；出现相互影响时，检查连接限额与会话状态。节点检测不经过映射限额。") }}</p>

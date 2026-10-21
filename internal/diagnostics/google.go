@@ -23,12 +23,14 @@ import (
 var googleHosts = []string{"www.google.com", "accounts.google.com", "oauth2.googleapis.com", "gmail.googleapis.com", "www.youtube.com", "gemini.google.com", "robinfrontend-pa.googleapis.com", "oauthaccountmanager.googleapis.com"}
 
 type DNSResult struct {
+	Records    int      `json:"records"`
 	State      string   `json:"state"`
 	Addresses  []string `json:"addresses"`
 	RCode      int      `json:"rcode"`
 	DurationMS int64    `json:"duration_ms"`
 }
 type Target struct {
+	HTTPS      DNSResult      `json:"https"`
 	IP         string         `json:"ip,omitempty"`
 	ErrorCode  string         `json:"error_code,omitempty"`
 	Error      string         `json:"error,omitempty"`
@@ -63,6 +65,7 @@ type ProbeAttempt struct {
 	DurationMS int64  `json:"duration_ms"`
 }
 type Report struct {
+	MappingID       string               `json:"mapping_id,omitempty"`
 	NodeID          string               `json:"node_id"`
 	NodeName        string               `json:"node_name"`
 	CheckedAt       time.Time            `json:"checked_at"`
@@ -72,6 +75,22 @@ type Report struct {
 	QUIC            string               `json:"quic"`
 	TCPAlternatives int                  `json:"tcp_alternatives"`
 	ClientFallback  string               `json:"client_fallback"`
+}
+
+// Healthy is server-side reachability only, never proof of client fallback.
+func (r Report) Healthy() bool {
+	if len(r.Targets) == 0 {
+		return false
+	}
+	validDNS := func(v DNSResult) bool {
+		return v.State == "healthy" || v.State == "no_address" || v.State == "nxdomain"
+	}
+	for _, t := range r.Targets {
+		if t.A.State != "healthy" || !validDNS(t.AAAA) || !validDNS(t.HTTPS) || t.TCP != "healthy" || t.TLS != "healthy" || t.HTTP != "responded" {
+			return false
+		}
+	}
+	return true
 }
 
 // Google resolves through this node only, then pins each HTTPS dial to the
@@ -87,7 +106,22 @@ type resolver interface {
 	Resolve(context.Context, []byte) ([]byte, error)
 }
 
-func google(ctx context.Context, node model.SocksNode, hosts []string, doh, tcp resolver, probeTarget func(context.Context, model.SocksNode, string, *Target), exit func(context.Context, model.SocksNode) model.ProtocolHealth) Report {
+type ResolverFunc func(context.Context, []byte) ([]byte, error)
+
+func (f ResolverFunc) Resolve(ctx context.Context, q []byte) ([]byte, error) { return f(ctx, q) }
+
+// GoogleMapping uses the running mapping's DNS listener and only its selected
+// upstream. TCP/TLS still starts at the server, not at a real PPP client.
+func GoogleMapping(ctx context.Context, node model.SocksNode, id string, lookup ResolverFunc) Report {
+	r := google(ctx, node, googleHosts, nil, nil, probe, func(context.Context, model.SocksNode) model.ProtocolHealth {
+		return model.ProtocolHealth{State: "not_tested"}
+	}, lookup)
+	r.MappingID = id
+	r.Scope = "映射 DNS 监听器 → 固定节点 → 目标；TCP/TLS 从服务器发起，未验证手机、PPP 转发与账号登录。"
+	return r
+}
+
+func google(ctx context.Context, node model.SocksNode, hosts []string, doh, tcp resolver, probeTarget func(context.Context, model.SocksNode, string, *Target), exit func(context.Context, model.SocksNode) model.ProtocolHealth, mapping ...resolver) Report {
 	r := Report{NodeID: node.ID, NodeName: node.Name, CheckedAt: time.Now(), Targets: make([]Target, len(hosts)),
 		Scope: "服务器经固定节点检查 DNS、TCP/TLS、HTTP；失败时最多复测 3 个 IPv4 地址。不验证客户端连接和账号登录。",
 		QUIC:  "未发送 QUIC；TCP/TLS 可用不代表客户端已回退，需核对客户端行为与 ICMP 返回。"}
@@ -102,22 +136,38 @@ func google(ctx context.Context, node model.SocksNode, hosts []string, doh, tcp 
 			case slots <- struct{}{}:
 				defer func() { <-slots }()
 			case <-ctx.Done():
-				r.Targets[i] = Target{Host: host, TCP: "not_tested", TLS: "not_tested", HTTP: "not_tested", Stage: "cancelled", A: DNSResult{State: "cancelled", Addresses: []string{}}, AAAA: DNSResult{State: "cancelled", Addresses: []string{}}, DOH: DNSResult{State: "cancelled", Addresses: []string{}}, TCPDNS: DNSResult{State: "cancelled", Addresses: []string{}}}
+				r.Targets[i] = Target{Host: host, TCP: "not_tested", TLS: "not_tested", HTTP: "not_tested", Stage: "cancelled", A: DNSResult{State: "cancelled", Addresses: []string{}}, AAAA: DNSResult{State: "cancelled", Addresses: []string{}}, HTTPS: DNSResult{State: "cancelled", Addresses: []string{}}, DOH: DNSResult{State: "cancelled", Addresses: []string{}}, TCPDNS: DNSResult{State: "cancelled", Addresses: []string{}}}
 				return
 			}
 			row := Target{Host: host, TCP: "not_tested", TLS: "not_tested", HTTP: "not_tested"}
-			row.DOH = resolve(ctx, doh, host, 1)
-			row.TCPDNS = resolve(ctx, tcp, host, 1)
-			row.A = row.DOH
-			if row.A.State != "healthy" {
-				row.A = row.TCPDNS
-			}
-			row.AAAA = resolve(ctx, doh, host, 28)
-			if row.AAAA.State == "unavailable" {
-				row.AAAA = resolve(ctx, tcp, host, 28)
+			if len(mapping) > 0 {
+				row.DOH = DNSResult{State: "not_tested", Addresses: []string{}}
+				row.TCPDNS = row.DOH
+				row.A = resolve(ctx, mapping[0], host, 1)
+				row.AAAA = resolve(ctx, mapping[0], host, 28)
+				row.HTTPS = resolve(ctx, mapping[0], host, 65)
+			} else {
+				row.DOH = resolve(ctx, doh, host, 1)
+				row.TCPDNS = resolve(ctx, tcp, host, 1)
+				row.A = row.DOH
+				if row.A.State != "healthy" {
+					row.A = row.TCPDNS
+				}
+				row.AAAA = resolve(ctx, doh, host, 28)
+				if row.AAAA.State == "unavailable" {
+					row.AAAA = resolve(ctx, tcp, host, 28)
+				}
+				row.HTTPS = resolve(ctx, doh, host, 65)
+				if row.HTTPS.State == "unavailable" {
+					row.HTTPS = resolve(ctx, tcp, host, 65)
+				}
 			}
 			if len(row.A.Addresses) > 0 {
-				probeAddresses(ctx, node, &row, probeTarget)
+				if len(mapping) > 0 {
+					probeAddressSources(ctx, node, &row, probeTarget, row.A)
+				} else {
+					probeAddresses(ctx, node, &row, probeTarget)
+				}
 			} else {
 				row.Stage = "dns"
 			}
@@ -140,11 +190,14 @@ func google(ctx context.Context, node model.SocksNode, hosts []string, doh, tcp 
 // Retry destination addresses only within this node. DNS answers are interleaved
 // so the independent TCP resolver gets a chance before a third DoH address.
 func probeAddresses(ctx context.Context, node model.SocksNode, row *Target, check func(context.Context, model.SocksNode, string, *Target)) {
+	probeAddressSources(ctx, node, row, check, row.DOH, row.TCPDNS)
+}
+func probeAddressSources(ctx context.Context, node model.SocksNode, row *Target, check func(context.Context, model.SocksNode, string, *Target), sources ...DNSResult) {
 	var ips []string
 	seen := map[string]bool{}
 	for i := 0; len(ips) < 3; i++ {
 		added := false
-		for _, result := range []DNSResult{row.DOH, row.TCPDNS} {
+		for _, result := range sources {
 			if i >= len(result.Addresses) {
 				continue
 			}
@@ -185,6 +238,7 @@ func probeAddresses(ctx context.Context, node model.SocksNode, row *Target, chec
 		}
 	}
 	best.A, best.AAAA, best.DOH, best.TCPDNS = row.A, row.AAAA, row.DOH, row.TCPDNS
+	best.HTTPS = row.HTTPS
 	best.Attempts = attempts
 	if best.HTTP != "responded" {
 		best.Cancelled = best.Cancelled || errors.Is(budget.Err(), context.Canceled)
@@ -218,6 +272,9 @@ func resolve(ctx context.Context, r resolver, host string, kind uint16) DNSResul
 	}
 	binary.BigEndian.PutUint16(q[len(q)-4:], kind)
 	answer, err := r.Resolve(ctx, q)
+	if err == nil {
+		err = dnsproxy.ValidateResponse(q, answer)
+	}
 	result.DurationMS = time.Since(start).Milliseconds()
 	if err != nil {
 		if ctx.Err() != nil {
@@ -233,11 +290,36 @@ func resolve(ctx context.Context, r resolver, host string, kind uint16) DNSResul
 	// Validated DNS names can be compressed. Walk records rather than treating
 	// the total answer count (which includes CNAMEs) as an address count.
 	result.Addresses = addresses(answer, kind)
+	result.Records = recordCount(answer, kind)
 	result.State = "no_address"
-	if len(result.Addresses) > 0 {
+	if len(result.Addresses) > 0 || (kind == 65 && result.Records > 0) {
 		result.State = "healthy"
 	}
 	return result
+}
+func recordCount(b []byte, kind uint16) int {
+	p := skipName(b, 12)
+	if p < 0 || p+4 > len(b) {
+		return 0
+	}
+	p += 4
+	count := 0
+	for i := 0; i < int(binary.BigEndian.Uint16(b[6:8])); i++ {
+		p = skipName(b, p)
+		if p < 0 || p+10 > len(b) {
+			return count
+		}
+		k, c, n := binary.BigEndian.Uint16(b[p:]), binary.BigEndian.Uint16(b[p+2:]), int(binary.BigEndian.Uint16(b[p+8:]))
+		p += 10
+		if p+n > len(b) {
+			return count
+		}
+		if k == kind && c == 1 {
+			count++
+		}
+		p += n
+	}
+	return count
 }
 func skipName(b []byte, p int) int {
 	for p < len(b) {
