@@ -194,7 +194,11 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 		options := filepath.Join(root, fmt.Sprintf("client%d.options", i))
 		conf := filepath.Join(root, fmt.Sprintf("client%d.conf", i))
 		control := filepath.Join(root, fmt.Sprintf("client%d.control", i))
-		os.WriteFile(options, []byte(fmt.Sprintf("name user%d\npassword fixture-secret\nnoauth\nrefuse-eap\nnoccp\nnodefaultroute\nmtu 1400\nmru 1400\ndebug\nlogfile %s\n", i, filepath.Join(root, fmt.Sprintf("ppp-client%d.log", i)))), 0600)
+		// Colocated pppd 2.4.x peers share host entropy and can enter a
+		// synchronized magic-number collision (EXIT_LOOPBACK). This fixture
+		// tests real authentication, IPCP and forwarding, not serial-loop detection.
+		// Disable magic negotiation on fixture clients only; keep production LCP.
+		os.WriteFile(options, []byte(fmt.Sprintf("name user%d\npassword fixture-secret\nnoauth\nnomagic\nrefuse-eap\nnoccp\nnodefaultroute\nmtu 1400\nmru 1400\ndebug\nlogfile %s\n", i, filepath.Join(root, fmt.Sprintf("ppp-client%d.log", i)))), 0600)
 		os.WriteFile(conf, []byte(fmt.Sprintf("[lac vpn]\nlns = %s\npppoptfile = %s\nlength bit = yes\n", server, options)), 0600)
 		start("ip", "netns", "exec", ns, "xl2tpd", "-D", "-c", conf, "-p", filepath.Join(root, fmt.Sprintf("client%d.pid", i)), "-C", control)
 		integrationWait(t, 5*time.Second, func() bool {
