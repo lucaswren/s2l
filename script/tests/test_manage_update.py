@@ -126,6 +126,7 @@ class WebUpdateTests(unittest.TestCase):
                     worker_path], capture_output=True)
                 self.assertEqual(probe.returncode, 0, 'worker started while request still owned worker.lock')
             with patch.object(module, 'ROOT', Path(temporary)), patch.object(module, 'lock', real_lock), \
+                    patch.object(module.os, 'geteuid', return_value=0), \
                     patch.object(module, 'preflight'), patch.object(module, 'unit_active', return_value=False), \
                     patch.object(module.time, 'time', return_value=101), patch.object(module, 'command', side_effect=launch), \
                     patch.object(sys, 'argv', ['manage_update.py', 'start']), \
