@@ -309,3 +309,5 @@ footer {
  .settings-card .el-radio { margin-right: 16px; }
  .settings-card .actions { gap: 10px; }
 }
+
+@media(max-width:767px){.hero.compact{flex-direction:row;align-items:center}.hero.compact .toolbar{width:auto}.hero.compact .toolbar-buttons{margin-left:0}}

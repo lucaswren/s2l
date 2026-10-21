@@ -146,6 +146,16 @@ func TestAnalysisReportsPersistentUDPFailureAndDNSIndependently(t *testing.T) {
 	}
 }
 
+func TestAnalysisExplainsRejectedUDPWithoutChangingRawResult(t *testing.T) {
+	c := &Collector{}
+	c.Set(true)
+	c.RecordStatus(model.SystemStatus{UpstreamHealth: map[string]model.UpstreamHealth{"m": {State: "healthy", UDPPolicy: "reject", TCP: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "unavailable", Error: "code=9"}}}}, Resources{}, time.Now())
+	text := string(c.Analysis().Text())
+	if !strings.Contains(text, "不作为 TCP 链路故障") || !strings.Contains(text, "unavailable") {
+		t.Fatal(text)
+	}
+}
+
 func TestDNSParseErrorsUseSessionDelta(t *testing.T) {
 	c := &Collector{}
 	c.Set(true)

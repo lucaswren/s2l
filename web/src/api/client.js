@@ -78,6 +78,8 @@ async function streamNetworkTest(id, body, signal, onEvent) {
 }
 
 export const api = {
+ pppManagement:()=>request('/api/settings/ppp-management'),
+ savePPPManagement:(body)=>request('/api/settings/ppp-management',{method:'POST',body:JSON.stringify(body)}),
  operations:(signal)=>request('/api/operations',{signal}),
  saveNotifications:(body)=>request('/api/operations',{method:'POST',body:JSON.stringify(body)}),
  disconnectSession:(row)=>request('/api/sessions/disconnect',{method:'POST',body:JSON.stringify({interface:row.interface,peer:row.peer_ip,index:row.index})}),

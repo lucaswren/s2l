@@ -59,7 +59,7 @@ func main() {
 	l2tpMgr := l2tp.NewManager(cfg.ChapSecrets, cfg.Xl2tpdConf, cfg.PPPOptions)
 	svc := service.NewMappingService(st, sb, netCtrl, l2tpMgr)
 
-	if err := netCtrl.EnsureGuard(); err != nil {
+	if err := netCtrl.SetManagementAccess(cfg.PPPManagement); err != nil {
 		log.Fatalf("install traffic guards: %v", err)
 	}
 	if err := network.CleanupProofs(); err != nil {

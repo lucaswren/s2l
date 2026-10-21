@@ -339,7 +339,7 @@ func (s *MappingService) Status() model.SystemStatus {
 		traffic = append(traffic, t)
 	}
 	peers, peersAt, peersError := s.peerSnapshot()
-	return model.SystemStatus{HostStats: network.HostStats(), Sessions: peers, SessionsCheckedAt: peersAt, SessionsError: peersError,
+	return model.SystemStatus{CollectedAt: time.Now(), HostStats: network.HostStats(), Sessions: peers, SessionsCheckedAt: peersAt, SessionsError: peersError,
 		Uptime:         time.Since(s.startedAt),
 		Mappings:       mappings,
 		TunTraffic:     traffic,

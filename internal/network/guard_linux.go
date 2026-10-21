@@ -2,7 +2,10 @@
 
 package network
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/lucaswren/s2l/internal/model"
+)
 
 // EnsureGuard must run before xl2tpd can accept clients. Guards intentionally
 // survive teardown: an existing PPP session must never use the host's uplink.
@@ -10,10 +13,10 @@ import "fmt"
 func (c *Controller) EnsureGuard() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return ensureGuard()
+	return ensureGuard(c.management)
 }
 
-func ensureGuard() error {
+func ensureGuard(options ...model.ManagementAccess) error {
 	if err := run("iptables", "-N", "S2L_FORWARD"); err != nil {
 		if _, check := output("iptables", "-S", "S2L_FORWARD"); check != nil {
 			return err
@@ -37,7 +40,11 @@ func ensureGuard() error {
 			return fmt.Errorf("IPv6 guard: %w", err)
 		}
 	}
-	return nil
+	access := model.ManagementAccess{}
+	if len(options) > 0 {
+		access = options[0]
+	}
+	return ensureManagementAccess(access)
 }
 
 func ensureRule(bin, operation string, args ...string) error {

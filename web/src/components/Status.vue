@@ -67,7 +67,7 @@ function formatBytes(n) {
 
     </div>
   </div>
-  <p v-if="status.collected_at" class="muted">采集于 {{date(status.collected_at)}} · 超过 15 秒未更新时请检查连接</p>
+  <p v-if="status.collected_at" class="muted">采集于 {{date(status.collected_at)}}</p>
   <el-card shadow="never" class="section-gap">
     <template #header>映射健康状态</template>
     <el-table class="desktop-list" :data="health" empty-text="暂无活动映射">
@@ -98,8 +98,8 @@ function formatBytes(n) {
       <template v-if="row.local_state !== 'healthy'"><p class="muted">恢复尝试 {{ row.recovery?.attempts || 0 }} · 失败 {{ row.recovery?.failures || 0 }} · 下次 {{ date(row.recovery?.next_retry) }}</p><el-button :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">重试恢复</el-button></template>
      </article>
     </div>
-    <p class="muted">错误数为当前进程累计值。</p>
-    <details class="muted"><summary>检测与恢复说明</summary>
+
+    <details class="muted"><summary>检测与恢复说明</summary><p>错误数为当前进程累计值。</p>
      <p>DNS 为独立探测，“实际 DNS”为映射当前解析器。拒绝 UDP 策略下，UDP 不支持不影响映射正常判断。UDP 确认不支持或不可用后每 10 分钟复测；节点网络测试可立即复测。</p>
      <p>本地恢复在 10 分钟内最多尝试 3 次，冷却 5 分钟；稳定 2 分钟后重置。上游异常不会触发隧道重启，手动重试会重置预算。</p>
     </details>

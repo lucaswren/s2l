@@ -12,12 +12,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/diagnostics"
+	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/network"
 	"github.com/lucaswren/s2l/internal/speedtest"
 )
 
 const networkProbeAttempts = 8
 
 type networkTestRequest struct {
+	CompareNode string `json:"compare_node,omitempty"`
 	Kind        string `json:"kind"`
 	Target      string `json:"target"`
 	Stream      bool   `json:"stream"`
@@ -88,8 +92,8 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		writeError(w, 400, "invalid json")
 		return
 	}
-	if body.Kind != "ping" && body.Kind != "tcping" && body.Kind != "https" && body.Kind != "mtr" && body.Kind != "protocols" && body.Kind != "quality" {
-		writeError(w, 400, "kind must be protocols, ping, tcping, https, quality or mtr")
+	if body.Kind != "google" && body.Kind != "ping" && body.Kind != "tcping" && body.Kind != "https" && body.Kind != "mtr" && body.Kind != "protocols" && body.Kind != "quality" {
+		writeError(w, 400, "kind must be google, protocols, ping, tcping, https, quality or mtr")
 		return
 	}
 	if body.MTRProtocol != "" && body.MTRProtocol != "tcp" && body.MTRProtocol != "icmp" {
@@ -111,7 +115,54 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 	defer cancel()
 	var stream *networkStream
 	result := map[string]any{"started_at": time.Now().UTC(), "node_id": node.ID, "kind": body.Kind, "target": body.Target, "path": "S2L → SOCKS5 节点 → 目标（TCP 建连，包含代理握手耗时）"}
-	if body.Kind == "protocols" {
+	if body.Kind == "google" {
+		nodes := []model.SocksNode{node}
+		if body.CompareNode != "" {
+			other, exists := s.store.GetNode(body.CompareNode)
+			if !exists || other.ID == node.ID {
+				writeError(w, 400, "请选择不同且存在的对照节点")
+				return
+			}
+			nodes = append(nodes, other)
+		}
+		selected := []model.TunnelMapping{}
+		for _, m := range s.store.ListMappings() {
+			for _, n := range nodes {
+				if m.NodeID == n.ID {
+					selected = append(selected, m)
+				}
+			}
+		}
+		before := network.ReadRejectCounters(ctx, selected)
+		reports := make([]diagnostics.Report, len(nodes))
+		var wg sync.WaitGroup
+		for i, n := range nodes {
+			wg.Add(1)
+			go func(i int, n model.SocksNode) { defer wg.Done(); reports[i] = diagnostics.Google(ctx, n) }(i, n)
+		}
+		wg.Wait()
+		after := network.ReadRejectCounters(ctx, selected)
+		policies := []map[string]any{}
+		for _, m := range selected {
+			for _, n := range nodes {
+				if m.NodeID == n.ID {
+					policies = append(policies, map[string]any{"mapping_id": m.ID, "node_id": m.NodeID, "udp_policy": m.EffectiveUDPPolicy(), "dns_mode": m.EffectiveDNSMode(), "status": m.Status, "max_connections": m.MaxConnections, "max_sessions": m.MaxSessions, "upload_kbps": m.UploadKbps, "download_kbps": m.DownloadKbps, "reject_before": before[m.ID], "reject_after": after[m.ID]})
+				}
+			}
+		}
+		result["schema_version"] = 1
+		result["google"] = reports
+		result["mapping_policies"] = policies
+		result["ok"] = ctx.Err() == nil
+		for _, report := range reports {
+			for _, target := range report.Targets {
+				if target.TCP != "healthy" || target.TLS != "healthy" || target.HTTP != "responded" {
+					result["ok"] = false
+				}
+			}
+		}
+		result["path"] = "服务器 → 各自固定 SOCKS5；不切换映射，不经过手机/Panabit"
+	} else if body.Kind == "protocols" {
 		report := speedtest.HealthReport{}
 		if s.svc != nil {
 			report = s.svc.ProbeNode(ctx, node)

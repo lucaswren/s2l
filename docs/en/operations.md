@@ -190,3 +190,19 @@ Configuration forms preview changed field names without credential values and us
 The optional transfer-quality test makes eight alternating bounded requests (1 KiB and 256 KiB), recording first-byte time, total duration, early EOF and median/P95. Targets may ignore Range; a bounded response is not a complete download or a path-MTU proof. Host TCP/conntrack statistics refer to the entire server.
 
 Notification edits use a revision to reject stale forms. Changing the webhook address clears the old token unless a replacement is supplied. Unknown samples and stopped mappings are not reported as confirmed recovery.
+
+## Google service diagnostics and comparisons
+
+Use Network test → Google diagnostics on a node for manual checks of eight representative service hosts. Select a second fixed node, or import a previous exported Google JSON snapshot (up to 512 KiB) for historical comparison. Import never sends requests or changes configuration. Results remain in the dialog and can be exported.
+
+DoH A and TCP DNS A are checked separately through each node, with AAAA queries as well. The first available DoH IPv4 (otherwise TCP DNS IPv4) is pinned for TCP, certificate-verified TLS, ALPN and HTTP checks. HTTP/2 is negotiated when available; redirects are not followed and response reads are bounded. HTTP 401/403/404 and differing DNS addresses do not establish an IP ban. These independent resolvers do not measure the mapping's live resolver; AAAA results do not verify IPv6 forwarding.
+
+No UDP/QUIC is sent, and fixed exits and UDP policies remain unchanged. A working TCP/TLS alternative does not prove that an iPhone has fallen back. Validate client behavior and ICMP return through Panabit separately. Node checks bypass mapping forwarding and its limits. The policy snapshot includes aggregate mapping TCP limits, PPP session caps and bandwidth limits (zero means unlimited), which do not identify device counts behind NAT. Export separate runs with a desktop online and offline to compare this symptom.
+
+Read-only mapping UDP-reject and TCP-limit counters are sampled before and after diagnostics. Reproduce on the phone during the check. Counts are aggregate; unavailable samples, missing rules and resets are not reported as zero. A rule hit does not prove ICMP reached the phone.
+
+## Management access from L2TP
+
+The L2TP management access card is disabled by default. Configure an IPv4 actually assigned to the server, trusted PPP source CIDRs and explicit panel/SSH TCP ports. SSH effective configuration and the managed panel configuration are cross-checked against `ss -lnt`; port detection changes neither listeners nor authentication.
+
+The exception applies only to local IPv4 INPUT from PPP, never FORWARD, fixed exits or UDP policy. IPv6 remains blocked. Rules are committed atomically with iptables-restore. Disabling or narrowing access may disconnect the current management session. Management authentication is required. A cloud NAT public IP not assigned locally requires separate address/path verification; this does not configure cloud firewalls, Nginx or SSH listeners. Permitted management traffic stays local instead of using SOCKS.

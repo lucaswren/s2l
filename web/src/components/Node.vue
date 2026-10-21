@@ -172,7 +172,7 @@ async function speedTest(n) {
     <div class="section-head">
       <div>
         <h2>SOCKS5 节点</h2>
-        <p class="muted">上游出口与上下行测速</p>
+
       </div>
       <div class="actions">
         <el-button @click="openImport">批量导入</el-button

@@ -258,7 +258,7 @@ const editingActive = computed(() => {
     <div class="section-head">
       <div>
         <h2>隧道映射</h2>
-        <p class="muted">配置出口节点、路由子网与 L2TP 接入凭据</p>
+
       </div>
       <div class="actions">
         <el-button :disabled="!nodes.length || !!actionsBusy" @click="openImport"
@@ -449,7 +449,7 @@ const editingActive = computed(() => {
               :readonly="editingActive"
               autocomplete="new-password"
           /></el-form-item>
-          <el-form-item label="分组"><el-input v-model="form.group" maxlength="64"/></el-form-item>
+          <details class="form-wide mapping-advanced"><summary>高级选项 · 分组、限额与网络参数<span v-if="form.upload_kbps || form.download_kbps || form.max_sessions || form.max_connections"> · 限额已启用</span></summary><div class="form-grid"><el-form-item label="分组"><el-input v-model="form.group" maxlength="64"/></el-form-item>
  <el-form-item label="上传上限 Kbit/s"><el-input-number v-model="form.upload_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
  <el-form-item label="下载上限 Kbit/s"><el-input-number v-model="form.download_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
  <el-form-item label="PPP 会话上限"><el-input-number v-model="form.max_sessions" :min="0" :max="128" :disabled="editingActive"/></el-form-item>
@@ -461,7 +461,7 @@ const editingActive = computed(() => {
           <el-form-item label="UDP 策略"><el-select v-model="form.udp_policy" :disabled="editingActive"><el-option value="reject-quic" label="拒绝 UDP/443，支持时回退 TCP" /><el-option value="allow" label="允许 UDP（需上游支持）" /><el-option value="reject" label="主动拒绝 UDP（DNS 走 DoH/TCP，推荐）" /></el-select></el-form-item>
           <el-form-item label="DNS 模式" class="form-wide"><el-select v-model="form.dns_mode" :disabled="editingActive"><el-option value="auto" label="自动：DoH 故障时切换 TCP DNS" /><el-option value="doh" label="仅 DoH" /><el-option value="tcp" label="仅 TCP DNS" /></el-select></el-form-item>
           <p class="muted form-wide">默认 MTU 1400、MSS 1200。减小 MTU 时请同步调整 MSS；允许 UDP 无法为不支持 UDP 的节点增加能力。</p>
-          </div></el-form
+          </div></details></div></el-form
       ><template #footer
         ><el-button v-if="!editingId" :disabled="busy" @click="applyPreset"
           >按路由表填充</el-button
@@ -519,3 +519,5 @@ const editingActive = computed(() => {
     >
   </section>
 </template>
+
+<style scoped>.mapping-advanced>summary{cursor:pointer;min-height:44px;line-height:44px;font-size:14px}.mapping-advanced>.form-grid{margin-top:8px}</style>

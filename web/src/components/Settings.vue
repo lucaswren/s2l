@@ -1,4 +1,5 @@
 <script setup>
+import PPPManagement from "./PPPManagement.vue";
 import { onMounted, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
 import { api, setCredentials, clearCredentials } from "../api/client";
@@ -25,6 +26,7 @@ const settings = ref({
 const loading = ref(false);
 const busy = ref("");
 const error = ref("");
+const updateOpen=ref(false),debugOpen=ref(false);
 const ipsecRef = ref();
 const ipsec = reactive({ enabled: false, psk: "", current_password: "" });
 const accountRef = ref();
@@ -256,12 +258,12 @@ onMounted(load);
 <template>
  <section class="system-settings">
   <div class="section-head">
-   <h2>系统设置</h2>
+
    <el-button :loading="loading" :disabled="!!busy" @click="load">刷新设置</el-button>
   </div>
   <el-alert v-if="error" :title="error" type="error" :closable="false" class="section-gap" />
   <div class="settings-stack">
-   <section class="settings-group" aria-label="接入与账号">
+   <details class="settings-group settings-disclosure" aria-label="接入与账号"><summary>接入与账号<span>L2TP、IPsec、管理员</span></summary>
     <div class="settings-grid"><el-card shadow="never" class="settings-card">
     <template #header
       ><div class="card-heading">
@@ -392,8 +394,9 @@ onMounted(load);
           >
         </el-form>
       </el-card></div>
-   </section>
-   <section class="settings-group" aria-label="远程管理">
+   </details>
+   <details class="settings-group settings-disclosure" aria-label="远程管理"><summary>远程管理<span>面板、SSH、L2TP 管理访问</span></summary>
+ <PPPManagement />
     <div class="settings-grid"><div class="settings-stack"><el-card shadow="never" class="settings-card">
     <template #header>HTTPS 管理端口</template>
     <el-alert
@@ -547,15 +550,15 @@ onMounted(load);
           >
         </el-form>
       </el-card></div>
-   </section>
-   <section class="settings-grid" aria-label="时间与更新">
+   </details>
+   <details class="settings-disclosure" aria-label="时间与更新" @toggle="updateOpen=$event.target.open"><summary>时间与更新<span>时区、同步、软件版本</span></summary><div class="settings-grid">
     <TimeSettings />
-    <SoftwareUpdate :active="active" />
-   </section>
-   <section class="settings-grid" aria-label="备份与排障">
-    <DebugSettings :active="active" />
+    <SoftwareUpdate :active="active && updateOpen" />
+   </div></details>
+   <details class="settings-disclosure" aria-label="备份与排障" @toggle="debugOpen=$event.target.open"><summary>备份与排障<span>备份恢复、调试记录</span></summary><div class="settings-grid">
+    <DebugSettings :active="active && debugOpen" />
     <Backups @changed="emit('changed')" />
-   </section>
+   </div></details>
   </div>
  </section>
 </template>
@@ -564,6 +567,6 @@ onMounted(load);
 .settings-stack { display:grid; gap:20px; min-width:0; }
 .settings-grid :deep(.el-card) { min-width:0; margin-bottom:0; }
 .settings-grid :deep(.form-grid) { grid-template-columns:1fr; }
-.settings-group { min-width:0; }
+.settings-group { min-width:0; }.settings-disclosure{border:1px solid var(--el-border-color-light);border-radius:8px;padding:0 16px}.settings-disclosure>summary{cursor:pointer;padding:16px 0;font-weight:600;min-height:24px}.settings-disclosure>summary span{display:block;margin-top:4px;font-size:12px;font-weight:400;color:var(--el-text-color-secondary)}.settings-disclosure[open]{padding-bottom:16px}
 @media(max-width:900px) { .settings-grid { grid-template-columns:1fr; } }
 </style>

@@ -9,12 +9,14 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/service"
 	"github.com/lucaswren/s2l/internal/store"
 )
 
 // Server HTTP API + 静态前端
 type Server struct {
+	applyManagement func(model.ManagementAccess) error
 	store           *store.Store
 	svc             *service.MappingService
 	webFS           fs.FS // web/dist 内容；可为 nil（仅 API）
@@ -34,6 +36,9 @@ type Server struct {
 
 func NewServer(st *store.Store, svc *service.MappingService, webFS fs.FS, credentials ...string) *Server {
 	s := &Server{store: st, svc: svc, webFS: webFS, debugExports: make(chan struct{}, 2), networkTests: make(chan struct{}, 2), timeSettings: make(chan struct{}, 1), updateTasks: make(chan struct{}, 1), updateStatePath: "/var/lib/s2l/web-update/job.json"}
+	if svc != nil {
+		s.applyManagement = svc.SetManagementAccess
+	}
 	if len(credentials) >= 2 {
 		s.adminUser, s.adminPass = credentials[0], credentials[1]
 	}
@@ -61,6 +66,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/operations", s.handleOperations)
 	mux.HandleFunc("/api/sessions/disconnect", s.handleSessions)
 	mux.HandleFunc("/api/metrics", s.handleMetrics)
+	mux.HandleFunc("/api/settings/ppp-management", s.handlePPPManagement)
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/time", s.handleTimeSettings)
 	mux.HandleFunc("/api/settings/update", s.handleUpdate)

@@ -58,7 +58,7 @@ onBeforeUnmount(()=>{disposed=true;stop();});
    <el-button type="primary" :disabled="busy || running || !info.available || !info.release?.commit || sameVersion || olderRelease" @click="start">更新到稳定版</el-button>
    <el-button v-if="info.job?.status==='succeeded'" @click="reload">刷新页面</el-button>
   </div>
-  <p class="muted">仅安装本项目正式发布版，保留账号、节点和系统配置。更新由后台独立任务执行，关闭网页不影响进度。</p>
+  <p class="muted">后台更新并保留配置，关闭网页不影响进度。</p>
   <details class="muted"><summary>更新说明</summary><p>编译成功后才停止服务；失败沿用现有恢复流程。若网页持续不可达，请通过 SSH 检查 s2l、s2l-guard 与 xl2tpd 服务及升级备份。页面保存的只是更新状态，不记录命令输出或排障日志。</p></details>
  </el-card>
 </template>

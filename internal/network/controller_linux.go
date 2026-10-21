@@ -12,9 +12,10 @@ import (
 
 // Controller 编排单条映射的策略路由 + iptables 生命周期
 type Controller struct {
-	mu       sync.Mutex
-	active   map[string]model.TunnelMapping // key: mapping.ID 或 tun_name
-	tcpmssOn bool
+	management model.ManagementAccess
+	mu         sync.Mutex
+	active     map[string]model.TunnelMapping // key: mapping.ID 或 tun_name
+	tcpmssOn   bool
 }
 
 func NewController() *Controller {
@@ -38,7 +39,7 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 	if err := validateMapping(m); err != nil {
 		return err
 	}
-	if err := ensureGuard(); err != nil {
+	if err := ensureGuard(c.management); err != nil {
 		return err
 	}
 	if err := ensureIPForward(); err != nil {

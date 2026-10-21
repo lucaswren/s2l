@@ -222,7 +222,11 @@ func (c *Collector) analysisLocked() Analysis {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：最近采样本地链路为 %s，应先检查本地进程和恢复状态。", id, h.LocalState))
 		}
 		if h.TCP.State == "healthy" && (h.UDP.State == "unsupported" || h.UDP.State == "unavailable" || h.UDP.State == "unstable") {
-			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 为 %s；请核对拒绝码和节点 UDP 支持情况。", id, h.UDP.State))
+			if h.UDPPolicy == "reject" {
+				a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常，当前策略主动拒绝非 DNS UDP；上游 UDP 检测为 %s，不作为 TCP 链路故障。", id, h.UDP.State))
+			} else {
+				a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常但 UDP 为 %s；请核对拒绝码和节点 UDP 支持情况。", id, h.UDP.State))
+			}
 		}
 		if h.TCP.State == "healthy" && (h.DNS.State == "unavailable" || h.DNS.State == "degraded") {
 			a.Findings = append(a.Findings, fmt.Sprintf("%s：TCP 正常而 DNS 异常或仅备用可用，建议先核对 DNS 时间线。", id))

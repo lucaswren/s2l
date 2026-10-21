@@ -5,7 +5,7 @@ umask 077
 [[ "$(id -u)" -eq 0 ]] || { echo "[ERROR] 请使用 sudo bash script/update.sh" >&2; exit 1; }
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="$PATH:/usr/local/go/bin"
-for command in go python3 systemctl flock iptables ip6tables iptables-save ip6tables-save install cp; do
+for command in go python3 systemctl flock iptables iptables-restore ip6tables iptables-save ip6tables-save install cp; do
   command -v "$command" >/dev/null || { echo "[ERROR] 缺少 $command；现有服务未修改。" >&2; exit 1; }
 done
 exec 9>/run/s2l-update.lock

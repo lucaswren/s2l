@@ -130,11 +130,9 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
 <template>
   <el-config-provider size="default">
     <div class="page">
-      <header class="hero">
+      <header class="hero" :class="{compact:activeTab==='settings'}">
         <div>
-          <span class="brand">S2L / L2TP 网关管理</span>
-          <h1>SOCKS5 → L2TP</h1>
-          <p class="muted">SOCKS5 出口与 L2TP 接入管理</p>
+          <h1>S2L</h1><p class="muted">SOCKS5 → L2TP</p>
         </div>
         <div class="toolbar">
           <el-input
@@ -155,7 +153,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
           </div>
         </div>
       </header>
-      <el-row :gutter="12" class="stats">
+      <el-row v-if="activeTab==='lines'" :gutter="12" class="stats">
         <el-col :xs="12" :sm="6"
           ><el-card shadow="never"
             ><el-statistic title="节点" :value="nodes.length" /></el-card
@@ -221,7 +219,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
         ><Guide :mappings="mappings" :health="status.upstream_health"
       /></el-drawer>
       <footer class="muted">
-        运行 {{ formatUptime(status.uptime_sec) }} · 状态每 5 秒刷新
+        运行 {{ formatUptime(status.uptime_sec) }}
       </footer>
     </div>
   </el-config-provider>

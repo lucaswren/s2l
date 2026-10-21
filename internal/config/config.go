@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/lucaswren/s2l/internal/model"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,15 +13,16 @@ import (
 
 // Config 运行时配置
 type Config struct {
-	Listen      string `json:"listen"`       // 如 :8080
-	AdminUser   string `json:"admin_user"`   // 管理界面 Basic Auth 用户名
-	AdminPass   string `json:"admin_pass"`   // 管理界面 Basic Auth 密码
-	SingboxBin  string `json:"singbox_bin"`  // sing-box 路径
-	DataDir     string `json:"data_dir"`     // 状态持久化目录
-	ChapSecrets string `json:"chap_secrets"` // /etc/ppp/chap-secrets
-	Xl2tpdConf  string `json:"xl2tpd_conf"`  // /etc/xl2tpd/xl2tpd.conf
-	PPPOptions  string `json:"ppp_options"`  // /etc/ppp/options.xl2tpd
-	AutoRestore *bool  `json:"auto_restore"` // 开机恢复 running 映射，默认 true
+	PPPManagement model.ManagementAccess `json:"ppp_management"`
+	Listen        string                 `json:"listen"`       // 如 :8080
+	AdminUser     string                 `json:"admin_user"`   // 管理界面 Basic Auth 用户名
+	AdminPass     string                 `json:"admin_pass"`   // 管理界面 Basic Auth 密码
+	SingboxBin    string                 `json:"singbox_bin"`  // sing-box 路径
+	DataDir       string                 `json:"data_dir"`     // 状态持久化目录
+	ChapSecrets   string                 `json:"chap_secrets"` // /etc/ppp/chap-secrets
+	Xl2tpdConf    string                 `json:"xl2tpd_conf"`  // /etc/xl2tpd/xl2tpd.conf
+	PPPOptions    string                 `json:"ppp_options"`  // /etc/ppp/options.xl2tpd
+	AutoRestore   *bool                  `json:"auto_restore"` // 开机恢复 running 映射，默认 true
 }
 
 func Default() Config {
@@ -88,6 +90,12 @@ func (c Config) ShouldAutoRestore() bool {
 // Validate prevents exposing the unauthenticated management API on a network
 // interface. Loopback-only deployments may omit credentials for local use.
 func (c Config) Validate() error {
+	if err := c.PPPManagement.Validate(); err != nil {
+		return err
+	}
+	if c.PPPManagement.Enabled && (c.AdminUser == "" || c.AdminPass == "") {
+		return fmt.Errorf("PPP management access requires admin authentication")
+	}
 	if c.AdminUser == "" != (c.AdminPass == "") {
 		return fmt.Errorf("admin_user and admin_pass must be configured together")
 	}

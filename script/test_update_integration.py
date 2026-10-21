@@ -17,9 +17,17 @@ def main():
     umount = shutil.which("umount")
     if not umount:
         raise SystemExit("requires umount")
-    script = Path(__file__).resolve().parent / "update.sh"
+    repository = Path(__file__).resolve().parents[1]
+    if not (repository / "script/update.sh").is_file():
+        raise SystemExit("missing update script in source checkout")
     with tempfile.TemporaryDirectory(prefix="s2l-update-test-") as tmp:
         root = Path(tmp)
+        # /root, /opt and /etc are deliberately hidden below. A checkout in
+        # one of those paths must remain readable by the upgrade subprocess.
+        checkout = root / "source"
+        shutil.copytree(repository, checkout, ignore=shutil.ignore_patterns(
+            ".git", ".codex", ".agents", ".aws", "node_modules", "tmp", "bin"))
+        script = checkout / "script/update.sh"
         mounted = []
         try:
             for target in ("/opt", "/root", "/etc", "/run", "/usr/local/bin"):
@@ -32,7 +40,8 @@ def main():
             tools = root / "tools"
             tools.mkdir()
             mocks = {
-                "go": r'''[[ "${FAIL_BUILD:-0}" != 1 ]] || exit 1
+                "go": r'''echo build-attempt >> "$S2L_TEST_LOG"
+[[ "${FAIL_BUILD:-0}" != 1 ]] || exit 1
 for ((i=1; i<=$#; i++)); do if [[ "${!i}" == -o ]]; then j=$((i+1)); target="${!j}"; break; fi; done
 cat > "$target" <<'BINARY'
 #!/bin/bash
@@ -49,7 +58,7 @@ start|restart) shift; for name in "$@"; do touch "$S2L_TEST_STATE/$name"; done ;
 esac''',
                 "install": r'''if [[ "${FAIL_INSTALL:-0}" == 1 && "${@: -1}" == /etc/systemd/system/s2l.service ]]; then exit 1; fi
 exec /usr/bin/install "$@"''',
-                "iptables": "exit 0", "ip6tables": "exit 0",
+                "iptables": "exit 0", "iptables-restore": "cat >/dev/null", "ip6tables": "exit 0",
                 "iptables-save": "echo fixture", "ip6tables-save": "echo fixture",
             }
             for name, body in mocks.items():
@@ -96,6 +105,7 @@ exec /usr/bin/install "$@"''',
                 assert (app / "config.json").read_bytes() == original
                 assert json.loads((app / "data/state.json").read_text()) == {"nodes": [], "mappings": []}
                 if scenario == "build_failure":
+                    assert "build-attempt" in log.read_text(), "failure did not reach the build step: " + result.stdout + result.stderr
                     assert "stop" not in log.read_text(), "build failure stopped live services"
                     assert binary.read_bytes() == old_binary
                 elif scenario == "success_stopped":
