@@ -76,6 +76,15 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 		t.Fatal("set S2L_SINGBOX_CHECK_BIN")
 	}
 	root := t.TempDir()
+	t.Cleanup(func() {
+		if t.Failed() {
+			files, _ := filepath.Glob(filepath.Join(root, "ppp-*.log"))
+			for _, file := range files {
+				data, _ := os.ReadFile(file)
+				t.Logf("%s:\n%s", filepath.Base(file), data)
+			}
+		}
+	})
 	run := func(args ...string) string {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
@@ -157,6 +166,17 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 			}
 		})
 	}
+	// Keep PPP negotiation evidence in this disposable fixture, not host syslog.
+	serverOptions := filepath.Join(root, "server.options")
+	optionsFile, err := os.OpenFile(serverOptions, os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = fmt.Fprintf(optionsFile, "debug\nlogfile %s\n", filepath.Join(root, "ppp-server.log"))
+	closeErr := optionsFile.Close()
+	if err != nil || closeErr != nil {
+		t.Fatal(err, closeErr)
+	}
 	start("xl2tpd", "-D", "-c", filepath.Join(root, "server.conf"), "-p", filepath.Join(root, "server.pid"), "-C", filepath.Join(root, "server.control"))
 	for i := 0; i < 2; i++ {
 		ns := fmt.Sprintf("s2l-dial-%d", i)
@@ -174,7 +194,7 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 		options := filepath.Join(root, fmt.Sprintf("client%d.options", i))
 		conf := filepath.Join(root, fmt.Sprintf("client%d.conf", i))
 		control := filepath.Join(root, fmt.Sprintf("client%d.control", i))
-		os.WriteFile(options, []byte(fmt.Sprintf("name user%d\npassword fixture-secret\nnoauth\nrefuse-eap\nnoccp\nnodefaultroute\nmtu 1400\nmru 1400\n", i)), 0600)
+		os.WriteFile(options, []byte(fmt.Sprintf("name user%d\npassword fixture-secret\nnoauth\nrefuse-eap\nnoccp\nnodefaultroute\nmtu 1400\nmru 1400\ndebug\nlogfile %s\n", i, filepath.Join(root, fmt.Sprintf("ppp-client%d.log", i)))), 0600)
 		os.WriteFile(conf, []byte(fmt.Sprintf("[lac vpn]\nlns = %s\npppoptfile = %s\nlength bit = yes\n", server, options)), 0600)
 		start("ip", "netns", "exec", ns, "xl2tpd", "-D", "-c", conf, "-p", filepath.Join(root, fmt.Sprintf("client%d.pid", i)), "-C", control)
 		integrationWait(t, 5*time.Second, func() bool {
