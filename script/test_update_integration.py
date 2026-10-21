@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import shlex
 import subprocess
 import tempfile
 
@@ -39,17 +40,21 @@ def main():
             mounted.append(str(toolchain))
             go_source = root / 'probe.go'
             go_source.write_text('package main\nfunc main() {}\n')
-            for target in ("/opt", "/root", "/etc", "/run", "/usr/local/bin"):
+            for target in ("/opt", "/root", "/etc", "/run", "/usr/local"):
                 source = root / target.lstrip("/")
                 source.mkdir(parents=True, exist_ok=True)
                 subprocess.run(["mount", "--bind", str(source), target], check=True)
                 mounted.append(target)
-            for directory in ("/etc/ppp", "/etc/xl2tpd", "/etc/systemd/system"):
+            for directory in ("/etc/ppp", "/etc/xl2tpd", "/etc/systemd/system", "/usr/local/bin"):
                 Path(directory).mkdir(parents=True)
             tools = root / "tools"
             tools.mkdir()
             mocks = {
                 "go": r'''echo build-attempt >> "$S2L_TEST_LOG"
+if [[ "${S2L_TEST_REQUIRE_MANAGED:-0}" == 1 && "${S2L_TEST_MANAGED_GO:-0}" != 1 ]]; then
+  echo incompatible-system-go >&2
+  exit 1
+fi
 [[ "${FAIL_BUILD:-0}" != 1 ]] || exit 1
 if [[ -n "${S2L_TEST_REAL_GO:-}" ]]; then
   "$S2L_TEST_REAL_GO" build -o "$S2L_TEST_GO_OUTPUT" "$S2L_TEST_GO_SOURCE"
@@ -81,7 +86,7 @@ exec /usr/bin/install "$@"''',
             state.mkdir()
             log = root / "commands.log"
             env = dict(os.environ, PATH=f"{tools}:/usr/bin:/bin", S2L_TEST_STATE=str(state), S2L_TEST_LOG=str(log))
-            for scenario in ("build_failure", "success_stopped", "success_no_home", "install_failure"):
+            for scenario in ("build_failure", "success_stopped", "success_no_home", "install_failure", "success_managed_go"):
                 units = Path("/etc/systemd/system")
                 for child in units.iterdir():
                     if child.is_dir():
@@ -122,18 +127,30 @@ exec /usr/bin/install "$@"''',
                     case_env["FAIL_INSTALL"] = "1"
                     (state / "s2l").touch()
                     (state / "xl2tpd").touch()
+                elif scenario == "success_managed_go":
+                    managed_go = Path('/usr/local/go/bin/go')
+                    managed_go.parent.mkdir(parents=True)
+                    managed_go.write_text('#!/bin/bash\necho managed-go >> "$S2L_TEST_LOG"\n'
+                                          'export S2L_TEST_MANAGED_GO=1\nexec ' + shlex.quote(str(tools / 'go')) + ' "$@"\n')
+                    managed_go.chmod(0o755)
+                    case_env['S2L_TEST_REQUIRE_MANAGED'] = '1'
+                    control = subprocess.run(['go', 'version'], env=case_env, capture_output=True, text=True)
+                    assert control.returncode != 0 and 'incompatible-system-go' in control.stderr, \
+                        'control did not reproduce selection of the incompatible system Go'
                 result = subprocess.run(["bash", str(script)], env=case_env, capture_output=True, text=True)
-                assert (result.returncode == 0) == (scenario in ('success_stopped', 'success_no_home')), result.stdout + result.stderr
+                assert (result.returncode == 0) == (scenario in ('success_stopped', 'success_no_home', 'success_managed_go')), result.stdout + result.stderr
                 assert (app / "config.json").read_bytes() == original
                 assert json.loads((app / "data/state.json").read_text()) == {"nodes": [], "mappings": []}
                 if scenario == "build_failure":
                     assert "build-attempt" in log.read_text(), "failure did not reach the build step: " + result.stdout + result.stderr
                     assert "stop" not in log.read_text(), "build failure stopped live services"
                     assert binary.read_bytes() == old_binary
-                elif scenario in ('success_stopped', 'success_no_home'):
+                elif scenario in ('success_stopped', 'success_no_home', 'success_managed_go'):
                     assert log.read_text().index("guard-only") < log.read_text().index("stop xl2tpd"), "PPP was stopped before guards were installed"
                     if scenario == 'success_no_home':
                         assert (root / 'probe').is_file(), 'real compilation was not exercised'
+                    if scenario == 'success_managed_go':
+                        assert 'managed-go' in log.read_text(), 'managed Go was not selected'
                     assert binary.read_bytes() != old_binary
                     assert not (state / "s2l").exists(), "stopped service was started"
                     assert not (state / "xl2tpd").exists()
