@@ -8,6 +8,8 @@ import install_preflight
 import install_state
 import download_go
 import tarfile
+import os
+import subprocess
 
 class InstallChecks(unittest.TestCase):
     def test_supported_versions(self):
@@ -46,3 +48,15 @@ class InstallChecks(unittest.TestCase):
             with self.assertRaises(RuntimeError):download_go.validate_member(tarfile.TarInfo(name))
         link=tarfile.TarInfo('go/bin/link');link.type=tarfile.SYMTYPE;link.linkname='/etc/passwd'
         with self.assertRaises(RuntimeError):download_go.validate_member(link)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux shell apt lock probe')
+    def test_idle_update_daemon_does_not_block_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tools=Path(directory)
+            for name,body in (('fuser','exit 1'),('pgrep','exit 0')):
+                path=tools/name;path.write_text('#!/bin/sh\n'+body+'\n');path.chmod(0o755)
+            for filename in ('install.sh','remote_install.sh'):
+                source=Path(__file__).resolve().parents[1].joinpath(filename).read_text()
+                start=source.index('wait_for_apt()');end=source.index('\n}',start)+2
+                result=subprocess.run(['bash','-c',source[start:end]+'\nwait_for_apt'],env={**os.environ,'PATH':str(tools)+':'+os.environ['PATH']},capture_output=True,text=True,timeout=2)
+                self.assertEqual(result.returncode,0,result.stdout+result.stderr)

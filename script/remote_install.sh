@@ -20,12 +20,10 @@ wait_for_apt() {
   local max_wait="${APT_WAIT_SEC:-600}" # 默认最多等 10 分钟
   local waited=0
   echo "[INFO] 检查 apt 锁..."
+  command -v fuser >/dev/null 2>&1 || return 0
   while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 \
      || fuser /var/lib/dpkg/lock >/dev/null 2>&1 \
-     || fuser /var/lib/apt/lists/lock >/dev/null 2>&1 \
-     || pgrep -x unattended-upgr >/dev/null 2>&1 \
-     || pgrep -x apt-get >/dev/null 2>&1 \
-     || pgrep -x apt >/dev/null 2>&1; do
+     || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
     if (( waited >= max_wait )); then
       echo "[ERROR] 等待 apt 锁超时（${max_wait}s）。可稍后重试，或执行: systemctl stop unattended-upgrades"
       exit 1
@@ -40,9 +38,9 @@ wait_for_apt() {
 
 export DEBIAN_FRONTEND=noninteractive
 wait_for_apt
-timeout 240s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -y
+timeout 240s apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -y
 wait_for_apt
-timeout 240s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates curl git python3
+timeout 240s apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates curl git python3
 
 if [[ -z "$BRANCH" ]]; then
   [[ "$REPO_URL" == https://github.com/lucaswren/s2l.git ]] || { echo "自定义仓库需指定 BRANCH"; exit 1; }

@@ -46,12 +46,10 @@ esac
 wait_for_apt() {
   local max_wait="${APT_WAIT_SEC:-600}"
   local waited=0
+  command -v fuser >/dev/null 2>&1 || return 0
   while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 \
      || fuser /var/lib/dpkg/lock >/dev/null 2>&1 \
-     || fuser /var/lib/apt/lists/lock >/dev/null 2>&1 \
-     || pgrep -x unattended-upgr >/dev/null 2>&1 \
-     || pgrep -x apt-get >/dev/null 2>&1 \
-     || pgrep -x apt >/dev/null 2>&1; do
+     || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
     if (( waited >= max_wait )); then
       error "等待 apt 锁超时（${max_wait}s）。可执行: systemctl stop unattended-upgrades 后重试"
     fi
@@ -63,7 +61,7 @@ wait_for_apt() {
   done
 }
 
-apt_get() { timeout 240s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 "$@"; }
+apt_get() { timeout 240s apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 "$@"; }
 command -v python3 >/dev/null || { wait_for_apt; apt_get update -y; apt_get install -y --no-install-recommends python3; }
 python3 "${SCRIPT_DIR}/install_state.py" recover
 python3 "${SCRIPT_DIR}/install_preflight.py" system
