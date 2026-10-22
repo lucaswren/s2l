@@ -3242,5 +3242,10 @@
     "cn": "自动选择一条映射",
     "tw": "自動選擇一條映射",
     "en": "Select one mapping automatically"
+  },
+  "未发起 UDP 探测": {
+    "cn": "未发起 UDP 探测",
+    "tw": "未發起 UDP 探測",
+    "en": "UDP probe not performed"
   }
 }

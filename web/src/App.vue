@@ -214,7 +214,7 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
               @toast="pushToast"
             />
             </section><details class="settings-disclosure monitor-disclosure" @toggle="monitorOpen = $event.target.open"><summary>{{tr("运行监控")}}</summary>
-              <div class="monitor-content"><Status v-if="monitorOpen" :status="status" @changed="refresh" @toast="pushToast" /></div>
+              <div class="monitor-content"><Status v-if="monitorOpen" :active="activeTab === 'lines'" :status="status" @changed="refresh" @toast="pushToast" /></div>
             </details>
           </el-tab-pane>
           <el-tab-pane :label='tr("系统设置")' name="settings" lazy

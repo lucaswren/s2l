@@ -6,13 +6,14 @@ import Operations from './Operations.vue';
 import {ElMessageBox} from 'element-plus';
 import {api} from '../api/client';
 import {passRate} from '../utils/health';
-const props=defineProps({status:Object});
+const props=defineProps({status:Object,active:{type:Boolean,default:true}});
 const selected=ref(''),history=ref([]),warning=ref(''),busy=ref(false);
 const mappings=computed(()=>props.status?.mappings||[]);
 const sessions=computed(()=>props.status?.sessions||[]);
 let controller,disposed=false,version=0;
 watch(mappings,rows=>{if(!rows.some(m=>m.id===selected.value))selected.value=rows[0]?.id||'';},{immediate:true});
 async function load(){
+ if(!props.active||document.hidden)return;
  const current=++version;controller?.abort();history.value=[];warning.value='';
  if(!selected.value){busy.value=false;return}
  controller=new AbortController();busy.value=true;
@@ -21,6 +22,7 @@ async function load(){
  finally{if(!disposed&&current===version)busy.value=false;}
 }
 watch(selected,load,{immediate:true});
+watch(()=>props.active,active=>{if(active&&!busy.value)load()});
 const timer=setInterval(()=>{if(!document.hidden&&!busy.value)load()},60000);
 onBeforeUnmount(()=>{disposed=true;controller?.abort();clearInterval(timer)});
 const disconnecting=ref('');
@@ -62,7 +64,7 @@ const recent=computed(()=>history.value.slice(-12).reverse());
   <p class="muted">{{ tr("每 5 分钟汇总；列表展示最近时段。成功率来自已完成探测，未采样不计为离线。") }}</p>
  </el-card>
 <p v-if="Object.keys(status.host_stats||{}).length" class="muted">{{ tr("服务器 TCP 连接") }} {{status.host_stats.CurrEstab ?? '—'}} {{ tr("· 累计重传段") }} {{status.host_stats.RetransSegs ?? '—'}} · conntrack {{status.host_stats.conntrack_count ?? '—'}} / {{status.host_stats.conntrack_max ?? '—'}}{{ tr("（全机统计）") }}</p>
-<Operations :mappings="mappings"/>
+<Operations :active="active" :mappings="mappings"/>
 </template>
 <style scoped>
 .history-controls{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}.history-controls .el-select{width:240px;max-width:100%}.session-row{padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter);overflow-wrap:anywhere}.session-row p{font-size:14px;margin:8px 0}.session-row:last-child{border:0}

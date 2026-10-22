@@ -112,10 +112,6 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 				"username":    node.Username,
 				"password":    node.Password,
 			},
-			{
-				"type": "block",
-				"tag":  "block",
-			},
 		},
 		"route": map[string]any{
 			"auto_detect_interface": true,

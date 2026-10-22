@@ -1,16 +1,16 @@
 <script setup>
 import { tr, dateTime } from '../i18n/index.js';
 
-import {ref,computed,onMounted,onBeforeUnmount} from 'vue';
+import {ref,computed,onMounted,onBeforeUnmount,watch} from 'vue';
 import {ElMessageBox} from 'element-plus';
 import {isResolved} from '../utils/health';
 import {api} from '../api/client';
-const props=defineProps({mappings:{type:Array,default:()=>[]}});
+const props=defineProps({active:{type:Boolean,default:true},mappings:{type:Array,default:()=>[]}});
 const view=ref({events:[],incidents:[]}),error=ref(''),busy=ref(false),enabled=ref(false),webhook=ref(''),token=ref(''),maintenance=ref('keep');
 let controller,disposed=false,initialized=false,loadVersion=0,baselineEnabled=false;
 const saving=ref(false),configRevision=ref('');
 function acceptView(data){const pristine=!initialized||(enabled.value===baselineEnabled&&!webhook.value&&!token.value&&maintenance.value==='keep');view.value=data;if(pristine){enabled.value=!!data.enabled;baselineEnabled=!!data.enabled;configRevision.value=data.revision||'';initialized=true}}
-async function load(){if(busy.value||saving.value)return;busy.value=true;const version=++loadVersion;controller=new AbortController();try{const data=await api.operations(controller.signal);if(!disposed&&version===loadVersion){acceptView(data);error.value=data.revision&&configRevision.value&&data.revision!==configRevision.value?tr("通知配置已更新，请重新加载后编辑"):''}}catch(e){if(!disposed&&version===loadVersion&&e.name!=='AbortError')error.value=e.message}finally{if(!disposed&&version===loadVersion)busy.value=false}}
+async function load(){if(!props.active||document.hidden)return;if(busy.value||saving.value)return;busy.value=true;const version=++loadVersion;controller=new AbortController();try{const data=await api.operations(controller.signal);if(!disposed&&version===loadVersion){acceptView(data);error.value=data.revision&&configRevision.value&&data.revision!==configRevision.value?tr("通知配置已更新，请重新加载后编辑"):''}}catch(e){if(!disposed&&version===loadVersion&&e.name!=='AbortError')error.value=e.message}finally{if(!disposed&&version===loadVersion)busy.value=false}}
 async function save(){if(saving.value||!initialized)return;saving.value=true;loadVersion++;controller?.abort();busy.value=false;try{let until=view.value.maintenance_until;if(maintenance.value==='off')until=new Date(0).toISOString();if(maintenance.value==='hour')until=new Date(Date.now()+3600000).toISOString();if(maintenance.value==='day')until=new Date(Date.now()+86400000).toISOString();const data=await api.saveNotifications({enabled:enabled.value,webhook:webhook.value,token:token.value,revision:configRevision.value,maintenance_until:until||new Date(0).toISOString()});if(!disposed){webhook.value='';token.value='';maintenance.value='keep';initialized=false;acceptView(data);error.value=''}}catch(e){if(!disposed)error.value=e.message}finally{if(!disposed)saving.value=false}}
 async function reloadConfig(){if(saving.value)return;try{await ElMessageBox.confirm(tr("重新加载会放弃未保存的通知配置。"),tr("重新加载配置"),{get confirmButtonText() { return tr("重新加载"); },get cancelButtonText() { return tr("返回编辑"); }});if(disposed)return;loadVersion++;controller?.abort();busy.value=false;webhook.value='';token.value='';maintenance.value='keep';initialized=false;await load()}catch(e){if(e!=='cancel'&&e!=='close'&&!disposed)error.value=e.message}}
 const recent=computed(()=>[...(view.value.events||[])].reverse().slice(0,30));
@@ -25,7 +25,7 @@ async function connections(id){closeConnections();connectionMap.value=id;connect
 const closingConnection=ref('');
 async function endConnection(row){if(closingConnection.value)return;const mapping=connectionMap.value,version=connectionVersion;try{await ElMessageBox.confirm(tr("关闭此连接？应用可能重新建立连接。"),tr("连接管理"),{type:'warning'});if(disposed||version!==connectionVersion||!connectionShown.value)return;closingConnection.value=row.id;await api.closeConnection(mapping,row.id);if(!disposed&&version===connectionVersion)await connections(mapping)}catch(e){if(!disposed&&version===connectionVersion&&e!=='cancel'&&e!=='close')connectionError.value=e.message}finally{closingConnection.value=''}}
 
-onMounted(load);const timer=setInterval(()=>{if(!document.hidden)load()},30000);onBeforeUnmount(()=>{disposed=true;controller?.abort();closeConnections();clearInterval(timer)});
+watch(()=>props.active,active=>{if(active)load()});onMounted(load);const timer=setInterval(()=>{if(!document.hidden)load()},30000);onBeforeUnmount(()=>{disposed=true;controller?.abort();closeConnections();clearInterval(timer)});
 </script>
 <template>
 <el-card shadow="never" class="section-gap operations-panel"><template #header>{{ tr("故障事件与操作记录") }}</template>

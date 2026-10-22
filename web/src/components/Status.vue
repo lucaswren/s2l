@@ -28,6 +28,7 @@ async function retry(id) {
 function date(value) { return value && !value.startsWith('0001') ? dateTime(value) : '—'; }
 
 const props = defineProps({
+ active:{type:Boolean,default:true},
   status: {
     type: Object,
     default: () => ({ tun_traffic: [], singbox_pids: {} }),
@@ -48,8 +49,9 @@ function protocolLabel(result) {
  return healthLabels[result?.state] || tr("检测中");
 }
 function protocolDetail(result) {
+ if(result?.state==='blocked')return tr("未发起 UDP 探测");
  const methods = {get https() { return tr("HTTPS 转发"); }, get "dns-udp"() { return tr("UDP 中继实测"); }, get "udp-associate"() { return tr("UDP 协商"); }, doh: "DoH", tcp: "TCP DNS", get "tcp-fallback"() { return tr("TCP DNS 备用"); }, "doh/tcp": "DoH / TCP DNS"};
- return [methods[result?.method],protocolSummary(result), result?.error, result?.checked_at ? tr("检测于 {0}", dateTime(result.checked_at)) : ""].filter(Boolean).join(" · ") || tr("等待检测");
+ return [methods[result?.method],protocolSummary(result), result?.error, result?.checked_at && !result.checked_at.startsWith('0001') ? tr("检测于 {0}", dateTime(result.checked_at)) : ""].filter(Boolean).join(" · ") || tr("等待检测");
 }
 function formatBytes(n) {
   if (!n) return "0 B";
@@ -103,7 +105,7 @@ function formatBytes(n) {
      <p>{{ tr("本地恢复在 10 分钟内最多尝试 3 次，冷却 5 分钟；稳定 2 分钟后重置。上游异常不会触发隧道重启，手动重试会重置预算。") }}</p>
     </details>
   </el-card>
-  <MonitoringDetails :status="status"/>
+  <MonitoringDetails :active="active" :status="status"/>
   <el-dialog :model-value="!!diagnosing || !!diagnostic || !!diagnosticError" :title='tr("映射转发实测")' class="mapping-diagnostic" width="min(640px, calc(100vw - 24px))" append-to-body :close-on-click-modal="false" @close="closeDiagnostic"><p v-if="diagnosing">{{ tr("正在通过隔离入口检测映射转发…") }}</p><el-alert v-if="diagnosticError" :title="diagnosticError" type="error" :closable="false"/><template v-if="diagnostic"><el-tag :type="diagnostic.ok ? 'success' : 'warning'">{{diagnostic.ok ? tr("映射转发正常") : tr("检测完成，请查看分项")}}</el-tag><p>{{ tr("规则检查：") }}{{healthLabels[diagnostic.rules.state]}}</p><p>{{ tr("HTTPS 转发：") }}{{healthLabels[diagnostic.forwarding.state]}} · {{diagnostic.forwarding.duration_ms}} ms</p><p v-if="diagnostic.forwarding.exit_ip">{{ tr("映射出口 IP：") }}{{diagnostic.forwarding.exit_ip}}</p><p v-if="diagnostic.node?.exit_ip">{{ tr("节点出口 IP：") }}{{diagnostic.node.exit_ip}}</p><p v-if="diagnostic.exit_comparison === 'different'">{{ tr("两次出口观测不同；上游可能采用动态出口，请结合节点配置核对。") }}</p><p v-if="diagnostic.node?.error">{{diagnostic.node.error}}</p><p v-if="diagnostic.forwarding.error">{{diagnostic.forwarding.error}}</p><p class="muted">{{diagnostic.scope}}</p></template><template #footer><el-button @click="closeDiagnostic">{{diagnosing ? tr("停止检测") : tr("关闭")}}</el-button></template></el-dialog>
   <div class="monitor-secondary"><section><el-card shadow="never" class="section-gap"
         ><template #header>{{ tr("运行进程") }}</template
