@@ -2,6 +2,9 @@ name: CI
 on:
   push:
   pull_request:
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -77,6 +80,9 @@ jobs:
           cache: false
       - name: Install full-system test dependencies
         run: |
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-client
       - name: Fresh Ubuntu install, interrupted-install recovery, reboot and real PPP faults
