@@ -203,8 +203,11 @@ except ConnectionRefusedError:pass
 		t.Fatal(e)
 	}
 	integrationWait(t, 30*time.Second, func() bool { current := pid(); return current > 1 && current != oldPID })
-	if got := run("ip", curlArgs...); strings.TrimSpace(got) != "node0" {
-		t.Fatal("exit changed after recovery", got)
-	}
+	// A replacement PID precedes asynchronous TUN creation and route setup.
+	// Require the actual client path to recover within a bounded interval.
+	integrationWait(t, 20*time.Second, func() bool {
+		out, err := exec.Command("ip", curlArgs...).CombinedOutput()
+		return err == nil && strings.TrimSpace(string(out)) == "node0"
+	})
 	t.Log("installed systemd service: real PPP, duplicate rejection with legacy zero, UDP rejection, upstream outage, NAT repair, process recovery and fixed exit passed")
 }
