@@ -6,6 +6,8 @@ import tempfile
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import install_preflight
 import install_state
+import download_go
+import tarfile
 
 class InstallChecks(unittest.TestCase):
     def test_supported_versions(self):
@@ -35,3 +37,12 @@ class InstallChecks(unittest.TestCase):
             with patch.object(install_state,'ROOT',Path(directory)):
                 install_state.save(dict(complete=False))
                 self.assertEqual((Path(directory)/'journal.json').stat().st_mode&0o777,0o600) if sys.platform!='win32' else None
+
+    def test_go_archive_root_and_escape_rejection(self):
+        directory=tarfile.TarInfo('go');directory.type=tarfile.DIRTYPE
+        download_go.validate_member(directory)
+        download_go.validate_member(tarfile.TarInfo('go/bin/go'))
+        for name in ('go','../go/bin/go','go/../../etc/passwd','/go/bin/go','elsewhere/bin/go'):
+            with self.assertRaises(RuntimeError):download_go.validate_member(tarfile.TarInfo(name))
+        link=tarfile.TarInfo('go/bin/link');link.type=tarfile.SYMTYPE;link.linkname='/etc/passwd'
+        with self.assertRaises(RuntimeError):download_go.validate_member(link)

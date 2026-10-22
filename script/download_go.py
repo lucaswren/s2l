@@ -12,6 +12,13 @@ from urllib.request import urlopen
 from install_preflight import go_version
 
 
+def validate_member(member):
+    if (member.name not in ('go', 'go/') and not member.name.startswith('go/')) or '..' in Path(member.name).parts or not (member.isdir() or member.isfile()):
+        raise RuntimeError('unexpected Go archive entry')
+    if member.name in ('go', 'go/') and not member.isdir():
+        raise RuntimeError('Go archive root must be a directory')
+
+
 def install(arch):
     destination = Path('/usr/local/go')
     if destination.exists() or destination.is_symlink():
@@ -42,8 +49,7 @@ def install(arch):
             raise RuntimeError('Go archive checksum mismatch')
         with tarfile.open(archive) as bundle:
             for member in bundle.getmembers():
-                if not member.name.startswith('go/') or '..' in Path(member.name).parts or member.issym() or member.islnk():
-                    raise RuntimeError('unexpected Go archive entry')
+                validate_member(member)
             bundle.extractall(temporary)
         Path(temporary, 'go').rename(destination)
 

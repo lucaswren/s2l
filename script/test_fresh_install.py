@@ -27,7 +27,7 @@ def free_port():
 
 def main():
     repository = Path(__file__).resolve().parents[1]
-    for name in ('qemu-system-x86_64', 'qemu-img', 'cloud-localds', 'ssh', 'scp', 'ssh-keygen', 'curl', 'go'):
+    for name in ('qemu-system-x86_64', 'qemu-img', 'cloud-localds', 'ssh', 'scp', 'ssh-keygen', 'curl'):
         if not shutil.which(name):
             raise SystemExit('missing VM fixture dependency: ' + name)
     image_url = 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img'
@@ -88,20 +88,15 @@ def main():
             with tarfile.open(source_archive, 'w:gz') as bundle:
                 for name in ('cmd', 'internal', 'deploy', 'script', 'web', 'go.mod'):
                     bundle.add(repository / name, arcname=name, filter=lambda entry: None if any(part in entry.name.split('/') for part in ('__pycache__', 'node_modules', '.git')) else entry)
-            toolchain = Path(subprocess.check_output(['go', 'env', 'GOROOT'], text=True).strip())
-            go_archive = root / 'go.tgz'
-            with tarfile.open(go_archive, 'w:gz', compresslevel=1) as bundle:
-                bundle.add(toolchain, arcname='go')
             copy(source_archive, '/tmp/source.tgz')
-            copy(go_archive, '/tmp/go.tgz')
-            guest("mkdir -p /opt/src/s2l; tar -xzf /tmp/source.tgz -C /opt/src/s2l; tar -xzf /tmp/go.tgz -C /usr/local; printf '%s\\n' disposable-qemu-s2l-fixture > /etc/s2l-fresh-vm")
-            install = 'cd /opt/src/s2l && env ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash script/install.sh'
+            guest("mkdir -p /opt/src/s2l; tar -xzf /tmp/source.tgz -C /opt/src/s2l; test ! -e /usr/local/go; ! command -v go; printf '%s\\n' disposable-qemu-s2l-fixture > /etc/s2l-fresh-vm")
+            install = 'cd /opt/src/s2l && env ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash script/install.sh 2>&1 | tee /tmp/install-last.log'
             # Existing incompatible sing-box must be rejected without application writes.
             guest("printf '#!/bin/sh\\necho sing-box version 1.12.0\\n' > /usr/local/bin/sing-box; chmod 755 /usr/local/bin/sing-box")
             failed = guest(install, check=False)
             if failed.returncode == 0 or '1.11.15' not in failed.stdout + failed.stderr:
                 raise RuntimeError('incompatible sing-box was accepted: ' + failed.stdout + failed.stderr)
-            guest('test ! -e /opt/s2l/config.json; rm /usr/local/bin/sing-box')
+            guest('test ! -e /opt/s2l/config.json; test -x /usr/local/go/bin/go; rm /usr/local/bin/sing-box')
             print('PASS incompatible dependency rejection', flush=True)
             # A service start failure must restore files, sysctl and firewall state.
             wrapper = root / 'systemctl'
@@ -135,7 +130,7 @@ def main():
             original = guest('sha256sum /opt/s2l/config.json').stdout
             guest('systemctl reboot', check=False, timeout=20)
             ready(boot)
-            guest('systemctl is-active --quiet s2l xl2tpd nginx s2l-guard', timeout=30)
+            guest('systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; python3 /opt/src/s2l/script/verify_update.py health /opt/s2l/config.json', timeout=150)
             if guest('sha256sum /opt/s2l/config.json').stdout != original:
                 raise RuntimeError('reboot changed installed configuration')
             result = guest(dial, timeout=270)
@@ -147,7 +142,7 @@ def main():
                 if output:
                     print(str(output)[-12000:], flush=True)
             try:
-                print(guest('journalctl -u s2l -u xl2tpd -n 100 --no-pager; cat /var/lib/s2l-install/journal.json 2>/dev/null || true', check=False, timeout=20).stdout, flush=True)
+                print(guest('tail -n 100 /tmp/install-last.log 2>/dev/null || true; journalctl -u s2l -u xl2tpd -n 100 --no-pager; cat /var/lib/s2l-install/journal.json 2>/dev/null || true', check=False, timeout=20).stdout, flush=True)
             except Exception:
                 pass
             print((root / 'console.log').read_text(errors='replace')[-5000:], flush=True)
