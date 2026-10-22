@@ -7,6 +7,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-go@v7.0.0
@@ -30,18 +31,19 @@ jobs:
           S2L_SINGBOX_CHECK_BIN="$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" go test ./internal/singbox -run TestSingBoxRuntimeConfigCheck -v
       - name: Verify leak protection in isolated Linux networking
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y iproute2 iptables iputils-ping
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y iproute2 iptables iputils-ping
           go test -c -o /tmp/s2l-network.test ./internal/network
           sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run 'Test(LeakGuards|PPPManagement)Integration' -test.v
       - run: go vet ./...
       - name: Verify real L2TP fixed exits, DNS and UDP rejection
+        timeout-minutes: 8
         run: |
-          sudo apt-get install -y xl2tpd ppp curl
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y xl2tpd ppp curl
           # Hosted Azure kernels can omit L2TP from their base module package.
           # Install modules for the running kernel; never skip the real dial test.
           if ! modinfo l2tp_ppp >/dev/null 2>&1; then
-            sudo apt-get install -y "linux-modules-extra-$(uname -r)"
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y "linux-modules-extra-$(uname -r)"
           fi
           sudo modprobe ppp_generic
           sudo modprobe l2tp_ppp
