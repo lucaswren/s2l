@@ -241,3 +241,5 @@ Mapping subnets must be canonical RFC1918 IPv4 networks with at least two peer a
 CI additionally boots a fresh Ubuntu 24.04 amd64 QEMU guest, exercises incompatible dependency rejection, failed-install rollback, hard-interruption recovery, real systemd services, real PPP and fault injection, then reboots the guest and repeats dialing. ARM64 receives a cross-build check; this does not establish full ARM64 or every Debian runtime compatibility.
 
 The fresh-system fixture also tests two gateways with independent accounts and mappings sharing one SOCKS node: concurrent forwarding, duplicate-account rejection, fail-closed upstream outages, and repair or stop of one mapping without disrupting the other. These checks repeat after a full OS reboot.
+
+Installation preflight rejects Ubuntu 6.8.0-146-generic and 6.8.0-147-generic because of the known PPPoL2TP regression (Ubuntu bug 2169477). Boot a fixed or HWE kernel before retrying; the installer does not replace production kernels automatically. The full-system fixture uses Ubuntu 24.04 with an HWE kernel.
