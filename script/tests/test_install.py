@@ -12,6 +12,13 @@ import os
 import subprocess
 
 class InstallChecks(unittest.TestCase):
+    def test_kernel_regression_guard(self):
+        for release in ('6.8.0-146-generic', '6.8.0-147-generic'):
+            with self.assertRaisesRegex(RuntimeError, '2169477'):
+                install_preflight.kernel_version('ubuntu', release)
+        for distro, release in (('ubuntu', '6.8.0-142-generic'), ('ubuntu', '6.17.0-35-generic'), ('debian', '6.1.0-42-amd64')):
+            install_preflight.kernel_version(distro, release)
+
     def test_supported_versions(self):
         for value in ('go version go1.22.12 linux/amd64','go version go1.27.0 linux/arm64'):
             install_preflight.go_version(value)

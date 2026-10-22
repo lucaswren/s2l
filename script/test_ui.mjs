@@ -7,11 +7,14 @@ await mkdir(cwd+'/tmp',{recursive:true});
 async function freePort(){return new Promise((ok,no)=>{const s=createServer();s.on('error',no);s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>ok(p))})})}
 const apiPort=await freePort(),cdpPort=await freePort(),profile=await mkdtemp(cwd+'/tmp/ui-chrome-');
 const server=spawn(process.env.S2L_PYTHON_BIN || (process.platform==='win32'?'python':'python3'),['script/ui_fixture.py',String(apiPort)],{cwd,windowsHide:true,stdio:'ignore'});
-const chrome=spawn(process.env.S2L_CHROME_BIN || (process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'google-chrome'),['--headless=new','--disable-gpu','--no-first-run',`--remote-debugging-port=${cdpPort}`,`--user-data-dir=${profile}`,'about:blank'],{windowsHide:true,stdio:'ignore'});
+const chrome=spawn(process.env.S2L_CHROME_BIN || (process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'google-chrome'),['--headless=new','--disable-gpu','--no-first-run',`--remote-debugging-port=${cdpPort}`,`--user-data-dir=${profile}`,'about:blank'],{windowsHide:true,stdio:['ignore','ignore','pipe']});
+let chromeLog='',chromeError;
+chrome.stderr.on('data',data=>{chromeLog=(chromeLog+data.toString()).slice(-6000)});
+chrome.on('error',error=>{chromeError=error});
 let socket;
 try{
- let pages;for(let i=0;i<60;i++){try{pages=await(await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();if(pages.length)break}catch{}await pause(150)}
- if(!pages?.length)throw Error('headless browser unavailable');
+ let pages;for(let i=0;i<200;i++){if(chromeError||chrome.exitCode!==null)throw Error('browser exited before readiness: '+(chromeError||chrome.exitCode)+' '+chromeLog);try{pages=await(await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();if(pages.length)break}catch{}await pause(150)}
+ if(!pages?.length)throw Error('headless browser unavailable after 30s: '+chromeLog);
  for(let i=0;i<60;i++){try{if((await fetch(`http://127.0.0.1:${apiPort}/api/nodes`)).ok)break}catch{}await pause(100)}
  const target=await (await fetch(`http://127.0.0.1:${cdpPort}/json/new?about:blank`,{method:'PUT'})).json();
  socket=new WebSocket(target.webSocketDebuggerUrl);await new Promise((ok,no)=>{socket.onopen=ok;socket.onerror=no});

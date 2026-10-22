@@ -12,12 +12,15 @@ const dir=await mkdtemp(cwd+'/tmp/auth-ui-'),httpPort=await port(),cdpPort=await
 const binary=dir+(process.platform==='win32'?'/api.test.exe':'/api.test');
 execFileSync('go',['test','-c','-o',binary,'./internal/api'],{cwd,windowsHide:true,stdio:'inherit'});
 const backend=spawn(binary,['-test.run','^TestAuthBrowserFixture$','-test.timeout','5m'],{cwd,env:{...process.env,S2L_AUTH_UI_FIXTURE:`127.0.0.1:${httpPort}`},windowsHide:true,stdio:'ignore'});
-const chrome=spawn(process.env.S2L_CHROME_BIN||(process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'google-chrome'),['--headless=new','--disable-gpu','--no-first-run',`--remote-debugging-port=${cdpPort}`,`--user-data-dir=${dir}/profile`,'about:blank'],{cwd,windowsHide:true,stdio:'ignore'});
+const chrome=spawn(process.env.S2L_CHROME_BIN||(process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'google-chrome'),['--headless=new','--disable-gpu','--no-first-run',`--remote-debugging-port=${cdpPort}`,`--user-data-dir=${dir}/profile`,'about:blank'],{cwd,windowsHide:true,stdio:['ignore','ignore','pipe']});
+let chromeLog='',chromeError;
+chrome.stderr.on('data',data=>{chromeLog=(chromeLog+data.toString()).slice(-6000)});
+chrome.on('error',error=>{chromeError=error});
 let socket;
 try {
   let pages;
-  for(let i=0;i<80;i++){try{pages=await(await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();if(pages.length&&(await fetch(`http://127.0.0.1:${httpPort}/api/auth/status`)).ok)break}catch{}await pause(100)}
-  if(!pages?.length)throw Error('authentication browser fixture unavailable');
+  for(let i=0;i<300;i++){if(chromeError||chrome.exitCode!==null)throw Error('browser exited before readiness: '+(chromeError||chrome.exitCode)+' '+chromeLog);try{pages=await(await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();if(pages.length&&(await fetch(`http://127.0.0.1:${httpPort}/api/auth/status`)).ok)break}catch{}await pause(100)}
+  if(!pages?.length)throw Error('authentication browser fixture unavailable after 30s: '+chromeLog);
   const target=await(await fetch(`http://127.0.0.1:${cdpPort}/json/new?about:blank`,{method:'PUT'})).json();
   socket=new WebSocket(target.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{socket.onopen=resolve;socket.onerror=reject});
   let seq=0;const pending=new Map(),errors=[];

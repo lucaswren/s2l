@@ -84,6 +84,13 @@ def main():
         try:
             boot = ready()
             guest('cloud-init status --wait', timeout=180)
+            # Current Noble GA 6.8.0-147 has a PPPoL2TP refcount regression
+            # (Ubuntu bug 2169477). Use the supported HWE kernel for actual
+            # forwarding tests, rather than hiding a guest kernel lockup.
+            guest('export DEBIAN_FRONTEND=noninteractive; apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 update -qq; apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 install -y --no-install-recommends linux-generic-hwe-24.04', timeout=900)
+            guest('systemctl reboot', check=False, timeout=20)
+            boot = ready(boot)
+            print('Guest kernel: ' + guest('uname -r').stdout.strip(), flush=True)
             source_archive = root / 'source.tgz'
             with tarfile.open(source_archive, 'w:gz') as bundle:
                 for name in ('cmd', 'internal', 'deploy', 'script', 'web', 'go.mod'):

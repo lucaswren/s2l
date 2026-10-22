@@ -26,11 +26,19 @@ def singbox_version(text):
         raise ValueError('仅支持已验证的 sing-box 1.11.15；已有程序不会被自动覆盖')
 
 
+def kernel_version(distro, release):
+    # Ubuntu bug 2169477: PPPoL2TP session refcount regression. The VM's
+    # 6.8.0-147 kernel locked up in l2tp_tunnel_get_session after redial.
+    if distro == 'ubuntu' and re.fullmatch(r'6\.8\.0-(146|147)-generic', release):
+        raise RuntimeError('当前 Ubuntu 内核存在已知 L2TP 崩溃问题（2169477）；请切换已修复内核或 HWE 内核并重启后重试')
+
+
 def system():
     if sys.platform != 'linux' or os.geteuid() != 0:
         raise RuntimeError('requires Linux root')
     release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
     distro = release.get('ID', '').strip('"')
+    kernel_version(distro, os.uname().release)
     if distro not in ('ubuntu', 'debian'):
         raise RuntimeError('installer supports Ubuntu and Debian only')
     if not Path('/run/systemd/system').is_dir() or command('systemctl', 'show', '--property=Version').strip() == '':
