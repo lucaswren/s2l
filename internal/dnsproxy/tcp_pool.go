@@ -92,9 +92,9 @@ func (p *tcpPool) query(ctx context.Context, q []byte) ([]byte, error) {
 				c.Close()
 			}
 			p.mu.Unlock()
-			if err == nil {
-				return answer, nil
-			}
+			// A valid response remains valid if the peer closes immediately
+			// afterwards. Failure to reset its deadline only prevents reuse.
+			return answer, nil
 		} else {
 			c.Close()
 		}
