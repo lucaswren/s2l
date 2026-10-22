@@ -25,6 +25,7 @@ import (
 func main() {
 	log.SetOutput(io.MultiWriter(os.Stderr, debuglog.Default))
 	cfgPath := flag.String("config", "", "path to config JSON (optional)")
+	checkRuntime := flag.Bool("check-runtime", false, "validate sing-box runtime configuration without changing networking")
 	guardOnly := flag.Bool("guard-only", false, "install PPP traffic guards and exit (Linux root only)")
 	flag.Parse()
 	if *guardOnly {
@@ -40,6 +41,13 @@ func main() {
 	}
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid config: %v", err)
+	}
+
+	if *checkRuntime {
+		if err := singbox.CheckRuntime(cfg.SingboxBin); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 
 	st, err := store.New(cfg.StatePath())

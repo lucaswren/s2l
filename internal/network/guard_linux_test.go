@@ -141,6 +141,27 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	if err != nil || !allowed {
 		t.Fatalf("configured TUN forwarding never reached allowance: %s %v", counters, err)
 	}
+	// Resource conflict refusal must not erase another application's routes.
+	foreign := model.TunnelMapping{ID: "foreign", TunName: "tun202", TableID: 202, Subnet: "10.66.2.0/24"}
+	must("ip", "route", "add", "10.5.0.0/24", "dev", "wan0", "table", "202")
+	if DelPolicyRoute(foreign) == nil || AddPolicyRoute(foreign) == nil {
+		t.Fatal("foreign table was accepted")
+	}
+	saved, e := output("ip", "-j", "route", "show", "table", "202")
+	if e != nil || !strings.Contains(saved, "10.5.0.0/24") {
+		t.Fatal("foreign route was destroyed", saved, e)
+	}
+	must("ip", "route", "del", "10.5.0.0/24", "dev", "wan0", "table", "202")
+	must("ip", "link", "add", "tun202", "type", "dummy")
+	if CheckResources(foreign, false) == nil {
+		t.Fatal("foreign interface was accepted")
+	}
+	must("ip", "link", "del", "tun202")
+	must("ip", "addr", "add", "10.66.2.1/24", "dev", "wan0")
+	if CheckResources(foreign, false) == nil {
+		t.Fatal("host subnet collision was accepted")
+	}
+	must("ip", "addr", "del", "10.66.2.1/24", "dev", "wan0")
 	// Kill the interface: terminal unreachable must prevent main-table fallback.
 	must("ip", "link", "del", "tun101")
 	if _, err := output("ip", "route", "get", "198.18.0.2", "from", "10.0.101.2", "iif", "ppp0"); err == nil {

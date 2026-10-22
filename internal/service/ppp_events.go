@@ -47,7 +47,7 @@ func (s *MappingService) acceptPPP(e PPPEvent) error {
 		_, subnet, err := net.ParseCIDR(m.Subnet)
 		if err == nil && subnet.Contains(net.ParseIP(e.Peer)) {
 			mapping = m.ID
-			limit = m.MaxSessions
+			limit = m.EffectiveMaxSessions()
 			break
 		}
 	}

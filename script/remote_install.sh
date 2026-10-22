@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/lucaswren/s2l.git}"
-BRANCH="${BRANCH:-main}"
+BRANCH="${BRANCH:-}"
 SRC_DIR="${SRC_DIR:-/opt/src/s2l}"
 
 [[ "$(id -u)" -eq 0 ]] || { echo "请使用 root：curl ... | sudo bash"; exit 1; }
@@ -40,14 +40,19 @@ wait_for_apt() {
 
 export DEBIAN_FRONTEND=noninteractive
 wait_for_apt
-apt-get update -y
+timeout 240s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -y
 wait_for_apt
-apt-get install -y --no-install-recommends ca-certificates curl git
+timeout 240s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends ca-certificates curl git python3
 
+if [[ -z "$BRANCH" ]]; then
+  [[ "$REPO_URL" == https://github.com/lucaswren/s2l.git ]] || { echo "自定义仓库需指定 BRANCH"; exit 1; }
+  BRANCH="$(curl -fsSL --retry 2 --connect-timeout 15 --max-time 30 https://api.github.com/repos/lucaswren/s2l/releases/latest | python3 -c 'import json,sys,re; tag=json.load(sys.stdin)["tag_name"]; assert re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+",tag); print(tag)')"
+fi
+[[ "$BRANCH" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]] || { echo "无效的 BRANCH"; exit 1; }
 if [[ -d "${SRC_DIR}/.git" ]]; then
   echo "[INFO] 更新代码 ${SRC_DIR} ..."
   git -C "${SRC_DIR}" fetch --depth 1 origin "${BRANCH}"
-  git -C "${SRC_DIR}" checkout -B "${BRANCH}" "origin/${BRANCH}"
+  git -C "${SRC_DIR}" checkout --detach FETCH_HEAD
 else
   echo "[INFO] 克隆 ${REPO_URL} ..."
   if [[ -e "${SRC_DIR}" ]]; then
@@ -58,4 +63,6 @@ else
   git clone --depth 1 -b "${BRANCH}" "${REPO_URL}" "${SRC_DIR}"
 fi
 
+export S2L_REF="$BRANCH"
+export S2L_COMMIT="$(git -C "$SRC_DIR" rev-parse HEAD)"
 exec bash "${SRC_DIR}/script/install.sh"

@@ -21,7 +21,7 @@ Persistent PPP leak guards, separate upstream TCP/UDP/DNS health monitoring, and
 
 ## Installation
 
-Use a dedicated host: installation changes packages, forwarding, PPP/L2TP configuration, firewall rules and system services. Keep security updates enabled. Review the scripts before running them as root. The one-command installer follows `main` by default and is intended for a new installation.
+Use a dedicated host: installation changes packages, forwarding, PPP/L2TP configuration, firewall rules and system services. Keep security updates enabled. Review the scripts before running them as root. The one-command installer selects the latest stable release by default; set `BRANCH` explicitly for a reviewed development branch. It is intended for a new installation.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash

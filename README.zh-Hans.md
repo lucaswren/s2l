@@ -12,7 +12,7 @@ S2L 在 Linux 上管理 L2TP 客户端连接，通过 sing-box、策略路由与
 
 **默认普通 L2TP 不加密。** 管理 HTTPS 不会加密隧道流量。可选 IPsec 使用 IKEv1 与共享 PSK，须验证客户端兼容性；SOCKS5 本身也不加密。UDP 能力取决于上游。PPP IPv4 转发限制在对应 TUN，PPP IPv6 被阻断；仍需验证客户端路由与防火墙兼容性，不提供匿名性保证。
 
-使用专用主机并保留安全更新。安装会修改软件包、转发、PPP/L2TP、防火墙及系统服务。新安装优先使用下方一键脚本；执行前审阅脚本，其默认获取 `main` 分支。
+使用专用主机并保留安全更新。安装会修改软件包、转发、PPP/L2TP、防火墙及系统服务。新安装优先使用下方一键脚本；执行前审阅脚本，其默认获取最新稳定版；开发分支需明确指定 `BRANCH`。
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash

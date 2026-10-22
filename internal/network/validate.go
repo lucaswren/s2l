@@ -2,7 +2,6 @@ package network
 
 import (
 	"fmt"
-	"net"
 	"regexp"
 
 	"github.com/lucaswren/s2l/internal/model"
@@ -26,12 +25,8 @@ func ValidateMapping(m model.TunnelMapping) error {
 	if m.Subnet == "" {
 		return fmt.Errorf("subnet is required")
 	}
-	_, subnet, err := net.ParseCIDR(m.Subnet)
-	if err != nil || subnet.IP.To4() == nil {
-		return fmt.Errorf("invalid IPv4 subnet %q", m.Subnet)
-	}
-	if ones, bits := subnet.Mask.Size(); bits != 32 || ones > 30 {
-		return fmt.Errorf("subnet must contain at least two usable IPv4 addresses")
+	if _, err := model.TunnelSubnet(m.Subnet); err != nil {
+		return err
 	}
 	return nil
 }

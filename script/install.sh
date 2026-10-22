@@ -22,7 +22,7 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 [[ "$(id -u)" -eq 0 ]] || error "请使用 root 执行：sudo bash script/install.sh"
-[[ ! -e "${INSTALL_DIR}/config.json" ]] || error "S2L 已安装；为保护现有账号和配置，请使用应用更新流程，勿重复执行安装脚本"
+[[ "$(uname -s)" == Linux && -d /run/systemd/system ]] || error "需要以 systemd 运行的 Ubuntu/Debian Linux 主机"
 info "新安装使用自签证书启用 HTTPS；管理端口未指定则随机生成，无需放行 TCP 80"
 
 # 定位项目根目录（脚本在 script/ 下）
@@ -61,26 +61,34 @@ wait_for_apt() {
   done
 }
 
+apt_get() { timeout 240s apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 "$@"; }
+command -v python3 >/dev/null || { wait_for_apt; apt_get update -y; apt_get install -y --no-install-recommends python3; }
+python3 "${SCRIPT_DIR}/install_state.py" recover
+python3 "${SCRIPT_DIR}/install_preflight.py" system
 info "1/7 安装系统依赖..."
 export DEBIAN_FRONTEND=noninteractive
 # 确保 fuser 可用（来自 psmisc）
 command -v fuser >/dev/null 2>&1 || true
 wait_for_apt
-apt-get update -y
+apt_get update -y
 wait_for_apt
 IPSEC_PREINSTALLED=0
 dpkg-query -W -f='${Status}' strongswan-starter 2>/dev/null | grep -q "install ok installed" && IPSEC_PREINSTALLED=1
-apt-get install -y --no-install-recommends \
+apt_get install -y --no-install-recommends \
   ca-certificates curl wget tar iptables iproute2 psmisc iputils-ping mtr-tiny \
-  xl2tpd ppp openssl python3 build-essential strongswan strongswan-starter
+  xl2tpd ppp openssl python3 build-essential strongswan strongswan-starter kmod
 
-# Enable system-managed clock synchronization without replacing an existing NTP provider.
-if command -v timedatectl >/dev/null 2>&1; then
-  if [[ "$(timedatectl show --property=CanNTP --value 2>/dev/null || true)" == "no" ]]; then
-    apt-get install -y --no-install-recommends systemd-timesyncd
+# Package post-install scripts can start an unconfigured daemon. It was verified
+# inactive before package installation; keep it stopped until guards are ready.
+systemctl stop xl2tpd
+if ! modprobe l2tp_ppp; then
+  if [[ "$(. /etc/os-release; echo "$ID")" == ubuntu ]]; then
+    apt_get install -y --no-install-recommends "linux-modules-extra-$(uname -r)"
+  else
+    error "当前内核缺少 L2TP 模块；请安装与运行内核匹配的模块并重试"
   fi
-  timedatectl set-ntp true || warn "时间自动同步未能开启，请在设置中检查系统时间服务。"
 fi
+python3 "${SCRIPT_DIR}/install_preflight.py" capabilities
 
 if [[ "${IPSEC_PREINSTALLED}" == "0" ]]; then
   systemctl disable --now strongswan-starter.service >/dev/null 2>&1 || true
@@ -104,46 +112,27 @@ ADMIN_PASS="${ADMIN_PASS:-$(openssl rand -hex 8)}"
 [[ "${ADMIN_USER}" =~ ^[A-Za-z0-9_.-]{1,64}$ ]] || error "ADMIN_USER 仅允许字母、数字、点、下划线和连字符"
 [[ "${ADMIN_PASS}" =~ ^[A-Za-z0-9_.@+-]{12,128}$ ]] || error "ADMIN_PASS 需为 12-128 位安全字符"
 
-# 开启内核转发（持久）
-mkdir -p /etc/sysctl.d
-cat >/etc/sysctl.d/99-s2l.conf <<'EOF'
-net.ipv4.ip_forward=1
-net.ipv4.conf.all.rp_filter=0
-net.ipv4.conf.default.rp_filter=0
-EOF
-sysctl --system >/dev/null 2>&1 || {
-  sysctl -w net.ipv4.ip_forward=1
-  sysctl -w net.ipv4.conf.all.rp_filter=0
-  sysctl -w net.ipv4.conf.default.rp_filter=0
-}
-
 info "2/7 安装 / 检查 Go..."
+export PATH="/usr/local/go/bin:/usr/local/bin:${PATH:-}"
 if ! command -v go >/dev/null 2>&1; then
-  GO_VER="1.22.12"
-  tmp="$(mktemp -d)"
-  wget -qO "${tmp}/go.tgz" "https://go.dev/dl/go${GO_VER}.linux-${GOARCH}.tar.gz"
-  rm -rf /usr/local/go
-  tar -C /usr/local -xzf "${tmp}/go.tgz"
-  rm -rf "${tmp}"
-  export PATH="/usr/local/go/bin:${PATH}"
-  if ! grep -q '/usr/local/go/bin' /etc/profile.d/go.sh 2>/dev/null; then
-    echo 'export PATH=/usr/local/go/bin:$PATH' >/etc/profile.d/go.sh
-  fi
+  python3 "${SCRIPT_DIR}/download_go.py" "$GOARCH"
 fi
-export PATH="/usr/local/go/bin:${PATH:-}"
+python3 "${SCRIPT_DIR}/install_preflight.py" go "$(command -v go)"
 go version
 
 info "3/7 安装 / 检查 sing-box..."
+[[ "$SINGBOX_VERSION" == 1.11.15 ]] || error "仅支持已验证的 sing-box 1.11.15"
 if [[ ! -x /usr/local/bin/sing-box ]]; then
+  [[ ! -e /usr/local/bin/sing-box ]] || error "sing-box 路径已被其他文件占用"
   tmp="$(mktemp -d)"
-  SB_URL="https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/sing-box-${SINGBOX_VERSION}-linux-${SB_ARCH}.tar.gz"
-  info "下载 sing-box ${SINGBOX_VERSION} ..."
-  wget -qO "${tmp}/sb.tgz" "${SB_URL}" || error "下载 sing-box 失败，请检查网络或手动安装到 /usr/local/bin/sing-box"
-  tar -C "${tmp}" -xzf "${tmp}/sb.tgz"
+  SB_FILE="sing-box-${SINGBOX_VERSION}-linux-${SB_ARCH}.tar.gz"
+  curl -fSL --retry 2 --connect-timeout 15 --max-time 180 "https://github.com/SagerNet/sing-box/releases/download/v${SINGBOX_VERSION}/${SB_FILE}" -o "${tmp}/${SB_FILE}"
+  (cd "$tmp"; grep "  ${SB_FILE}$" "$SCRIPT_DIR/singbox.sha256" | sha256sum -c -)
+  tar -C "$tmp" -xzf "${tmp}/${SB_FILE}"
   install -m 755 "${tmp}/sing-box-${SINGBOX_VERSION}-linux-${SB_ARCH}/sing-box" /usr/local/bin/sing-box
-  rm -rf "${tmp}"
+  rm -rf "$tmp"
 fi
-sing-box version || true
+python3 "${SCRIPT_DIR}/install_preflight.py" singbox /usr/local/bin/sing-box
 
 info "4/7 编译 ${APP_NAME}..."
 # 前端 dist 已存在则跳过 npm；否则尝试构建
@@ -163,6 +152,40 @@ S2L_BUILD_COMMIT="${S2L_COMMIT:-}"
 S2L_BUILD_FLAGS="-X github.com/lucaswren/s2l/internal/buildinfo.Version=$S2L_BUILD_VERSION -X github.com/lucaswren/s2l/internal/buildinfo.Revision=$S2L_BUILD_COMMIT"
 go build -ldflags "$S2L_BUILD_FLAGS" -o "bin/${APP_NAME}" ./cmd/s2l
 info "编译完成: ${ROOT_DIR}/bin/${APP_NAME}"
+
+"bin/${APP_NAME}" -check-runtime
+python3 "${SCRIPT_DIR}/install_state.py" begin
+finish_install() {
+  local code=$?
+  trap - EXIT
+  if (( code != 0 )); then
+    python3 "${SCRIPT_DIR}/install_state.py" recover || echo "[ERROR] 自动恢复未完成，请保留 /var/lib/s2l-install 并检查恢复日志" >&2
+  fi
+  exit "$code"
+}
+trap finish_install EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+# Enable system-managed clock synchronization without replacing an existing NTP provider.
+if command -v timedatectl >/dev/null 2>&1; then
+  if [[ "$(timedatectl show --property=CanNTP --value 2>/dev/null || true)" == "no" ]]; then
+    apt_get install -y --no-install-recommends systemd-timesyncd
+  fi
+  timedatectl set-ntp true || warn "时间自动同步未能开启，请在设置中检查系统时间服务。"
+fi
+
+# 开启内核转发（持久）
+mkdir -p /etc/sysctl.d
+cat >/etc/sysctl.d/99-s2l.conf <<'EOF'
+net.ipv4.ip_forward=1
+net.ipv4.conf.all.rp_filter=0
+net.ipv4.conf.default.rp_filter=0
+EOF
+sysctl --system >/dev/null 2>&1 || {
+  sysctl -w net.ipv4.ip_forward=1
+  sysctl -w net.ipv4.conf.all.rp_filter=0
+  sysctl -w net.ipv4.conf.default.rp_filter=0
+}
 
 info "5/7 安装到 ${INSTALL_DIR}..."
 mkdir -p "${INSTALL_DIR}/data"
@@ -248,8 +271,7 @@ sleep 1
 if systemctl restart xl2tpd >/dev/null 2>&1 && systemctl is-active --quiet xl2tpd; then
   info "xl2tpd 已启动"
 else
-  warn "xl2tpd 启动失败，请检查: systemctl status xl2tpd -l --no-pager"
-  warn "配置文件: /etc/xl2tpd/xl2tpd.conf"
+  error "xl2tpd 启动失败，请检查: systemctl status xl2tpd -l --no-pager"
 fi
 
 info "6/7 写入 systemd 服务..."
@@ -265,10 +287,13 @@ if systemctl is-active --quiet "${APP_NAME}"; then
   info "生成自签证书并启用 HTTPS..."
   # Execute as a separate command so setup_https.sh retains its ERR rollback trap.
   # Never report installation success while the management endpoint lacks TLS.
-  trap 'error "HTTPS 尚未完成；请放行 TCP ${HTTPS_PORT} 后执行 bash ${SCRIPT_DIR}/setup_https.sh ${PUBLIC_IP} ${HTTPS_PORT}；管理配置已保留于 ${INSTALL_DIR}/config.json"' ERR
+  trap 'error "HTTPS 配置失败，正在恢复安装前状态"' ERR
   bash "${SCRIPT_DIR}/setup_https.sh" "${PUBLIC_IP}" "${HTTPS_PORT}"
   trap - ERR
   echo
+  python3 "${SCRIPT_DIR}/verify_update.py" health "${INSTALL_DIR}/config.json"
+  systemctl is-active --quiet xl2tpd
+  python3 "${SCRIPT_DIR}/install_state.py" commit
   info "S2L 安装完成"
   echo "  Web UI : https://${PUBLIC_IP}:${HTTPS_PORT}"
   echo "  管理账号: ${ADMIN_USER}"

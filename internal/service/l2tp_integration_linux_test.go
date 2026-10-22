@@ -518,7 +518,7 @@ func integrationCertificate(t *testing.T) (tls.Certificate, []byte) {
 	return cert, certPEM
 }
 
-func integrationSOCKS(t *testing.T, id string, cert tls.Certificate) (string, func(bool)) {
+func integrationSOCKS(t *testing.T, id string, cert tls.Certificate, bind ...string) (string, func(bool)) {
 	t.Helper()
 	var online atomic.Bool
 	online.Store(true)
@@ -542,7 +542,11 @@ func integrationSOCKS(t *testing.T, id string, cert tls.Certificate) (string, fu
 	target.TLS = &tls.Config{Certificates: []tls.Certificate{cert}}
 	target.StartTLS()
 	t.Cleanup(func() { close(holdDone); target.CloseClientConnections(); target.Close() })
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	address := "127.0.0.1:0"
+	if len(bind) > 0 {
+		address = bind[0]
+	}
+	ln, err := net.Listen("tcp", address)
 	if err != nil {
 		t.Fatal(err)
 	}

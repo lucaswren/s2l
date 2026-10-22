@@ -2,7 +2,9 @@ package api
 
 import (
 	"fmt"
+	"github.com/lucaswren/s2l/internal/network"
 	"net/http"
+	"runtime"
 	"strings"
 
 	"github.com/lucaswren/s2l/internal/model"
@@ -170,6 +172,12 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 	if !validGroup(m.Group) {
 		writeError(w, 400, "分组名称无效")
 		return
+	}
+	if s.svc != nil && runtime.GOOS == "linux" && m.Status == model.StatusStopped {
+		if err := network.CheckResources(m, false); err != nil {
+			writeError(w, 409, "network resource conflict: "+err.Error())
+			return
+		}
 	}
 	if s.previewChange(w, r, old, m, m.NodeID) {
 		return

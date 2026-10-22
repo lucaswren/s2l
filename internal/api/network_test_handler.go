@@ -192,7 +192,7 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		for i, m := range selected {
 			for _, n := range nodes {
 				if m.NodeID == n.ID {
-					policies = append(policies, map[string]any{"mapping_id": m.ID, "node_id": m.NodeID, "udp_policy": m.EffectiveUDPPolicy(), "dns_mode": m.EffectiveDNSMode(), "status": m.Status, "max_connections": m.MaxConnections, "max_sessions": m.MaxSessions, "upload_kbps": m.UploadKbps, "download_kbps": m.DownloadKbps, "reject_before": before[m.ID], "reject_after": after[m.ID]})
+					policies = append(policies, map[string]any{"mapping_id": m.ID, "node_id": m.NodeID, "udp_policy": m.EffectiveUDPPolicy(), "dns_mode": m.EffectiveDNSMode(), "status": m.Status, "max_connections": m.MaxConnections, "max_sessions": m.EffectiveMaxSessions(), "upload_kbps": m.UploadKbps, "download_kbps": m.DownloadKbps, "reject_before": before[m.ID], "reject_after": after[m.ID]})
 					policies[len(policies)-1]["mapping_dns"] = mappingReports[i]
 				}
 			}

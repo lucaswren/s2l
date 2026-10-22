@@ -48,13 +48,10 @@ func Mapping(m model.TunnelMapping) error {
 	if !tunNamePattern.MatchString(m.TunName) {
 		return fmt.Errorf("tun_name must be 1-15 letters, digits, '.', '_' or '-'")
 	}
-	_, subnet, err := net.ParseCIDR(m.Subnet)
-	if err != nil || subnet.IP.To4() == nil {
-		return fmt.Errorf("subnet must be a valid IPv4 CIDR")
+	if _, err := model.TunnelSubnet(m.Subnet); err != nil {
+		return err
 	}
-	if ones, bits := subnet.Mask.Size(); bits != 32 || ones > 30 {
-		return fmt.Errorf("subnet must contain at least two usable IPv4 addresses (prefix /30 or shorter)")
-	}
+
 	if err := Credential("L2TP username", m.L2TPUser); err != nil {
 		return err
 	}

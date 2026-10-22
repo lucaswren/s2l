@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"net"
 	"path/filepath"
 	"sync"
 	"time"
@@ -170,6 +171,14 @@ func (s *MappingService) startLocked(id string) error {
 	if m.L2TPUser == "" || m.L2TPPass == "" {
 		cause := fmt.Errorf("l2tp_user/l2tp_pass required")
 		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
+	}
+	if err := network.CheckResources(m, s.singbox.IsRunning(m.TunName)); err != nil {
+		return fmt.Errorf("network resource conflict: %w", err)
+	}
+	host, _, _ := net.SplitHostPort(node.Addr)
+	_, clientSubnet, _ := net.ParseCIDR(m.Subnet)
+	if ip := net.ParseIP(host); ip != nil && clientSubnet.Contains(ip) {
+		return fmt.Errorf("SOCKS5 endpoint overlaps client subnet")
 	}
 	s.mu.Lock()
 	knownHealthy := s.health[id] != nil && s.health[id].LocalState == "healthy"

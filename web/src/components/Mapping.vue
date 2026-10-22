@@ -71,7 +71,7 @@ const form = reactive({
   subnet: "10.0.101.0/24",
   l2tp_user: "",
   l2tp_pass: "",
-  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
 });
 const importText = ref("");
 const importErrors = ref([]);
@@ -122,7 +122,7 @@ function resetForm() {
     subnet: `10.0.${id % 256}.0/24`,
     l2tp_user: `l2tp${id}`,
     l2tp_pass: "",
-  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
   });
 }
 
@@ -455,10 +455,10 @@ const editingActive = computed(() => {
               :readonly="editingActive"
               autocomplete="new-password"
           /></el-form-item>
-          <details class="form-wide mapping-advanced"><summary>{{ tr("高级选项 · 分组、限额与网络参数") }}<span v-if="form.upload_kbps || form.download_kbps || form.max_sessions || form.max_connections"> {{ tr("· 限额已启用") }}</span></summary><div class="form-grid"><el-form-item :label='tr("分组")'><el-input v-model="form.group" maxlength="64"/></el-form-item>
+          <details class="form-wide mapping-advanced"><summary>{{ tr("高级选项 · 分组、限额与网络参数") }}<span v-if="form.upload_kbps || form.download_kbps || form.max_connections"> {{ tr("· 限额已启用") }}</span></summary><div class="form-grid"><el-form-item :label='tr("分组")'><el-input v-model="form.group" maxlength="64"/></el-form-item>
  <el-form-item :label='tr("上传上限 Kbit/s")'><el-input-number v-model="form.upload_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
  <el-form-item :label='tr("下载上限 Kbit/s")'><el-input-number v-model="form.download_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
- <el-form-item :label='tr("PPP 会话上限")'><el-input-number v-model="form.max_sessions" :min="0" :max="128" :disabled="editingActive"/></el-form-item>
+ <el-form-item :label='tr("拨号保护")'><span>{{tr("同一账号仅允许一条拨号会话；多设备可共享网关。")}}</span></el-form-item>
  <el-form-item :label='tr("连接观测")'><el-switch v-model="form.observe_connections" :disabled="editingActive"/></el-form-item><el-form-item :label='tr("TCP 连接上限")'><el-input-number v-model="form.max_connections" :min="0" :max="1000000" :disabled="editingActive"/></el-form-item>
  <p class="muted form-wide">{{ tr("0 表示不限；限额按整条映射合计。下载超额采用丢弃控制速率，非平滑整形。") }}</p>
  <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingActive" /></el-form-item>

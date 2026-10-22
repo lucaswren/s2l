@@ -28,7 +28,7 @@ jobs:
         run: |
           curl -fL --retry 2 --connect-timeout 15 --max-time 180 https://github.com/SagerNet/sing-box/releases/download/v1.11.15/sing-box-1.11.15-linux-amd64.tar.gz -o "$RUNNER_TEMP/sing-box.tgz"
           tar -xzf "$RUNNER_TEMP/sing-box.tgz" -C "$RUNNER_TEMP"
-          S2L_SINGBOX_CHECK_BIN="$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" go test ./internal/singbox -run TestSingBoxRuntimeConfigCheck -v
+          S2L_SINGBOX_CHECK_BIN="$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" go test ./internal/singbox -run 'TestSingBoxRuntimeConfigCheck|TestRuntimeCompatibilityCheck' -v
       - name: Verify leak protection in isolated Linux networking
         run: |
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
@@ -65,3 +65,21 @@ jobs:
       - run: python3 script/collect_frontend_licenses.py
       - run: git diff --exit-code -- web/dist
       - run: go build -o bin/s2l ./cmd/s2l
+
+  fresh-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - name: Install full-system test dependencies
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-client
+      - name: Fresh Ubuntu install, interrupted-install recovery, reboot and real PPP faults
+        run: sudo env PATH="$PATH" python3 script/test_fresh_install.py
+      - name: Compile Linux ARM64 gateway
+        run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/s2l-arm64 ./cmd/s2l

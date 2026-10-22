@@ -3247,5 +3247,15 @@
     "cn": "未发起 UDP 探测",
     "tw": "未發起 UDP 探測",
     "en": "UDP probe not performed"
+  },
+  "拨号保护": {
+    "cn": "拨号保护",
+    "tw": "撥號保護",
+    "en": "Session protection"
+  },
+  "同一账号仅允许一条拨号会话；多设备可共享网关。": {
+    "cn": "同一账号仅允许一条拨号会话；多设备可共享网关。",
+    "tw": "同一帳號僅允許一條撥號工作階段；多裝置可共用閘道。",
+    "en": "One session per account. Multiple devices can share the gateway."
   }
 }
