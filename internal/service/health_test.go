@@ -215,3 +215,25 @@ func TestRestrictedTargetDoesNotCondemnProxy(t *testing.T) {
 		t.Fatal(h)
 	}
 }
+
+func TestHealthyProbeCadenceAndFastConfirmation(t *testing.T) {
+	h := healthRecord{}
+	now := time.Now()
+	h.observe(nil, now)
+	if h.next.Sub(now) != 5*time.Second {
+		t.Fatal("slow initial confirmation")
+	}
+	h.observe(nil, now)
+	if d := h.next.Sub(now); d < 45*time.Second || d > 55*time.Second {
+		t.Fatal("healthy cadence too aggressive", d)
+	}
+	h.observe(errors.New("failure"), now)
+	if h.next.Sub(now) != 5*time.Second {
+		t.Fatal("fault confirmation delayed")
+	}
+	h.UDPPolicy = "reject"
+	h.applyReport(speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}}, now)
+	if h.UDP.State != "blocked" || !h.UDP.CheckedAt.IsZero() {
+		t.Fatal("policy rejection reported as node capability", h.UDP)
+	}
+}

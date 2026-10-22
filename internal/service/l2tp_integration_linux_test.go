@@ -129,7 +129,7 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 		if err := st.UpsertNode(n); err != nil {
 			t.Fatal(err)
 		}
-		m := model.TunnelMapping{ID: fmt.Sprintf("m%d", i), NodeID: id, TunName: fmt.Sprintf("tun%d", 101+i), TableID: 101 + i, Subnet: fmt.Sprintf("10.0.%d.0/24", 101+i), L2TPUser: fmt.Sprintf("user%d", i), L2TPPass: "fixture-secret", Status: model.StatusStopped, DNSMode: "tcp", UDPPolicy: "reject", UploadKbps: 20000, DownloadKbps: 20000, MaxConnections: 2, MaxSessions: 1}
+		m := model.TunnelMapping{ID: fmt.Sprintf("m%d", i), NodeID: id, TunName: fmt.Sprintf("tun%d", 101+i), TableID: 101 + i, Subnet: fmt.Sprintf("10.0.%d.0/24", 101+i), L2TPUser: fmt.Sprintf("user%d", i), L2TPPass: "fixture-secret", Status: model.StatusStopped, DNSMode: "tcp", UDPPolicy: "reject", UploadKbps: 20000, DownloadKbps: 20000, MaxConnections: 2, MaxSessions: 1, ObserveConnections: true}
 		if err := st.UpsertMapping(m); err != nil {
 			t.Fatal(err)
 		}

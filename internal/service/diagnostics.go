@@ -21,24 +21,32 @@ func (s *MappingService) ProbeGoogleMapping(ctx context.Context, id, nodeID stri
 	if err := lockutil.RLock(ctx, &s.stateGate); err != nil {
 		return diagnostics.Report{}, err
 	}
-	defer s.stateGate.RUnlock()
 	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
 	mu := value.(*sync.Mutex)
 	if err := lockutil.Lock(ctx, mu); err != nil {
+		s.stateGate.RUnlock()
 		return diagnostics.Report{}, err
 	}
-	defer mu.Unlock()
 	m, ok := s.store.GetMapping(id)
-	if !ok || m.NodeID != nodeID || m.Status != model.StatusRunning {
-		return diagnostics.Report{}, fmt.Errorf("mapping is not running on selected node")
-	}
-	node, ok := s.store.GetNode(m.NodeID)
-	if !ok || s.singbox == nil {
+	node, nodeOK := s.store.GetNode(m.NodeID)
+	if !ok || !nodeOK || m.NodeID != nodeID || m.Status != model.StatusRunning || s.singbox == nil {
+		mu.Unlock()
+		s.stateGate.RUnlock()
 		return diagnostics.Report{}, fmt.Errorf("mapping runtime unavailable")
 	}
-	return diagnostics.GoogleMapping(ctx, node, id, func(ctx context.Context, q []byte) ([]byte, error) {
-		return s.singbox.ResolveDNS(ctx, m.TunName, q)
-	}), nil
+	probe, valid, err := s.singbox.DNSProbe(m.TunName)
+	mu.Unlock()
+	s.stateGate.RUnlock()
+	if err != nil {
+		return diagnostics.Report{}, err
+	}
+	report := diagnostics.GoogleMapping(ctx, node, id, probe)
+	current, exists := s.store.GetMapping(id)
+	latest, nodeExists := s.store.GetNode(nodeID)
+	if ctx.Err() != nil || !exists || current != m || !nodeExists || latest != node || !valid() {
+		return diagnostics.Report{}, fmt.Errorf("mapping changed during diagnostic; retry")
+	}
+	return report, nil
 }
 
 // ProbeMapping serializes only this mapping's lifecycle. It neither repairs nor

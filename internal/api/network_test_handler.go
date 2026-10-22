@@ -21,11 +21,13 @@ import (
 const networkProbeAttempts = 8
 
 type networkTestRequest struct {
-	CompareNode string `json:"compare_node,omitempty"`
-	Kind        string `json:"kind"`
-	Target      string `json:"target"`
-	Stream      bool   `json:"stream"`
-	MTRProtocol string `json:"mtr_protocol"`
+	MappingID        string `json:"mapping_id,omitempty"`
+	CompareMappingID string `json:"compare_mapping_id,omitempty"`
+	CompareNode      string `json:"compare_node,omitempty"`
+	Kind             string `json:"kind"`
+	Target           string `json:"target"`
+	Stream           bool   `json:"stream"`
+	MTRProtocol      string `json:"mtr_protocol"`
 }
 type tcpSample struct {
 	Milliseconds float64 `json:"milliseconds"`
@@ -126,11 +128,28 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 			nodes = append(nodes, other)
 		}
 		selected := []model.TunnelMapping{}
-		for _, m := range s.store.ListMappings() {
-			for _, n := range nodes {
-				if m.NodeID == n.ID {
-					selected = append(selected, m)
+		mappings := s.store.ListMappings()
+		for i, n := range nodes {
+			wanted := body.MappingID
+			if i > 0 {
+				wanted = body.CompareMappingID
+			}
+			var chosen *model.TunnelMapping
+			for _, m := range mappings {
+				if m.NodeID != n.ID || (wanted != "" && m.ID != wanted) {
+					continue
 				}
+				if chosen == nil || (chosen.Status != model.StatusRunning && m.Status == model.StatusRunning) {
+					copy := m
+					chosen = &copy
+				}
+			}
+			if wanted != "" && chosen == nil {
+				writeError(w, 400, "mapping does not belong to selected node")
+				return
+			}
+			if chosen != nil {
+				selected = append(selected, *chosen)
 			}
 		}
 		before := network.ReadRejectCounters(ctx, selected)

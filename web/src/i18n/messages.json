@@ -3217,5 +3217,30 @@
   "表格视图": {
     "en": "Table view",
     "tw": "表格檢視"
+  },
+  "连接观测": {
+    "cn": "连接观测",
+    "tw": "連線觀測",
+    "en": "Connection observation"
+  },
+  "按策略拒绝": {
+    "cn": "按策略拒绝",
+    "tw": "依策略拒絕",
+    "en": "Blocked by policy"
+  },
+  "检测映射": {
+    "cn": "检测映射",
+    "tw": "檢測映射",
+    "en": "Test mapping"
+  },
+  "对照映射": {
+    "cn": "对照映射",
+    "tw": "對照映射",
+    "en": "Comparison mapping"
+  },
+  "自动选择一条映射": {
+    "cn": "自动选择一条映射",
+    "tw": "自動選擇一條映射",
+    "en": "Select one mapping automatically"
   }
 }

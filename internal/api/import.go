@@ -162,6 +162,8 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 			// Updating credentials through it must preserve existing tuning.
 			if textImport {
 				m.MTU, m.MSS, m.QueueLength = existing.MTU, existing.MSS, existing.QueueLength
+				m.ObserveConnections = existing.ObserveConnections
+				m.UploadKbps, m.DownloadKbps, m.MaxConnections, m.MaxSessions = existing.UploadKbps, existing.DownloadKbps, existing.MaxConnections, existing.MaxSessions
 				m.UDPPolicy, m.DNSMode = existing.UDPPolicy, existing.DNSMode
 			}
 			m.Status = existing.Status

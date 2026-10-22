@@ -30,7 +30,7 @@ func runContext(parent context.Context, name string, args ...string) error {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return fmt.Errorf("%s %s: %s", name, strings.Join(args, " "), msg)
+		return fmt.Errorf("%s %s: %s: %w", name, strings.Join(args, " "), msg, err)
 	}
 	return nil
 }
@@ -56,7 +56,7 @@ func outputContext(parent context.Context, name string, args ...string) (string,
 		if msg == "" {
 			msg = err.Error()
 		}
-		return "", fmt.Errorf("%s %s: %s", name, strings.Join(args, " "), msg)
+		return "", fmt.Errorf("%s %s: %s: %w", name, strings.Join(args, " "), msg, err)
 	}
 	return stdout.String(), nil
 }

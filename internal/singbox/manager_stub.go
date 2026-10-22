@@ -86,3 +86,7 @@ func (m *Manager) Connections(context.Context, string) (Connections, error) {
 func (m *Manager) CloseConnection(context.Context, string, string) error {
 	return fmt.Errorf("requires Linux")
 }
+
+func (m *Manager) DNSProbe(string) (func(context.Context, []byte) ([]byte, error), func() bool, error) {
+	return nil, nil, fmt.Errorf("mapping DNS requires Linux")
+}

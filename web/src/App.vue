@@ -11,6 +11,7 @@ import {
   ref,
 } from "vue";
 import { api } from "./api/client";
+const monitorOpen = ref(false);
 const Guide = defineAsyncComponent(() => import("./components/Guide.vue"));
 import Node from "./components/Node.vue";
 import Mapping from "./components/Mapping.vue";
@@ -135,7 +136,7 @@ function formatUptime(sec) {
 
 onMounted(() => {
   refresh();
-  timer = setInterval(refresh, 5000);
+  timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
 });
 onUnmounted(() => { disposed = true; clearInterval(timer); });
 </script>
@@ -212,8 +213,8 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
               @changed="refresh"
               @toast="pushToast"
             />
-            </section><details class="settings-disclosure monitor-disclosure"><summary>{{tr("运行监控")}}</summary>
-              <div class="monitor-content"><Status :status="status" @changed="refresh" @toast="pushToast" /></div>
+            </section><details class="settings-disclosure monitor-disclosure" @toggle="monitorOpen = $event.target.open"><summary>{{tr("运行监控")}}</summary>
+              <div class="monitor-content"><Status v-if="monitorOpen" :status="status" @changed="refresh" @toast="pushToast" /></div>
             </details>
           </el-tab-pane>
           <el-tab-pane :label='tr("系统设置")' name="settings" lazy

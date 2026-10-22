@@ -23,8 +23,8 @@ func TestExitedProcessDoesNotUseLiveReusedPID(t *testing.T) {
 
 func TestRuntimeSnapshotNeverMixesProcessGenerations(t *testing.T) {
 	m := NewManager("")
-	a := &managedProc{pid: 100, done: make(chan struct{}), exits: 7, log: &rotatingLog{status: model.ProcessStatus{LogBytes: 100}}}
-	b := &managedProc{pid: 200, done: make(chan struct{}), exits: 20, log: &rotatingLog{status: model.ProcessStatus{LogBytes: 200}}}
+	a := &managedProc{pid: 100, done: make(chan struct{}), exits: 7, log: &processLog{status: model.ProcessStatus{LogBytes: 100}}}
+	b := &managedProc{pid: 200, done: make(chan struct{}), exits: 20, log: &processLog{status: model.ProcessStatus{LogBytes: 200}}}
 	m.procs["tun101"] = a
 	var wg sync.WaitGroup
 	wg.Add(1)

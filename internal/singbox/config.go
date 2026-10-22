@@ -3,7 +3,6 @@ package singbox
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/lucaswren/s2l/internal/debuglog"
 	"net"
 	"os"
 	"path/filepath"
@@ -66,10 +65,7 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 		return nil, fmt.Errorf("tun_name is required")
 	}
 
-	level := "info"
-	if debuglog.Default.State().Enabled {
-		level = "debug"
-	}
+	level := "warn"
 	cfg := map[string]any{
 		"log": map[string]any{
 			"level":     level,
@@ -136,15 +132,6 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 					"action":  "reject",
 					"method":  "default",
 					"no_drop": true,
-				},
-				// Sniff only after early TUN rejection so UDP receives ICMP
-				// rather than closing an already assembled packet connection.
-				{
-					"action": "sniff",
-				},
-				{
-					"protocol": "dns",
-					"action":   "hijack-dns",
 				},
 			},
 			"final": "proxy",

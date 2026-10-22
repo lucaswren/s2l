@@ -59,3 +59,7 @@ func (c *Controller) Verify(model.TunnelMapping) error {
 func (c *Controller) VerifyContext(context.Context, model.TunnelMapping) error {
 	return fmt.Errorf("forwarding verification requires Linux")
 }
+
+func (c *Controller) RepairContext(context.Context, model.TunnelMapping) error {
+	return fmt.Errorf("forwarding repair requires Linux")
+}

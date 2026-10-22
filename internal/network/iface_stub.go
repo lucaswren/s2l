@@ -10,3 +10,7 @@ import (
 func WaitInterface(name string, timeout time.Duration) error {
 	return fmt.Errorf("WaitInterface is only supported on linux")
 }
+
+func InterfacePresent(string) (bool, error) {
+	return false, fmt.Errorf("interface inspection requires Linux")
+}

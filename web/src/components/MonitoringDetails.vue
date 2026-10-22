@@ -21,7 +21,7 @@ async function load(){
  finally{if(!disposed&&current===version)busy.value=false;}
 }
 watch(selected,load,{immediate:true});
-const timer=setInterval(()=>{if(!busy.value)load()},60000);
+const timer=setInterval(()=>{if(!document.hidden&&!busy.value)load()},60000);
 onBeforeUnmount(()=>{disposed=true;controller?.abort();clearInterval(timer)});
 const disconnecting=ref('');
 async function disconnect(row){if(disconnecting.value)return;try{await ElMessageBox.confirm(tr("断开 {0} 会话？", row.interface),tr("会话管理"),{type:'warning'});disconnecting.value=row.interface;await api.disconnectSession(row)}catch(e){if(e!=='cancel'&&e!=='close')warning.value=e.message}finally{disconnecting.value=''}}

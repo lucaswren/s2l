@@ -98,8 +98,8 @@ func TestGenerateConfig(t *testing.T) {
 	}
 	route := cfg["route"].(map[string]any)
 	rules, _ := route["rules"].([]any)
-	if len(rules) != 4 {
-		t.Fatalf("expected early DNS, rejection, sniffing and protocol DNS rules, got %v", rules)
+	if len(rules) != 2 {
+		t.Fatalf("expected port DNS interception and early rejection only, got %v", rules)
 	}
 	if rules[0].(map[string]any)["action"] != "hijack-dns" || rules[0].(map[string]any)["port"] != float64(53) {
 		t.Fatal("DNS interception must precede UDP rejection")
@@ -108,11 +108,14 @@ func TestGenerateConfig(t *testing.T) {
 	if quic["network"] != "udp" || quic["port"] != nil || quic["action"] != "reject" || quic["method"] != "default" || quic["no_drop"] != true {
 		t.Fatalf("Non-DNS UDP must fail promptly: %v", quic)
 	}
-	if rules[2].(map[string]any)["action"] != "sniff" {
-		t.Fatal("sniffing must follow early rejection")
+	for _, value := range rules {
+		rule := value.(map[string]any)
+		if rule["action"] == "sniff" || rule["protocol"] != nil {
+			t.Fatal("unnecessary protocol inspection enabled")
+		}
 	}
-	if rules[3].(map[string]any)["protocol"] != "dns" || rules[3].(map[string]any)["action"] != "hijack-dns" {
-		t.Fatal("nonstandard-port DNS must remain intercepted after sniffing")
+	if cfg["log"].(map[string]any)["level"] != "warn" {
+		t.Fatal("verbose process logging enabled")
 	}
 
 	if !strings.Contains(ConfigPath("tun101"), "s2l-tun101.json") {
@@ -155,7 +158,7 @@ func TestRuntimeDNSAndMappingOptions(t *testing.T) {
 		}
 		rules := cfg["route"].(map[string]any)["rules"].([]any)
 		if policy == "allow" {
-			if len(rules) != 3 {
+			if len(rules) != 1 {
 				t.Fatal("allow policy still rejects UDP")
 			}
 		} else {

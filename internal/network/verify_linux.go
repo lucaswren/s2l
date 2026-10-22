@@ -5,9 +5,11 @@ package network
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,10 @@ func (c *Controller) VerifyContext(ctx context.Context, m model.TunnelMapping) e
 		return err
 	}
 	defer c.mu.Unlock()
+	return c.verifyContext(ctx, m)
+}
+
+func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) error {
 	run := func(name string, args ...string) error { return runContext(ctx, name, args...) }
 	output := func(name string, args ...string) (string, error) { return outputContext(ctx, name, args...) }
 	if err := validateMapping(m); err != nil {
@@ -63,12 +69,12 @@ func (c *Controller) VerifyContext(ctx context.Context, m model.TunnelMapping) e
 	}
 	for _, args := range checks {
 		if err := run("iptables", args...); err != nil {
-			return fmt.Errorf("forwarding rule missing: %w", err)
+			return missingFirewall(err, "iptables", args)
 		}
 	}
 	for _, chain := range []string{"INPUT", "FORWARD"} {
 		if err := run("ip6tables", "-C", chain, "-i", "ppp+", "-j", "DROP"); err != nil {
-			return err
+			return missingFirewall(err, "ip6tables", []string{"-C", chain, "-i", "ppp+", "-j", "DROP"})
 		}
 	}
 	enabled, err := os.ReadFile("/proc/sys/net/ipv4/ip_forward")
@@ -76,7 +82,7 @@ func (c *Controller) VerifyContext(ctx context.Context, m model.TunnelMapping) e
 		return err
 	}
 	if strings.TrimSpace(string(enabled)) != "1" {
-		return fmt.Errorf("IPv4 forwarding disabled")
+		return missingState("IPv4 forwarding disabled", "sysctl", "-w", "net.ipv4.ip_forward=1")
 	}
 	return verifyBandwidth(ctx, m)
 }
@@ -101,9 +107,7 @@ func verifyRouteJSON(m model.TunnelMapping, rules, routes []byte) error {
 			found = true
 		}
 	}
-	if !found {
-		return fmt.Errorf("policy rule missing")
-	}
+
 	var routeList []struct {
 		Dst    string `json:"dst"`
 		Dev    string `json:"dev"`
@@ -124,8 +128,14 @@ func verifyRouteJSON(m model.TunnelMapping, rules, routes []byte) error {
 			}
 		}
 	}
-	if !live || !guard {
-		return fmt.Errorf("TUN route or unreachable fallback missing")
+	if !guard {
+		return missingState("unreachable fallback missing", "ip", "route", "replace", "unreachable", "default", "table", strconv.Itoa(m.TableID), "metric", "32767")
+	}
+	if !found {
+		return missingState("policy rule missing", "ip", "rule", "add", "from", m.Subnet, "table", strconv.Itoa(m.TableID), "priority", strconv.Itoa(10000+m.TableID))
+	}
+	if !live {
+		return missingState("TUN route missing", "ip", "route", "replace", "default", "dev", m.TunName, "table", strconv.Itoa(m.TableID), "metric", "100")
 	}
 	return nil
 }
@@ -136,4 +146,88 @@ func canonicalSubnet(value string) string {
 		return value
 	}
 	return n.String()
+}
+
+func missingFirewall(err error, command string, args []string) error {
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		return err
+	}
+	text := strings.ToLower(err.Error())
+	if !strings.Contains(text, "bad rule") && !strings.Contains(text, "does a matching rule exist") && !strings.Contains(text, "no chain/target/match") {
+		return err
+	}
+	return missingState("forwarding rule missing: "+err.Error(), command, args...)
+}
+
+// RepairContext rechecks under lock and repairs missing components in place.
+// Healthy routes, rules, processes and fixed upstreams are never rebuilt.
+func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) error {
+	if err := lockutil.Lock(ctx, &c.mu); err != nil {
+		return err
+	}
+	defer c.mu.Unlock()
+	for attempts := 0; attempts < 24; attempts++ {
+		err := c.verifyContext(ctx, m)
+		if err == nil {
+			return nil
+		}
+		var missing *MissingState
+		if !errors.As(err, &missing) {
+			return err
+		}
+		switch missing.command {
+		case "iptables", "ip6tables":
+			args := append([]string(nil), missing.args...)
+			check := 0
+			for i, arg := range args {
+				if arg == "-C" {
+					check = i
+					break
+				}
+			}
+			chain := args[check+1]
+			if chain == "S2L_FORWARD" && strings.Contains(strings.Join(args, " "), "-j ACCEPT") {
+				snapshot, e := outputContext(ctx, "iptables", "-S", "S2L_FORWARD")
+				if e != nil {
+					return e
+				}
+				position, terminal := 0, false
+				for _, line := range strings.Split(snapshot, "\n") {
+					if strings.HasPrefix(line, "-A S2L_FORWARD ") {
+						position++
+						if strings.TrimSpace(line) == "-A S2L_FORWARD -j DROP" {
+							terminal = true
+							break
+						}
+					}
+				}
+				if !terminal {
+					return fmt.Errorf("terminal guard unavailable")
+				}
+				args[check] = "-I"
+				args = append(args[:check+2], append([]string{strconv.Itoa(position)}, args[check+2:]...)...)
+			} else if strings.Contains(strings.Join(args, " "), "S2L_FORWARD") && (chain == "FORWARD" || (chain == "S2L_FORWARD" && len(args) == 4)) {
+				if e := ensureGuard(c.management); e != nil {
+					return e
+				}
+				continue
+			} else {
+				args[check] = "-I"
+				args = append(args[:check+2], append([]string{"1"}, args[check+2:]...)...)
+			}
+			if e := runContext(ctx, missing.command, args...); e != nil {
+				return e
+			}
+		case "bandwidth":
+			if e := applyBandwidth(m); e != nil {
+				return e
+			}
+		default:
+			if e := runContext(ctx, missing.command, missing.args...); e != nil {
+				return e
+			}
+		}
+	}
+	return fmt.Errorf("forwarding repair exceeded component limit")
 }

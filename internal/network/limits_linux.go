@@ -84,18 +84,18 @@ func verifyBandwidth(ctx context.Context, m model.TunnelMapping) error {
 		}
 	}
 	if !uploadOK {
-		return fmt.Errorf("upload limiter missing or rate changed")
+		return missingState("upload limiter missing or rate changed", "bandwidth")
 	}
 	if m.DownloadKbps > 0 {
 		if !ingress {
-			return fmt.Errorf("download limiter missing")
+			return missingState("download limiter missing", "bandwidth")
 		}
 		f, e := outputContext(ctx, "tc", "filter", "show", "dev", m.TunName, "parent", "ffff:", "pref", "10")
 		if e != nil {
 			return e
 		}
 		if !validPolicer(f, m.DownloadKbps) {
-			return fmt.Errorf("download limiter missing or rate changed")
+			return missingState("download limiter missing or rate changed", "bandwidth")
 		}
 	}
 	return nil

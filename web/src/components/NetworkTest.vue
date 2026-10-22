@@ -8,6 +8,8 @@ import { mtrHops } from '../utils/mtr';
 import {protocolSummary} from '../utils/health';
 const props = defineProps({ node: Object });
 const emit = defineEmits(['close', 'changed']);
+const mappingID=ref(''),compareMappingID=ref(''),mappings=ref([]);
+api.listMappings().then(rows=>{if(!disposed)mappings.value=rows;}).catch(()=>{});
 const compareNode=ref(''), nodes=ref([]), nodeError=ref('');
 api.listNodes().then(rows=>{if(!disposed)nodes.value=rows;}).catch(()=>{if(!disposed)nodeError.value=tr("无法加载对照节点，可先检测当前节点");});
 const kind = ref('protocols'), mtrProtocol = ref('tcp');
@@ -25,6 +27,7 @@ const rows = computed(() => Object.entries(result.value?.protocols || {}).map(([
 const hops = computed(() => mtrHops(result.value?.output));
 const summary = computed(() => result.value?.kind==='google' && !busy.value ? tr("专项检测完成 · 请查看各阶段结果") : stopped.value ? tr("测试已停止 · 保留部分结果") : busy.value ? tr("检测中 · {0} 秒", elapsed.value) : result.value?.kind === 'mtr' && result.value.ok ? (result.value.reached ? tr("追踪完成 · 目标已响应") : tr("追踪完成 · 目标未响应")) : result.value?.kind === 'https' && result.value?.protocols?.tcp?.state === 'restricted' ? tr("目标已响应 · 状态异常") : result.value?.ok ? (result.value.capability_warning ? tr("TCP / DNS 正常 · UDP 能力受限") : tr("检测通过")) : tr("检测完成 · 存在异常"));
 let controller, timer, disposed = false;
+watch(compareNode,()=>{compareMappingID.value=''});
 watch([kind,mtrProtocol], () => { if (!busy.value) { result.value=null;error.value='';stopped.value=false; } });
 onBeforeUnmount(() => { disposed=true;controller?.abort();clearInterval(timer);mobileQuery.removeEventListener('change',resized); });
 async function run() {
@@ -33,7 +36,7 @@ async function run() {
  controller=new AbortController();
  const started=Date.now();timer=setInterval(() => {elapsed.value=Math.floor((Date.now()-started)/1000);},1000);
  try {
-  const body={kind:kind.value,target:target.value.trim(),mtr_protocol:mtrProtocol.value,compare_node:kind.value==='google'?compareNode.value:undefined};
+  const body={kind:kind.value,target:target.value.trim(),mtr_protocol:mtrProtocol.value,compare_node:kind.value==='google'?compareNode.value:undefined,mapping_id:kind.value==='google'?mappingID.value:undefined,compare_mapping_id:kind.value==='google'?compareMappingID.value:undefined};
   if (kind.value === 'mtr') {
    result.value={kind:'mtr',output:''};
    result.value=await api.streamNetworkTest(props.node.id,body,controller.signal,event => {
@@ -57,7 +60,7 @@ function download() {
   <div class="network-test-node"><strong>{{ node.name }}</strong><span>{{ node.addr }}</span></div>
   <div class="network-test-modes"><label for="network-test-kind">{{ tr("检测类型") }}</label><el-select id="network-test-kind" v-model="kind" :disabled="busy"><el-option v-for="mode in modes" :key="mode.value" :value="mode.value" :label="mode.label" /></el-select></div>
   <div v-if="kind === 'tcping' || kind === 'https' || kind === 'quality'" class="network-test-options"><label for="network-test-target">{{ tr("目标地址") }}</label><el-input id="network-test-target" v-model="target" :disabled="busy" :placeholder='tr("host:port，例如 www.example.com:443")' @keyup.enter="run" /></div>
-  <div v-if="kind === 'google'" class="network-test-options"><label>{{ tr("对照线路节点（可选）") }}</label><el-select v-model="compareNode" clearable :disabled="busy" :placeholder='tr("仅检测当前节点")'><el-option v-for="n in nodes.filter(n=>n.id!==node.id)" :key="n.id" :value="n.id" :label="n.name" /></el-select><p v-if="nodeError">{{nodeError}}</p><p class="network-test-hint">{{ tr("分别经所选节点检测，不切换出口。") }}</p></div>
+  <div v-if="kind === 'google'" class="network-test-options"><label>{{ tr("对照线路节点（可选）") }}</label><el-select v-model="compareNode" clearable :disabled="busy" :placeholder='tr("仅检测当前节点")'><el-option v-for="n in nodes.filter(n=>n.id!==node.id)" :key="n.id" :value="n.id" :label="n.name" /></el-select><label>{{tr("检测映射")}}</label><el-select v-model="mappingID" clearable :disabled="busy" :placeholder='tr("自动选择一条映射")'><el-option v-for="m in mappings.filter(m=>m.node_id===node.id)" :key="m.id" :value="m.id" :label="m.tun_name"/></el-select><template v-if="compareNode"><label>{{tr("对照映射")}}</label><el-select v-model="compareMappingID" clearable :disabled="busy" :placeholder='tr("自动选择一条映射")'><el-option v-for="m in mappings.filter(m=>m.node_id===compareNode)" :key="m.id" :value="m.id" :label="m.tun_name"/></el-select></template><p v-if="nodeError">{{nodeError}}</p><p class="network-test-hint">{{ tr("分别经所选节点检测，不切换出口。") }}</p></div>
   <div v-if="kind === 'mtr'" class="network-test-options"><label>{{ tr("探测方式") }}</label><el-radio-group v-model="mtrProtocol" :disabled="busy"><el-radio-button value="tcp">{{ tr("TCP · 节点端口") }}</el-radio-button><el-radio-button value="icmp">ICMP</el-radio-button></el-radio-group></div>
   <p class="network-test-hint">{{ kind === 'google' ? tr("分项检查 DNS、TCP/TLS 与 HTTP。") : kind === 'quality' ? tr("经固定 SOCKS5 交替请求 1 KB 和 256 KB 响应，默认 8 次。") : kind === 'https' ? tr("经 SOCKS5 检测指定目标的 TLS 与 HTTP 响应，不影响自动健康判断。") : kind === 'tcping' ? tr("经 SOCKS5 节点测试 TCP 建连。") : kind === 'protocols' ? tr("经 SOCKS5 节点检测 TCP、UDP 和 DNS。") : tr("测试 S2L 服务器到节点的网络路径。") }}</p>
   <div v-if="result?.quality" class="quality-results"><p>{{ tr("成功") }} {{result.quality.successes}} / {{result.quality.samples.length}} {{ tr("· 中位数") }} {{Math.round(result.quality.median_ms)}} ms · P95 {{Math.round(result.quality.p95_ms)}} ms</p><article v-for="(sample,i) in result.quality.samples" :key="i"><strong>{{i+1}} · {{sample.requested/1024}} {{ tr("KB 请求") }}</strong><p>{{ tr("首字节") }} {{Math.round(sample.first_byte_ms)}} {{ tr("ms · 总耗时") }} {{Math.round(sample.duration_ms)}} {{ tr("ms · 收到") }} {{sample.received}} B</p><p>{{sample.error || (sample.bounded?tr("达到读取上限"):sample.complete?tr("响应完整"):tr("响应未完成"))}} · HTTP {{sample.status}}</p></article><p class="muted">{{result.quality.scope}}</p></div>

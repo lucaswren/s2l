@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 now=datetime.now(timezone.utc).isoformat()
 node={"id":"n","name":"固定出口 A","addr":"192.0.2.5:1080"}
-mapping={"id":"m","node_id":"n","tun_name":"tun101","table_id":101,"subnet":"10.0.101.0/24","l2tp_user":"account-a","status":"running","udp_policy":"reject","dns_mode":"auto"}
+mapping={"observe_connections":True,"id":"m","node_id":"n","tun_name":"tun101","table_id":101,"subnet":"10.0.101.0/24","l2tp_user":"account-a","status":"running","udp_policy":"reject","dns_mode":"auto"}
 healthy={"state":"healthy","method":"https","checked_at":now,"duration_ms":123,"stage":"http","status_code":204}
 status={"mappings":[mapping],"sessions":[{"interface":"ppp0","index":5,"mapping_id":"m","peer_ip":"10.0.101.2","mtu":1400,"first_seen":now,"rx_bytes":524288,"tx_bytes":125000,"dropped":0,"errors":0}],"upstream_health":{"m":{"state":"healthy","tun_name":"tun101","udp_policy":"reject","local_state":"healthy","checked_at":now,"tcp":healthy,"dns":dict(healthy,method="doh"),"udp":dict(healthy,state="unsupported",method="udp-associate"),"resolver":{"active":"doh"}}},"singbox_pids":{"tun101":100},"tun_traffic":[{"tun_name":"tun101","rx_bytes":10240,"tx_bytes":20480}]}
 class Handler(SimpleHTTPRequestHandler):

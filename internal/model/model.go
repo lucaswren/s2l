@@ -21,25 +21,26 @@ type SocksNode struct {
 
 // TunnelMapping 一条「SOCKS5 → TUN → 路由表 → L2TP」完整映射
 type TunnelMapping struct {
-	Group          string `json:"group,omitempty"`
-	UploadKbps     int    `json:"upload_kbps,omitempty"`
-	DownloadKbps   int    `json:"download_kbps,omitempty"`
-	MaxSessions    int    `json:"max_sessions,omitempty"`
-	MaxConnections int    `json:"max_connections,omitempty"`
-	ID             string `json:"id"`
-	NodeID         string `json:"node_id"`
-	TunName        string `json:"tun_name"`  // 如 tun101
-	TableID        int    `json:"table_id"`  // 如 101
-	Subnet         string `json:"subnet"`    // L2TP 专属子网，如 10.0.101.0/24
-	L2TPUser       string `json:"l2tp_user"` // L2TP 拨号账号
-	L2TPPass       string `json:"l2tp_pass"` // L2TP 拨号密码
-	Status         string `json:"status"`    // running / stopped / error
-	ErrorMsg       string `json:"error_msg,omitempty"`
-	MTU            int    `json:"mtu,omitempty"`
-	MSS            int    `json:"mss,omitempty"`
-	QueueLength    int    `json:"queue_length,omitempty"`
-	UDPPolicy      string `json:"udp_policy,omitempty"` // reject (default) | allow | reject-quic
-	DNSMode        string `json:"dns_mode,omitempty"`   // auto (default) | doh | tcp
+	ObserveConnections bool   `json:"observe_connections,omitempty"`
+	Group              string `json:"group,omitempty"`
+	UploadKbps         int    `json:"upload_kbps,omitempty"`
+	DownloadKbps       int    `json:"download_kbps,omitempty"`
+	MaxSessions        int    `json:"max_sessions,omitempty"`
+	MaxConnections     int    `json:"max_connections,omitempty"`
+	ID                 string `json:"id"`
+	NodeID             string `json:"node_id"`
+	TunName            string `json:"tun_name"`  // 如 tun101
+	TableID            int    `json:"table_id"`  // 如 101
+	Subnet             string `json:"subnet"`    // L2TP 专属子网，如 10.0.101.0/24
+	L2TPUser           string `json:"l2tp_user"` // L2TP 拨号账号
+	L2TPPass           string `json:"l2tp_pass"` // L2TP 拨号密码
+	Status             string `json:"status"`    // running / stopped / error
+	ErrorMsg           string `json:"error_msg,omitempty"`
+	MTU                int    `json:"mtu,omitempty"`
+	MSS                int    `json:"mss,omitempty"`
+	QueueLength        int    `json:"queue_length,omitempty"`
+	UDPPolicy          string `json:"udp_policy,omitempty"` // reject (default) | allow | reject-quic
+	DNSMode            string `json:"dns_mode,omitempty"`   // auto (default) | doh | tcp
 }
 
 func (m TunnelMapping) EffectiveMTU() int {

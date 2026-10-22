@@ -49,8 +49,10 @@ func ensureGuard(options ...model.ManagementAccess) error {
 
 func ensureRule(bin, operation string, args ...string) error {
 	check := append([]string{"-C"}, args...)
-	if run(bin, check...) == nil {
+	if err := run(bin, check...); err == nil {
 		return nil
+	} else if !IsMissingState(missingFirewall(err, bin, check)) {
+		return err
 	}
 	return run(bin, append([]string{operation}, args...)...)
 }

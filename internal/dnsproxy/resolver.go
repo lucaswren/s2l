@@ -26,6 +26,7 @@ type Resolver struct {
 	probing             bool
 	exchange            func(context.Context, string, []byte) ([]byte, error)
 	transport           *http.Transport
+	tcp                 *tcpPool
 	ctx                 context.Context
 	cancel              context.CancelFunc
 	closed              bool
@@ -45,11 +46,14 @@ func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolve
 	if mode == "tcp" {
 		r.status.Active = "tcp"
 	}
-	r.transport = &http.Transport{Proxy: nil, MaxIdleConns: 4, MaxIdleConnsPerHost: 4, IdleConnTimeout: 30 * time.Second, MaxResponseHeaderBytes: 64 * 1024,
+	r.transport = &http.Transport{Proxy: nil, ForceAttemptHTTP2: true, MaxConnsPerHost: 8, MaxIdleConns: 4, MaxIdleConnsPerHost: 4, IdleConnTimeout: 30 * time.Second, MaxResponseHeaderBytes: 64 * 1024,
 		TLSHandshakeTimeout: 3 * time.Second, ResponseHeaderTimeout: 3 * time.Second,
 		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
 			return speedtest.DialSOCKS5(ctx, node.Addr, node.Username, node.Password, addr)
 		}}
+	r.tcp = &tcpPool{slots: make(chan struct{}, 4), dial: func(ctx context.Context) (net.Conn, error) {
+		return speedtest.DialSOCKS5(ctx, node.Addr, node.Username, node.Password, tcpAddress)
+	}}
 	r.exchange = func(ctx context.Context, method string, query []byte) ([]byte, error) {
 		if method == "doh" {
 			req, err := http.NewRequestWithContext(ctx, "POST", dohURL, bytes.NewReader(query))
@@ -74,29 +78,7 @@ func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolve
 			}
 			return body, err
 		}
-		conn, err := speedtest.DialSOCKS5(ctx, node.Addr, node.Username, node.Password, tcpAddress)
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Close()
-		stop := context.AfterFunc(ctx, func() { conn.Close() })
-		defer stop()
-		if deadline, ok := ctx.Deadline(); ok {
-			conn.SetDeadline(deadline)
-		}
-		frame := make([]byte, len(query)+2)
-		binary.BigEndian.PutUint16(frame, uint16(len(query)))
-		copy(frame[2:], query)
-		if _, err = io.Copy(conn, bytes.NewReader(frame)); err != nil {
-			return nil, err
-		}
-		var size [2]byte
-		if _, err = io.ReadFull(conn, size[:]); err != nil {
-			return nil, err
-		}
-		body := make([]byte, binary.BigEndian.Uint16(size[:]))
-		_, err = io.ReadFull(conn, body)
-		return body, err
+		return r.tcp.query(ctx, query)
 	}
 	return r
 }
@@ -108,6 +90,9 @@ func (r *Resolver) Close() {
 	r.cancel()
 	r.mu.Unlock()
 	r.wg.Wait()
+	if r.tcp != nil {
+		r.tcp.close()
+	}
 	if r.transport != nil {
 		r.transport.CloseIdleConnections()
 	}

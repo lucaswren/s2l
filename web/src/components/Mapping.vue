@@ -71,7 +71,7 @@ const form = reactive({
   subnet: "10.0.101.0/24",
   l2tp_user: "",
   l2tp_pass: "",
-  group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
 });
 const importText = ref("");
 const importErrors = ref([]);
@@ -122,7 +122,7 @@ function resetForm() {
     subnet: `10.0.${id % 256}.0/24`,
     l2tp_user: `l2tp${id}`,
     l2tp_pass: "",
-  group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:0,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
   });
 }
 
@@ -144,7 +144,7 @@ async function openEdit(m) {
   }
   editingId.value = m.id;editRevision.value=m._revision||"";
   Object.assign(form, {
-    node_id: m.node_id,group:m.group||"",upload_kbps:m.upload_kbps||0,download_kbps:m.download_kbps||0,max_connections:m.max_connections||0,max_sessions:m.max_sessions||0,
+    observe_connections:!!m.observe_connections,node_id: m.node_id,group:m.group||"",upload_kbps:m.upload_kbps||0,download_kbps:m.download_kbps||0,max_connections:m.max_connections||0,max_sessions:m.max_sessions||0,
     tun_name: m.tun_name,
     table_id: m.table_id,
     subnet: m.subnet,
@@ -176,7 +176,7 @@ async function save() {
     };
     if (editingId.value) body.id = editingId.value;
     const preview=await api.previewMapping(body,editRevision.value);
-    const labels={get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); },get max_connections() { return tr("连接上限"); },get max_sessions() { return tr("PPP 会话上限"); }};
+    const labels={get observe_connections(){return tr("连接观测")},get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); },get max_connections() { return tr("连接上限"); },get max_sessions() { return tr("PPP 会话上限"); }};
     await ElMessageBox.confirm(tr("变更：{0}。影响 {1} 条映射。{2}", preview.fields.map(f=>labels[f]||f).join('、')||tr("无"), preview.affected.length, preview.message),tr("保存配置"),{get confirmButtonText() { return tr("保存"); },get cancelButtonText() { return tr("返回编辑"); }});
     await api.saveMapping(body,editRevision.value);
     emit("toast", {
@@ -459,7 +459,7 @@ const editingActive = computed(() => {
  <el-form-item :label='tr("上传上限 Kbit/s")'><el-input-number v-model="form.upload_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
  <el-form-item :label='tr("下载上限 Kbit/s")'><el-input-number v-model="form.download_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
  <el-form-item :label='tr("PPP 会话上限")'><el-input-number v-model="form.max_sessions" :min="0" :max="128" :disabled="editingActive"/></el-form-item>
- <el-form-item :label='tr("TCP 连接上限")'><el-input-number v-model="form.max_connections" :min="0" :max="1000000" :disabled="editingActive"/></el-form-item>
+ <el-form-item :label='tr("连接观测")'><el-switch v-model="form.observe_connections" :disabled="editingActive"/></el-form-item><el-form-item :label='tr("TCP 连接上限")'><el-input-number v-model="form.max_connections" :min="0" :max="1000000" :disabled="editingActive"/></el-form-item>
  <p class="muted form-wide">{{ tr("0 表示不限；限额按整条映射合计。下载超额采用丢弃控制速率，非平滑整形。") }}</p>
  <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingActive" /></el-form-item>
           <el-form-item label="TCP MSS"><el-input-number v-model="form.mss" :min="536" :max="form.mtu - 40" :disabled="editingActive" /></el-form-item>

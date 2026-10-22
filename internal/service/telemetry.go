@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/lucaswren/s2l/internal/debuglog"
@@ -10,6 +11,21 @@ import (
 )
 
 func (s *MappingService) runTelemetry(ctx context.Context) {
+	var delivery sync.WaitGroup
+	wake := make(chan struct{}, 1)
+	delivery.Add(1)
+	go func() {
+		defer delivery.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wake:
+				s.operations.Deliver(ctx)
+			}
+		}
+	}()
+	defer delivery.Wait()
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	defer s.operations.Flush()
@@ -26,7 +42,10 @@ func (s *MappingService) runTelemetry(ctx context.Context) {
 		now := time.Now()
 		s.operations.Observe(status, now)
 		_ = s.operations.Flush()
-		s.operations.Deliver(ctx)
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
 		if s.history != nil {
 			s.history.Record(status, now)
 		}

@@ -32,6 +32,17 @@ func (m *Manager) ResolveDNS(ctx context.Context, name string, query []byte) ([]
 	return p.resolver.Query(ctx, query)
 }
 
+func (m *Manager) DNSProbe(name string) (func(context.Context, []byte) ([]byte, error), func() bool, error) {
+	m.mu.Lock()
+	p := m.procs[name]
+	m.mu.Unlock()
+	if p == nil || p.resolver == nil || !p.running() {
+		return nil, nil, fmt.Errorf("mapping DNS resolver is not running")
+	}
+	valid := func() bool { m.mu.Lock(); defer m.mu.Unlock(); return m.procs[name] == p && p.running() }
+	return p.resolver.Query, valid, nil
+}
+
 type managedProc struct {
 	apiAddress string
 	apiSecret  string
@@ -39,7 +50,7 @@ type managedProc struct {
 	pid        int
 	done       chan struct{}
 	resolver   *dnsproxy.Server
-	log        *rotatingLog
+	log        *processLog
 	exits      uint64
 }
 
@@ -84,7 +95,10 @@ func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error
 	if err != nil {
 		return err
 	}
-	apiAddress, apiSecret, err := prepareAPI(cfgPath)
+	var apiAddress, apiSecret string
+	if mapping.ObserveConnections {
+		apiAddress, apiSecret, err = prepareAPI(cfgPath)
+	}
 	if err != nil {
 		_ = RemoveConfig(mapping.TunName)
 		return err
@@ -286,6 +300,9 @@ func (m *Manager) Connections(ctx context.Context, name string) (Connections, er
 	if p == nil || !p.running() {
 		return Connections{}, fmt.Errorf("映射进程未运行")
 	}
+	if p.apiAddress == "" {
+		return Connections{}, fmt.Errorf("connection observation is disabled")
+	}
 	return readConnections(ctx, p.apiAddress, p.apiSecret)
 }
 func (m *Manager) CloseConnection(ctx context.Context, name, id string) error {
@@ -300,6 +317,9 @@ func (m *Manager) CloseConnection(ctx context.Context, name, id string) error {
 	m.mu.Unlock()
 	if p == nil || !p.running() {
 		return fmt.Errorf("映射进程未运行")
+	}
+	if p.apiAddress == "" {
+		return fmt.Errorf("connection observation is disabled")
 	}
 	return closeConnection(ctx, p.apiAddress, p.apiSecret, id)
 }

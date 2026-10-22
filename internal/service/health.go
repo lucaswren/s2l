@@ -20,6 +20,8 @@ type healthRecord struct {
 	next                time.Time
 	localNext           time.Time
 	forwardingNext      time.Time
+	repairFailures      int
+	forwardingError     string
 	startupPending      bool
 	generation          uint64
 	recoveryFailures    int
@@ -60,7 +62,11 @@ func (h *healthRecord) observe(err error, now time.Time) {
 				h.OutageSince = time.Time{}
 			}
 		}
-		h.next = now.Add(time.Duration(9500+rand.Intn(1001)) * time.Millisecond)
+		if h.successes < 2 {
+			h.next = now.Add(5 * time.Second)
+		} else {
+			h.next = now.Add(time.Duration(45000+rand.Intn(10001)) * time.Millisecond)
+		}
 	}
 	h.baseState = h.State
 }
@@ -169,7 +175,16 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		return
 	}
 	s.mu.Unlock()
-	alive := s.singbox.IsRunning(m.TunName) && network.WaitInterface(m.TunName, 100*time.Millisecond) == nil
+	present, inspectErr := network.InterfacePresent(m.TunName)
+	if inspectErr != nil && s.singbox.IsRunning(m.TunName) {
+		s.mu.Lock()
+		h.LocalCheckedAt = time.Now()
+		h.LocalState = "unstable"
+		h.RecoveryError = "Interface inspection unavailable"
+		s.mu.Unlock()
+		return
+	}
+	alive := s.singbox.IsRunning(m.TunName) && present
 	now := time.Now()
 	if h.startupPending {
 		s.retryStartup(m, h)
@@ -183,22 +198,40 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		} else {
 			err = network.TunePeerSnapshot(m, peers)
 		}
+		s.mu.Lock()
 		verifyDue := !now.Before(h.forwardingNext)
+		s.mu.Unlock()
 		repairAttempted, repairSucceeded := false, false
 		if verifyDue {
 			ruleErr := s.net.VerifyContext(ctx, m)
-			if ruleErr != nil && ctx.Err() == nil {
+			if network.IsMissingState(ruleErr) && ctx.Err() == nil {
 				repairAttempted = true
 				debuglog.Default.Printf("mapping %s forwarding rules missing; repairing: %v", m.ID, ruleErr)
-				ruleErr = s.net.Setup(m)
+				ruleErr = s.net.RepairContext(ctx, m)
 				if ruleErr == nil {
 					ruleErr = s.net.VerifyContext(ctx, m)
 					repairSucceeded = ruleErr == nil
 				}
 			}
+			s.mu.Lock()
+			if ruleErr != nil {
+				h.repairFailures++
+				h.forwardingNext = now.Add(retryDelay(h.repairFailures))
+			} else {
+				h.repairFailures = 0
+				h.forwardingNext = now.Add(30 * time.Second)
+			}
+			h.forwardingError = ""
+			if ruleErr != nil {
+				h.forwardingError = ruleErr.Error()
+			}
+			s.mu.Unlock()
 			err = errors.Join(err, ruleErr)
 		}
 		s.mu.Lock()
+		if !verifyDue && h.forwardingError != "" {
+			err = errors.Join(err, errors.New(h.forwardingError))
+		}
 		if repairAttempted {
 			h.RepairAttempts++
 		}
@@ -303,7 +336,7 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 		return
 	}
 	generation := h.generation
-	probeUDP := h.udpProbeDue(time.Now())
+	probeUDP := m.EffectiveUDPPolicy() != "reject" && h.udpProbeDue(time.Now())
 	s.mu.Unlock()
 	report := speedtest.HealthReport{}
 	var legs sync.WaitGroup
@@ -418,6 +451,9 @@ func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time)
 	}
 	h.TCP = h.tcp.ProtocolHealth
 	h.UDP = h.udp.ProtocolHealth
+	if h.UDPPolicy == "reject" && h.UDP.CheckedAt.IsZero() {
+		h.UDP = model.ProtocolHealth{State: "blocked", Method: "policy-reject"}
+	}
 	h.DNS = h.dns.ProtocolHealth
 	if h.State == "healthy" && ((h.UDPPolicy != "reject" && h.UDPPolicy != "" && h.UDP.State != "healthy") || h.DNS.State != "healthy" || h.TCP.State == "restricted") {
 		h.State = "degraded"
@@ -449,6 +485,9 @@ func (h *healthRecord) invalidateProtocols() {
 	h.dns = protocolRecord{ProtocolHealth: model.ProtocolHealth{State: "checking"}}
 	h.TCP = h.tcp.ProtocolHealth
 	h.UDP = h.udp.ProtocolHealth
+	if h.UDPPolicy == "reject" && h.UDP.CheckedAt.IsZero() {
+		h.UDP = model.ProtocolHealth{State: "blocked", Method: "policy-reject"}
+	}
 	h.DNS = h.dns.ProtocolHealth
 }
 
