@@ -86,8 +86,8 @@ def main():
             guest('cloud-init status --wait', timeout=180)
             source_archive = root / 'source.tgz'
             with tarfile.open(source_archive, 'w:gz') as bundle:
-                for name in ('cmd', 'internal', 'deploy', 'script', 'web/dist', 'go.mod'):
-                    bundle.add(repository / name, arcname=name, filter=lambda entry: None if '__pycache__' in entry.name else entry)
+                for name in ('cmd', 'internal', 'deploy', 'script', 'web', 'go.mod'):
+                    bundle.add(repository / name, arcname=name, filter=lambda entry: None if any(part in entry.name.split('/') for part in ('__pycache__', 'node_modules', '.git')) else entry)
             toolchain = Path(subprocess.check_output(['go', 'env', 'GOROOT'], text=True).strip())
             go_archive = root / 'go.tgz'
             with tarfile.open(go_archive, 'w:gz', compresslevel=1) as bundle:
