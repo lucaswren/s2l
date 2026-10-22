@@ -123,8 +123,8 @@ def main():
             print(result.stdout[-5000:], flush=True)
             print('PASS crash recovery and full fresh installation', flush=True)
             guest('rm /usr/local/bin/systemctl; systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; test ! -e /var/lib/s2l-install/journal.json')
-            guest('cd /opt/src/s2l; /usr/local/go/bin/go test -c -o /tmp/s2l-fresh.test ./internal/service', timeout=300)
-            dial = 'S2L_FRESH_VM_TEST=1 /tmp/s2l-fresh.test -test.run ^TestFreshInstalledServiceDial$ -test.v -test.timeout 240s'
+            guest('cd /opt/src/s2l; /usr/local/go/bin/go test -c -o /opt/src/s2l/bin/s2l-fresh.test ./internal/service', timeout=300)
+            dial = 'S2L_FRESH_VM_TEST=1 /opt/src/s2l/bin/s2l-fresh.test -test.run ^TestFreshInstalledServiceDial$ -test.v -test.timeout 240s'
             result = guest(dial, timeout=270)
             print(result.stdout, flush=True)
             original = guest('sha256sum /opt/s2l/config.json').stdout
