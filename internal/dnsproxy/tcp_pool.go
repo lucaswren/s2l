@@ -45,7 +45,7 @@ func (p *tcpPool) query(ctx context.Context, q []byte) ([]byte, error) {
 			return nil, fmt.Errorf("DNS pool closed")
 		}
 		var c net.Conn
-		if n := len(p.idle); n > 0 {
+		if n := len(p.idle); n > 0 && attempt == 0 {
 			c = p.idle[n-1]
 			p.idle = p.idle[:n-1]
 		}

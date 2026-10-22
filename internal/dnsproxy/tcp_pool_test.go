@@ -73,3 +73,42 @@ func TestTCPPoolCancellationReleasesCapacity(t *testing.T) {
 		t.Fatal("leaked connection lease")
 	}
 }
+
+func TestTCPPoolRetriesFreshAfterMultipleExpiredIdleConnections(t *testing.T) {
+	p := &tcpPool{slots: make(chan struct{}, 4)}
+	defer p.close()
+	for i := 0; i < 4; i++ {
+		a, b := net.Pipe()
+		b.Close()
+		p.idle = append(p.idle, a)
+	}
+	var dials atomic.Int32
+	p.dial = func(context.Context) (net.Conn, error) {
+		dials.Add(1)
+		a, b := net.Pipe()
+		go func() {
+			defer b.Close()
+			var size [2]byte
+			if _, e := io.ReadFull(b, size[:]); e != nil {
+				return
+			}
+			q := make([]byte, binary.BigEndian.Uint16(size[:]))
+			if _, e := io.ReadFull(b, q); e != nil {
+				return
+			}
+			answer := answerA(q)
+			binary.BigEndian.PutUint16(size[:], uint16(len(answer)))
+			b.Write(append(size[:], answer...))
+		}()
+		return a, nil
+	}
+	q, _ := QueryA("example.com")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if _, e := p.query(ctx, q); e != nil {
+		t.Fatal("retry reused another expired socket", e)
+	}
+	if dials.Load() != 1 {
+		t.Fatal("retry did not use a fresh connection", dials.Load())
+	}
+}
