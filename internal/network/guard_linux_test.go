@@ -3,6 +3,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"github.com/lucaswren/s2l/internal/model"
 	"os"
@@ -94,13 +95,34 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	if controller.Verify(m) == nil {
 		t.Fatal("missing UDP rejection rule not detected")
 	}
-	must("iptables", append([]string{"-I", "S2L_FORWARD", "1"}, udpArgs...)...)
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("UDP repair", err)
+	}
 	must("iptables", mappingMSSDeleteArgs(m, "-i")...)
 	if controller.Verify(m) == nil {
 		t.Fatal("missing MSS rule not detected")
 	}
-	if err := addMappingTCPMSS(m); err != nil {
-		t.Fatal(err)
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("MSS repair", err)
+	}
+	must("ip", "link", "set", "dev", m.TunName, "down")
+	if err := controller.Verify(m); !IsMissingState(err) {
+		t.Fatal("TUN down was not confirmed", err)
+	}
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("TUN up repair", err)
+	}
+	must("iptables", "-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m))
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("allow repair", err)
+	}
+	ordered, e := output("iptables", "-S", "S2L_FORWARD")
+	if e != nil || strings.Index(ordered, "-j REJECT") > strings.Index(ordered, "-j ACCEPT") {
+		t.Fatal("repair bypassed UDP policy", ordered, e)
+	}
+	must("ip", "route", "del", "unreachable", "default", "table", strconv.Itoa(m.TableID), "metric", "32767")
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("fallback repair", err)
 	}
 	route, err := output("ip", "route", "get", "198.18.0.2", "from", "10.0.101.2", "iif", "ppp0")
 	if err != nil || !strings.Contains(route, "dev tun101") {

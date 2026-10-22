@@ -57,8 +57,12 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 	}()
 	var primaryWorks atomic.Bool
 	var dohQueries atomic.Int32
-	doh := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var dohHTTP2 atomic.Int32
+	doh := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dohQueries.Add(1)
+		if r.ProtoMajor == 2 {
+			dohHTTP2.Add(1)
+		}
 		if !primaryWorks.Load() {
 			w.WriteHeader(503)
 			return
@@ -67,6 +71,8 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 		w.Header().Set("Content-Type", "application/dns-message")
 		w.Write(answerA(q))
 	}))
+	doh.EnableHTTP2 = true
+	doh.StartTLS()
 	defer doh.Close()
 	proxy, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
@@ -172,7 +178,7 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 	mu.Lock()
 	tcpConnects, dohConnects := targets[tcpAddr], targets[dohAddr]
 	mu.Unlock()
-	if int(tcpQueries.Load()) != tcpConnects || tcpConnects < 4 || dohConnects < 1 || dohQueries.Load() < 4 {
+	if int(tcpQueries.Load()) != tcpConnects || tcpConnects < 4 || dohConnects < 1 || dohQueries.Load() < 4 || dohHTTP2.Load() < 4 {
 		t.Fatalf("DNS bypassed SOCKS: TCP queries=%d CONNECTs=%d DoH CONNECTs=%d", tcpQueries.Load(), tcpConnects, dohConnects)
 	}
 }

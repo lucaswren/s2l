@@ -56,11 +56,11 @@ func TestInterfaceInspectionIsReadOnly(t *testing.T) {
 func TestRepairRefusesUnknownInspectionWithoutMutations(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
-	m := model.TunnelMapping{TunName: "tun101", Subnet: "10.0.101.0/24", TableID: 101}
+	m := model.TunnelMapping{TunName: "lo", Subnet: "10.0.101.0/24", TableID: 101}
 	ip := `#!/bin/sh
 case "$*" in
  "-N -j rule show") echo '[{"src":"10.0.101.0/24","table":101,"priority":10101}]';;
- "-j route show table 101") echo '[{"dst":"default","dev":"tun101","metric":100},{"dst":"default","type":"unreachable","metric":32767}]';;
+ "-j route show table 101") echo '[{"dst":"default","dev":"lo","metric":100},{"dst":"default","type":"unreachable","metric":32767}]';;
  *) echo mutation >> "$S2L_REPAIR_TEST_LOG"; exit 99;;
 esac
 `

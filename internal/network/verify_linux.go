@@ -39,6 +39,13 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 	if err := validateMapping(m); err != nil {
 		return err
 	}
+	iface, err := net.InterfaceByName(m.TunName)
+	if err != nil {
+		return err
+	}
+	if iface.Flags&net.FlagUp == 0 {
+		return missingState("TUN interface down", "ip", "link", "set", "dev", m.TunName, "up")
+	}
 	rules, err := output("ip", "-N", "-j", "rule", "show")
 	if err != nil {
 		return err
@@ -163,6 +170,8 @@ func missingFirewall(err error, command string, args []string) error {
 // RepairContext rechecks under lock and repairs missing components in place.
 // Healthy routes, rules, processes and fixed upstreams are never rebuilt.
 func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) error {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
 	if err := lockutil.Lock(ctx, &c.mu); err != nil {
 		return err
 	}
@@ -207,20 +216,52 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 				}
 				args[check] = "-I"
 				args = append(args[:check+2], append([]string{strconv.Itoa(position)}, args[check+2:]...)...)
-			} else if strings.Contains(strings.Join(args, " "), "S2L_FORWARD") && (chain == "FORWARD" || (chain == "S2L_FORWARD" && len(args) == 4)) {
-				if e := ensureGuard(c.management); e != nil {
-					return e
-				}
-				continue
+			} else if chain == "S2L_FORWARD" && len(args) == 4 {
+				args[check] = "-A" // Restore only the terminal guard, after existing rules.
 			} else {
+				position := 1
+				if missing.command == "iptables" && chain == "FORWARD" && args[len(args)-1] == "S2L_FORWARD" {
+					if _, err := outputContext(ctx, "iptables", "-S", "S2L_FORWARD"); err != nil {
+						if !IsMissingState(missingFirewall(err, "iptables", nil)) {
+							return err
+						}
+						if err := runContext(ctx, "iptables", "-N", "S2L_FORWARD"); err != nil {
+							return err
+						}
+						if err := runContext(ctx, "iptables", "-A", "S2L_FORWARD", "-j", "DROP"); err != nil {
+							return err
+						}
+					}
+				}
+				if missing.command == "iptables" && chain == "INPUT" {
+					snapshot, err := outputContext(ctx, "iptables", "-S", "INPUT")
+					if err != nil {
+						return err
+					}
+					index := 0
+					for _, line := range strings.Split(snapshot, "\n") {
+						if strings.HasPrefix(line, "-A INPUT ") {
+							index++
+							if strings.TrimSpace(line) == "-A INPUT -i ppp+ -j "+managementChain {
+								position = index + 1
+							}
+						}
+					}
+				}
 				args[check] = "-I"
-				args = append(args[:check+2], append([]string{"1"}, args[check+2:]...)...)
+				args = append(args[:check+2], append([]string{strconv.Itoa(position)}, args[check+2:]...)...)
 			}
 			if e := runContext(ctx, missing.command, args...); e != nil {
 				return e
 			}
-		case "bandwidth":
-			if e := applyBandwidth(m); e != nil {
+		case "bandwidth-upload", "bandwidth-download":
+			limit := m
+			if missing.command == "bandwidth-upload" {
+				limit.DownloadKbps = 0
+			} else {
+				limit.UploadKbps = 0
+			}
+			if e := applyBandwidthContext(ctx, limit); e != nil {
 				return e
 			}
 		default:

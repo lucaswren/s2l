@@ -23,6 +23,11 @@ func connectionLimitArgs(m model.TunnelMapping) []string {
 	return []string{"-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-p", "tcp", "--syn", "-m", "connlimit", "--connlimit-above", fmt.Sprint(m.MaxConnections), "--connlimit-mask", fmt.Sprint(ones), "--connlimit-saddr", "-j", "REJECT", "--reject-with", "tcp-reset", "-m", "comment", "--comment", mappingComment(m) + "-connections"}
 }
 func applyBandwidth(m model.TunnelMapping) error {
+	return applyBandwidthContext(context.Background(), m)
+}
+func applyBandwidthContext(ctx context.Context, m model.TunnelMapping) error {
+	run := func(name string, args ...string) error { return runContext(ctx, name, args...) }
+	output := func(name string, args ...string) (string, error) { return outputContext(ctx, name, args...) }
 	if m.UploadKbps > 0 {
 		if err := run("tc", "qdisc", "replace", "dev", m.TunName, "root", "handle", "1:", "tbf", "rate", fmt.Sprintf("%dkbit", m.UploadKbps), "burst", fmt.Sprint(limitBurst(m.UploadKbps)), "latency", "100ms"); err != nil {
 			return err
@@ -84,18 +89,18 @@ func verifyBandwidth(ctx context.Context, m model.TunnelMapping) error {
 		}
 	}
 	if !uploadOK {
-		return missingState("upload limiter missing or rate changed", "bandwidth")
+		return missingState("upload limiter missing or rate changed", "bandwidth-upload")
 	}
 	if m.DownloadKbps > 0 {
 		if !ingress {
-			return missingState("download limiter missing", "bandwidth")
+			return missingState("download limiter missing", "bandwidth-download")
 		}
 		f, e := outputContext(ctx, "tc", "filter", "show", "dev", m.TunName, "parent", "ffff:", "pref", "10")
 		if e != nil {
 			return e
 		}
 		if !validPolicer(f, m.DownloadKbps) {
-			return missingState("download limiter missing or rate changed", "bandwidth")
+			return missingState("download limiter missing or rate changed", "bandwidth-download")
 		}
 	}
 	return nil

@@ -69,7 +69,7 @@ func TestTextImportPreservesNetworkTuning(t *testing.T) {
 	if err := st.UpsertNode(model.SocksNode{ID: "n", Name: "node", Addr: "127.0.0.1:1080"}); err != nil {
 		t.Fatal(err)
 	}
-	m := model.TunnelMapping{ID: "m", NodeID: "n", TableID: 101, TunName: "tun101", Subnet: "10.0.101.0/24", L2TPUser: "user", L2TPPass: "old", Status: model.StatusStopped, MTU: 1280, MSS: 1100, QueueLength: 500, UDPPolicy: "reject", DNSMode: "tcp"}
+	m := model.TunnelMapping{ID: "m", NodeID: "n", TableID: 101, TunName: "tun101", Subnet: "10.0.101.0/24", L2TPUser: "user", L2TPPass: "old", Status: model.StatusStopped, MTU: 1280, MSS: 1100, QueueLength: 500, UDPPolicy: "reject", DNSMode: "tcp", ObserveConnections: true, UploadKbps: 1000, DownloadKbps: 2000, MaxConnections: 50, MaxSessions: 2}
 	if err := st.UpsertMapping(m); err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestTextImportPreservesNetworkTuning(t *testing.T) {
 	w := httptest.NewRecorder()
 	NewServer(st, nil, nil).Handler().ServeHTTP(w, r)
 	got, _ := st.GetMapping("m")
-	if w.Code != 200 || got.L2TPPass != "new-password" || got.MTU != m.MTU || got.MSS != m.MSS || got.QueueLength != m.QueueLength || got.UDPPolicy != m.UDPPolicy || got.DNSMode != m.DNSMode {
+	if w.Code != 200 || got.L2TPPass != "new-password" || got.MTU != m.MTU || got.MSS != m.MSS || got.QueueLength != m.QueueLength || got.UDPPolicy != m.UDPPolicy || got.DNSMode != m.DNSMode || got.ObserveConnections != m.ObserveConnections || got.UploadKbps != m.UploadKbps || got.DownloadKbps != m.DownloadKbps || got.MaxConnections != m.MaxConnections || got.MaxSessions != m.MaxSessions {
 		t.Fatalf("import lost tuning: %+v, %s", got, w.Body.String())
 	}
 }
