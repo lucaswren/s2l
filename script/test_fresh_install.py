@@ -66,7 +66,7 @@ def main():
         ssh_base = ['ssh', '-i', str(key), '-p', str(port), '-o', 'StrictHostKeyChecking=no',
                     '-o', 'UserKnownHostsFile=/dev/null', '-o', 'ConnectTimeout=5', '-o', 'LogLevel=ERROR', 'fixture@127.0.0.1']
         def guest(command, check=True, timeout=900):
-            return subprocess.run(ssh_base + ['sudo -n bash -lc ' + shlex.quote(command)],
+            return subprocess.run(ssh_base + ['sudo -n bash -lc ' + shlex.quote('set -euo pipefail; ' + command)],
                                   check=check, text=True, capture_output=True, timeout=timeout)
         def ready(previous=None):
             end = time.monotonic() + 240
@@ -105,19 +105,25 @@ def main():
             print('PASS incompatible dependency rejection', flush=True)
             # A service start failure must restore files, sysctl and firewall state.
             wrapper = root / 'systemctl'
-            wrapper.write_text('#!/bin/bash\nif [[ "$1" == restart && "${2:-}" == s2l ]]; then\n if [[ -f /tmp/fail-s2l-install ]]; then exit 71; fi\n if [[ -f /tmp/kill-s2l-install ]]; then kill -KILL "$PPID"; exit 72; fi\nfi\nexec /usr/bin/systemctl "$@"\n')
+            wrapper.write_text('#!/bin/bash\nif [[ "$1" == restart && "${2:-}" == s2l ]]; then\n if [[ -f /tmp/fail-s2l-install ]]; then echo fail > /tmp/install-injected; exit 71; fi\n if [[ -f /tmp/kill-s2l-install ]]; then echo kill > /tmp/install-injected; kill -KILL "$PPID"; exit 72; fi\nfi\nif [[ "$1" == reload && "${2:-}" == nginx && -f /tmp/fail-s2l-https ]]; then echo https > /tmp/install-injected; exit 73; fi\nexec /usr/bin/systemctl "$@"\n')
             copy(wrapper, '/tmp/systemctl-wrapper')
             guest('install -m 755 /tmp/systemctl-wrapper /usr/local/bin/systemctl; touch /tmp/fail-s2l-install; cp -p /etc/ppp/chap-secrets /tmp/chap-before; sysctl -n net.ipv4.ip_forward > /tmp/forward-before')
             failed = guest(install, check=False)
             if failed.returncode == 0:
                 raise RuntimeError('injected install failure was ignored')
-            result = guest('test ! -e /opt/s2l/config.json; cmp /tmp/chap-before /etc/ppp/chap-secrets; test "$(sysctl -n net.ipv4.ip_forward)" = "$(cat /tmp/forward-before)"; test ! -e /var/lib/s2l-install/journal.json; rm /tmp/fail-s2l-install')
+            result = guest('test "$(cat /tmp/install-injected)" = fail; rm /tmp/install-injected; test ! -e /opt/s2l/config.json; cmp /tmp/chap-before /etc/ppp/chap-secrets; test "$(sysctl -n net.ipv4.ip_forward)" = "$(cat /tmp/forward-before)"; test ! -e /var/lib/s2l-install/journal.json; rm /tmp/fail-s2l-install')
             print('PASS failed installation rollback', flush=True)
+            guest('touch /tmp/fail-s2l-https')
+            failed = guest(install, check=False)
+            if failed.returncode == 0:
+                raise RuntimeError('injected HTTPS failure was ignored')
+            guest('test "$(cat /tmp/install-injected)" = https; test ! -e /opt/s2l/config.json; test ! -e /etc/ppp/options.xl2tpd.s2l-up; cmp /tmp/chap-before /etc/ppp/chap-secrets; rm /tmp/fail-s2l-https /tmp/install-injected')
+            print('PASS HTTPS failure rollback after service startup', flush=True)
             guest('touch /tmp/kill-s2l-install')
             failed = guest(install, check=False)
             if failed.returncode == 0:
                 raise RuntimeError('hard interruption was ignored')
-            guest('test -f /var/lib/s2l-install/journal.json; rm /tmp/kill-s2l-install')
+            guest('test "$(cat /tmp/install-injected)" = kill; test -f /var/lib/s2l-install/journal.json; rm /tmp/kill-s2l-install /tmp/install-injected')
             result = guest(install)
             print(result.stdout[-5000:], flush=True)
             print('PASS crash recovery and full fresh installation', flush=True)
@@ -135,7 +141,11 @@ def main():
             result = guest(dial, timeout=270)
             print(result.stdout, flush=True)
             print('PASS full OS reboot, restored fixed mapping and repeat real PPP/fault tests', flush=True)
-        except Exception:
+        except Exception as error:
+            for name in ('stdout', 'stderr'):
+                output = getattr(error, name, None)
+                if output:
+                    print(str(output)[-12000:], flush=True)
             try:
                 print(guest('journalctl -u s2l -u xl2tpd -n 100 --no-pager; cat /var/lib/s2l-install/journal.json 2>/dev/null || true', check=False, timeout=20).stdout, flush=True)
             except Exception:

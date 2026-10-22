@@ -23,6 +23,8 @@ error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
 [[ "$(id -u)" -eq 0 ]] || error "请使用 root 执行：sudo bash script/install.sh"
 [[ "$(uname -s)" == Linux && -d /run/systemd/system ]] || error "需要以 systemd 运行的 Ubuntu/Debian Linux 主机"
+exec 9>/run/s2l-install.lock
+flock -n 9 || error "另一个 S2L 安装正在运行"
 info "新安装使用自签证书启用 HTTPS；管理端口未指定则随机生成，无需放行 TCP 80"
 
 # 定位项目根目录（脚本在 script/ 下）

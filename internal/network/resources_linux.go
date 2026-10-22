@@ -13,7 +13,11 @@ import (
 	"time"
 )
 
+const routeProtocol = "196"
+
 type resourceRule struct {
+	Protocol any    `json:"protocol"`
+	Foreign  bool   `json:"-"`
 	Src      string `json:"src"`
 	SrcLen   *int   `json:"srclen"`
 	Table    any    `json:"table"`
@@ -24,6 +28,8 @@ type resourceRule struct {
 	To       string `json:"dst"`
 }
 type resourceRoute struct {
+	Protocol  any             `json:"protocol"`
+	Foreign   bool            `json:"-"`
 	Dst       string          `json:"dst"`
 	Dev       string          `json:"dev"`
 	Type      string          `json:"type"`
@@ -65,14 +71,14 @@ func validateRouteOwnership(m model.TunnelMapping, rules []resourceRule, routes 
 		if r.SrcLen != nil && !strings.Contains(src, "/") {
 			src = fmt.Sprintf("%s/%d", src, *r.SrcLen)
 		}
-		if table != strconv.Itoa(m.TableID) || canonicalSubnet(src) != m.Subnet || r.Priority != 10000+m.TableID || r.IIF != "" || r.OIF != "" || r.Mark != nil || (r.To != "" && r.To != "all") {
+		if r.Foreign || fmt.Sprint(r.Protocol) != routeProtocol || table != strconv.Itoa(m.TableID) || canonicalSubnet(src) != m.Subnet || r.Priority != 10000+m.TableID || r.IIF != "" || r.OIF != "" || r.Mark != nil || (r.To != "" && r.To != "all") {
 			return fmt.Errorf("routing table or rule priority is used by another configuration")
 		}
 	}
 	for _, r := range routes {
 		guard := r.Dst == "default" && r.Type == "unreachable" && r.Metric == 32767 && r.Dev == ""
 		live := r.Dst == "default" && r.Dev == m.TunName && r.Metric == 100 && (r.Type == "" || r.Type == "unicast")
-		if (!guard && !live) || r.Gateway != "" || len(r.Multipath) > 0 {
+		if r.Foreign || fmt.Sprint(r.Protocol) != routeProtocol || (!guard && !live) || r.Gateway != "" || len(r.Multipath) > 0 {
 			return fmt.Errorf("routing table %d contains unmanaged routes", m.TableID)
 		}
 	}
@@ -159,5 +165,46 @@ func CheckResources(m model.TunnelMapping, ownInterface bool) error {
 			return fmt.Errorf("subnet overlaps host route %s", r.Dst)
 		}
 	}
+	return nil
+}
+
+func (r *resourceRule) UnmarshalJSON(data []byte) error {
+	type plain resourceRule
+	var value plain
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	for name := range fields {
+		switch name {
+		case "priority", "src", "srclen", "dst", "table", "protocol", "iif", "oif", "fwmark", "flags":
+		default:
+			value.Foreign = true
+		}
+	}
+	*r = resourceRule(value)
+	return nil
+}
+func (r *resourceRoute) UnmarshalJSON(data []byte) error {
+	type plain resourceRoute
+	var value plain
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	for name := range fields {
+		switch name {
+		case "dst", "dev", "type", "metric", "gateway", "protocol", "scope", "table", "flags", "nexthops":
+		default:
+			value.Foreign = true
+		}
+	}
+	*r = resourceRoute(value)
 	return nil
 }

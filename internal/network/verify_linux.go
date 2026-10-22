@@ -136,13 +136,13 @@ func verifyRouteJSON(m model.TunnelMapping, rules, routes []byte) error {
 		}
 	}
 	if !guard {
-		return missingState("unreachable fallback missing", "ip", "route", "replace", "unreachable", "default", "table", strconv.Itoa(m.TableID), "metric", "32767")
+		return missingState("unreachable fallback missing", "ip", "route", "replace", "unreachable", "default", "table", strconv.Itoa(m.TableID), "metric", "32767", "protocol", routeProtocol)
 	}
 	if !found {
-		return missingState("policy rule missing", "ip", "rule", "add", "from", m.Subnet, "table", strconv.Itoa(m.TableID), "priority", strconv.Itoa(10000+m.TableID))
+		return missingState("policy rule missing", "ip", "rule", "add", "from", m.Subnet, "table", strconv.Itoa(m.TableID), "priority", strconv.Itoa(10000+m.TableID), "protocol", routeProtocol)
 	}
 	if !live {
-		return missingState("TUN route missing", "ip", "route", "replace", "default", "dev", m.TunName, "table", strconv.Itoa(m.TableID), "metric", "100")
+		return missingState("TUN route missing", "ip", "route", "replace", "default", "dev", m.TunName, "table", strconv.Itoa(m.TableID), "metric", "100", "protocol", routeProtocol)
 	}
 	return nil
 }

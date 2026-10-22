@@ -196,6 +196,7 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		if peerErr != "" {
 			err = fmt.Errorf("PPP snapshot unavailable")
 		} else {
+			s.enforcePPPSessions(ctx, m, peers)
 			err = network.TunePeerSnapshot(m, peers)
 		}
 		s.mu.Lock()

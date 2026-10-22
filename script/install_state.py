@@ -16,6 +16,7 @@ FILES = (
  '/etc/systemd/system/s2l.service', '/etc/systemd/system/s2l-guard.service',
  '/etc/systemd/system/s2l-ipsec.service', '/etc/systemd/system/xl2tpd.service.d/s2l.conf',
  '/etc/ppp/chap-secrets', '/etc/ppp/options.xl2tpd', '/etc/xl2tpd/xl2tpd.conf',
+ '/etc/ppp/options.xl2tpd.s2l-up', '/etc/ppp/options.xl2tpd.s2l-down',
  '/etc/nginx/conf.d/s2l.conf', '/etc/nginx/sites-enabled/default',
 )
 UNITS = ('s2l', 's2l-guard', 's2l-ipsec', 'xl2tpd', 'nginx')

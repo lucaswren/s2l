@@ -29,9 +29,15 @@ func TestPolicyRouteFailureRollsBackAllChanges(t *testing.T) {
 echo "$*" >> "$S2L_IP_LOG"
 case "$*" in
   "$S2L_IP_FAIL"*) echo "injected failure" >&2; exit 1 ;;
-  "rule del"*) echo "No such file or directory" >&2; exit 1 ;;
+  "-N -j rule show") if [ -f "$S2L_IP_STATE/rule" ]; then echo '[{"src":"10.0.101.0/24","table":101,"priority":10101,"protocol":196}]'; else echo '[]'; fi ;;
+  "-j route show table 101") if [ -f "$S2L_IP_STATE/guard" ]; then echo '[{"dst":"default","type":"unreachable","metric":32767,"protocol":196}]'; else echo '[]'; fi ;;
+  "route add unreachable"*) touch "$S2L_IP_STATE/guard" ;;
+  "rule add"*) touch "$S2L_IP_STATE/rule" ;;
+  "route del unreachable"*) rm -f "$S2L_IP_STATE/guard" ;;
+  "rule del"*) if [ -f "$S2L_IP_STATE/rule" ]; then rm "$S2L_IP_STATE/rule"; else echo "No such file or directory" >&2; exit 1; fi ;;
 esac
 `
+			t.Setenv("S2L_IP_STATE", dir)
 			if err := os.WriteFile(filepath.Join(dir, "ip"), []byte(script), 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -47,8 +53,17 @@ esac
 				t.Fatal(err)
 			}
 			commands := string(data)
-			if strings.Count(commands, "route flush table 101\n") != 2 || !strings.HasSuffix(commands, "rule del from 10.0.101.0/24 table 101\n") {
-				t.Fatalf("partial routes survived failure:\n%s", commands)
+			if strings.Contains(commands, "route flush") {
+				t.Fatal("failure rollback flushed a routing table", commands)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "guard")); !os.IsNotExist(err) {
+				t.Fatal("partial fallback route survived failure", commands)
+			}
+			if _, err := os.Stat(filepath.Join(dir, "rule")); !os.IsNotExist(err) {
+				t.Fatal("partial source rule survived failure", commands)
+			}
+			if !strings.Contains(commands, failure) {
+				t.Fatal("did not exercise requested failure", commands)
 			}
 		})
 	}

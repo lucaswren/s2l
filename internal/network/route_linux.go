@@ -37,13 +37,13 @@ func AddPolicyRoute(m model.TunnelMapping) (result error) {
 		}
 	}()
 
-	if err := run("ip", "route", "add", "unreachable", "default", "metric", "32767", "table", table); err != nil {
+	if err := run("ip", "route", "add", "unreachable", "default", "metric", "32767", "table", table, "protocol", routeProtocol); err != nil {
 		return err
 	}
-	if err := run("ip", "rule", "add", "priority", strconv.Itoa(10000+m.TableID), "from", m.Subnet, "table", table, "priority", strconv.Itoa(10000+m.TableID)); err != nil {
+	if err := run("ip", "rule", "add", "from", m.Subnet, "table", table, "priority", strconv.Itoa(10000+m.TableID), "protocol", routeProtocol); err != nil {
 		return err
 	}
-	if err := run("ip", "route", "add", "default", "dev", m.TunName, "metric", "100", "table", table); err != nil {
+	if err := run("ip", "route", "add", "default", "dev", m.TunName, "metric", "100", "table", table, "protocol", routeProtocol); err != nil {
 		return err
 	}
 	return nil
@@ -70,9 +70,9 @@ func DelPolicyRoute(m model.TunnelMapping) error {
 		return err
 	}
 	for _, route := range routes {
-		args := []string{"route", "del", "unreachable", "default", "metric", "32767", "table", table}
+		args := []string{"route", "del", "unreachable", "default", "metric", "32767", "table", table, "protocol", routeProtocol}
 		if route.Dev == m.TunName {
-			args = []string{"route", "del", "default", "dev", m.TunName, "metric", "100", "table", table}
+			args = []string{"route", "del", "default", "dev", m.TunName, "metric", "100", "table", table, "protocol", routeProtocol}
 		}
 		if err := runContext(ctx, "ip", args...); err != nil && !strings.Contains(strings.ToLower(err.Error()), "no such") {
 			errs = append(errs, err)
@@ -83,7 +83,7 @@ func DelPolicyRoute(m model.TunnelMapping) error {
 	}
 	// 同一 from+table 可能残留多条，循环清理
 	for i := 0; i < 8; i++ {
-		err := run("ip", "rule", "del", "from", m.Subnet, "table", table, "priority", strconv.Itoa(10000+m.TableID))
+		err := run("ip", "rule", "del", "from", m.Subnet, "table", table, "priority", strconv.Itoa(10000+m.TableID), "protocol", routeProtocol)
 		if err == nil {
 			continue
 		}

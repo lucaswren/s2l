@@ -153,3 +153,32 @@ func (s *MappingService) enrichSessions(rows []model.PPPSession) {
 		}
 	}
 }
+
+// Monitoring retries protection after an event-time inspection failure. Only
+// sessions with a verified event/PID can be disconnected; older identities stay.
+func (s *MappingService) enforcePPPSessions(ctx context.Context, m model.TunnelMapping, rows []model.PPPSession) {
+	managed := []model.PPPSession{}
+	for _, row := range rows {
+		if row.MappingID == m.ID {
+			managed = append(managed, row)
+		}
+	}
+	if len(managed) <= m.EffectiveMaxSessions() {
+		return
+	}
+	sort.Slice(managed, func(i, j int) bool { return managed[i].Index < managed[j].Index })
+	for _, row := range managed[m.EffectiveMaxSessions():] {
+		s.sessions.mu.Lock()
+		event, known := s.sessions.active[row.Interface]
+		s.sessions.mu.Unlock()
+		if !known || event.Index != row.Index || event.Peer != row.PeerIP || event.Requested != "" {
+			continue
+		}
+		check, cancel := context.WithTimeout(ctx, 3*time.Second)
+		err := s.disconnectSession(check, row.Interface, row.PeerIP, row.Index, "limit")
+		cancel()
+		if err == nil {
+			s.operations.Audit("session-limit", m.ID, "已拒绝超出上限的新会话")
+		}
+	}
+}
