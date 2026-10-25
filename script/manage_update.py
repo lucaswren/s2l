@@ -193,6 +193,7 @@ def phase(job_id, value):
 
 
 FAILURE_MESSAGES = {
+    'dependency': '更新失败：conntrack 依赖安装未完成；现有 S2L 服务未停止，请检查 apt 软件源或锁后重试。',
     'build_cache': '更新失败：Go 构建缓存不可用，请检查目录权限。',
     'toolchain': '更新失败：Go 工具链不可用，请检查版本和下载连接。',
     'disk_full': '更新失败：磁盘空间不足。',
@@ -218,6 +219,7 @@ def execute_update(env):
     text = tail.decode('utf-8', errors='replace').lower()
     reason = 'update_failed'
     for name, markers in (
+        ('dependency', ('conntrack dependency installation failed',)),
         ('disk_full', ('no space left on device', 'disk quota exceeded')),
         ('build_cache', ('build cache is required', 'failed to initialize build cache', 'gocache is not defined')),
         ('toolchain', ('requires go >=', 'go.mod requires go', 'toolchain not available', 'cannot find goroot')),

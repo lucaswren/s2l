@@ -2,6 +2,8 @@
 
 [English](README.md) · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
+[Client setup, DNS and acceptance checks](docs/en/clients.md)
+
 S2L manages Linux L2TP client connections and routes their traffic through selected SOCKS5 upstreams using sing-box, policy routing and iptables. The Go backend provides the management API and an embedded Vue 3 / Element Plus web interface.
 
 Use only on authorized systems, networks and upstream services. Read the [legal and compliance notes](docs/en/legal.md) before deployment, especially for mainland China or cross-border connectivity. Software availability does not provide regulatory approval or guarantee anonymity.
@@ -35,7 +37,7 @@ To choose a fixed HTTPS port instead of the random default, use `HTTPS_PORT`, fo
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
 ```
 
-Open the printed HTTPS URL, add an authorized SOCKS5 node, create a mapping and start it to `running`. Configure the client with the server IP and mapping's L2TP credentials. Plain L2TP needs UDP 1701; optional IPsec needs UDP 500/4500 and ESP (IP protocol 50). Read the operations guide before exposing tunnel ports. Do not rerun the installer to upgrade. For installation from a reviewed source checkout, see the [development guide](docs/en/development.md).
+Open the printed HTTPS URL, add an authorized SOCKS5 node, create a mapping and start it to `running`. Configure the client with the server IP and mapping's L2TP credentials. Plain L2TP needs UDP 1701; optional IPsec needs UDP 500/4500 with enforced NAT-T. Read the operations guide before exposing tunnel ports. Do not rerun the installer to upgrade. For installation from a reviewed source checkout, see the [development guide](docs/en/development.md).
 
 ## Upgrade
 

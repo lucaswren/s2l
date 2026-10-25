@@ -50,13 +50,31 @@ try{
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='新建映射').click()`);
   await wait(`!!document.querySelector('.el-dialog input[type=password]')`);
   await evaluate(`(()=>{const p=document.querySelector('.el-dialog input[type=password]');p.value='fixture-password';p.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await evaluate(`document.querySelector('.mapping-advanced > summary').click()`);
+  await evaluate(`(()=>{for(const [name,value] of [['dns_doh_url','https://resolver.example/dns-query'],['dns_tcp_address','dns.internal:5353']]){const e=document.querySelector('input[name='+name+']');e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}))}window.__beforeDNSFetch=window.fetch;window.fetch=(path,options)=>{if(String(path)==='/api/mappings?preview=1')window.__dnsPreview=JSON.parse(options.body);return window.__beforeDNSFetch(path,options)}})()`);
+  await pause(100);
+  await checkLayout(width+' custom DNS fields');
   await evaluate(`[...document.querySelectorAll('.el-dialog button')].find(b=>b.innerText==='保存').click()`);
   await wait(`!!document.querySelector('.el-message-box') && document.querySelector('.el-message-box').innerText.includes('变更：')`);
+  if(await evaluate(`window.__dnsPreview?.dns_doh_url!=='https://resolver.example/dns-query'||window.__dnsPreview?.dns_tcp_address!=='dns.internal:5353'`))throw Error('custom DNS omitted from mapping request '+width);
+  if(await evaluate(`!document.querySelector('.el-message-box').innerText.includes('DoH 地址')||!document.querySelector('.el-message-box').innerText.includes('TCP DNS 地址')`))throw Error('custom DNS preview labels missing '+width);
+  await evaluate(`window.fetch=window.__beforeDNSFetch`);
   await pause(650);
   const previewBounds=await evaluate(`(()=>{const r=document.querySelector('.el-message-box').getBoundingClientRect();return {left:r.left,right:r.right,viewport:innerWidth}})()`);
   if(previewBounds.left<0||previewBounds.right>previewBounds.viewport+2)throw Error('configuration preview overflow '+width);
   await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(b=>b.innerText==='返回编辑').click()`);await pause(350);
   await evaluate(`document.querySelector('.el-dialog .el-dialog__headerbtn').click()`);await pause(350);
+  await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='帮助').click()`);
+  await wait(`document.querySelector('.el-drawer')?.innerText.includes('1.1.1.1, 8.8.8.8')`);
+  await evaluate(`for(const e of document.querySelectorAll('.el-drawer .el-collapse-item__header'))if(['DNS 与客户端路由','接入验收'].includes(e.innerText.trim()))e.click()`);
+  await pause(350);
+  for(const locale of ['en','zh-TW','zh-CN']) {
+   await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);await pause(100);
+   await checkLayout(width+' '+locale+' client guide');
+   if(await evaluate(`!document.querySelector('.el-drawer').innerText.includes('usepeerdns')||!document.querySelector('.el-drawer').innerText.includes('NAT-T')`))throw Error('client guide missing DNS or network instructions '+width);
+  }
+  await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-client-guide-${width}.png`,Buffer.from(r.data,'base64')));
+  await evaluate(`document.querySelector('.el-drawer__close-btn').click()`);await pause(350);
   await evaluate(`window.__batchPosts=0;window.__beforeBatchFetch=window.fetch;window.fetch=(path,options)=>{if(String(path).endsWith('/action')&&options?.method==='POST')window.__batchPosts++;return window.__beforeBatchFetch(path,options)};const button=[...document.querySelectorAll('button')].find(e=>e.innerText==='批量停止当前列表');button.click();button.click()`);
   await wait(`!!document.querySelector('.el-message-box')`);
   await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.innerText==='执行').click()`);

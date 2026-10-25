@@ -105,6 +105,8 @@ func TestFailedCleanupProtectsMappingAndNodeUntilStopped(t *testing.T) {
 	equivalent := m
 	equivalent.MTU = m.EffectiveMTU()
 	equivalent.DNSMode = m.EffectiveDNSMode()
+	equivalent.DNSDoHURL = model.DefaultDNSDoHURL
+	equivalent.DNSTCPAddress = model.DefaultDNSTCPAddress
 	if err = s.UpsertMapping(equivalent); err != nil {
 		t.Fatal(err)
 	}

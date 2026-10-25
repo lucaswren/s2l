@@ -28,6 +28,7 @@ func TestBackupPreviewRestoreAndStaleRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := model.TunnelMapping{ID: "m", NodeID: "n", TunName: "tun101", TableID: 101, Subnet: "10.0.101.0/24", L2TPUser: "user", L2TPPass: "private-password", Status: model.StatusStopped}
+	m.DNSDoHURL, m.DNSTCPAddress = "https://resolver.example/dns-query", "dns.internal:5353"
 	if err = st.UpsertMapping(m); err != nil {
 		t.Fatal(err)
 	}
@@ -37,6 +38,11 @@ func TestBackupPreviewRestoreAndStaleRevision(t *testing.T) {
 	}
 	n.Name = "changed"
 	st.UpsertNode(n)
+	changed := m
+	changed.DNSTCPAddress = "other.internal:53"
+	if err := st.UpsertMapping(changed); err != nil {
+		t.Fatal(err)
+	}
 	h := NewServer(st, service.NewMappingService(st, nil, nil, nil), nil, "admin", "admin-password-long").Handler()
 	post := func(path string, body any) *httptest.ResponseRecorder {
 		data, _ := json.Marshal(body)
@@ -82,6 +88,9 @@ func TestBackupPreviewRestoreAndStaleRevision(t *testing.T) {
 	gotMapping, _ := st.GetMapping("m")
 	if gotMapping.Status != model.StatusStopped {
 		t.Fatal("restored active mapping")
+	}
+	if gotMapping.EffectiveDNSOptions() != m.EffectiveDNSOptions() {
+		t.Fatal("backup lost custom DNS", gotMapping)
 	}
 	r := httptest.NewRequest("GET", "/api/backups", nil)
 	w := httptest.NewRecorder()

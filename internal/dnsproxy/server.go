@@ -22,13 +22,16 @@ type Server struct {
 }
 
 // Only sing-box connects here over loopback TCP; no public DNS listener.
-func Start(node model.SocksNode, mode string) (*Server, error) {
+func Start(node model.SocksNode, options model.DNSOptions) (*Server, error) {
+	if err := options.Validate(); err != nil {
+		return nil, err
+	}
 	l, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Server{Resolver: New(node, mode), listener: l, ctx: ctx, cancel: cancel}
+	s := &Server{Resolver: New(node, options), listener: l, ctx: ctx, cancel: cancel}
 	s.wg.Add(1)
 	go s.serve()
 	return s, nil

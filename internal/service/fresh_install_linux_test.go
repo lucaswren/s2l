@@ -32,7 +32,7 @@ func TestFreshInstalledServiceDial(t *testing.T) {
 	cert, ca := integrationCertificate(t)
 	caPath := filepath.Join(root, "ca.pem")
 	os.WriteFile(caPath, ca, 0600)
-	addr, online := integrationSOCKS(t, "node0", cert, "127.0.0.1:31080")
+	addr, online, _ := integrationSOCKS(t, "node0", cert, "127.0.0.1:31080")
 	jar, _ := cookiejar.New(nil)
 	client := &http.Client{Jar: jar, Timeout: 50 * time.Second}
 	api := func(method, path string, body any) map[string]any {
@@ -106,9 +106,10 @@ func TestFreshInstalledServiceDial(t *testing.T) {
 		run("ip", "netns", "exec", ns, "ip", "link", "set", "eth0", "up")
 		run("ip", "netns", "exec", ns, "ip", "link", "set", "lo", "up")
 		options := filepath.Join(root, fmt.Sprintf("client%d.options", index))
+		dnsHook, _ := integrationClientDNSHook(t, root, index)
 		conf := filepath.Join(root, fmt.Sprintf("client%d.conf", index))
 		control := filepath.Join(root, fmt.Sprintf("client%d.control", index))
-		os.WriteFile(options, []byte(fmt.Sprintf("name fixture%d\npassword fixture-dial-password\nnoauth\nnomagic\nrefuse-eap\nnoccp\nnodefaultroute\nmtu 1400\nmru 1400\n", account)), 0600)
+		os.WriteFile(options, []byte(fmt.Sprintf("name fixture%d\npassword fixture-dial-password\nnoauth\nnomagic\nrefuse-eap\nnoccp\nnodefaultroute\nusepeerdns\nip-up-script %s\nmtu 1400\nmru 1400\n", account, dnsHook)), 0600)
 		os.WriteFile(conf, []byte(fmt.Sprintf("[lac vpn]\nlns = %s\npppoptfile = %s\nlength bit = yes\n", server, options)), 0600)
 		cmd := exec.Command("ip", "netns", "exec", ns, "xl2tpd", "-D", "-c", conf, "-p", conf+".pid", "-C", control)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -152,16 +153,17 @@ func TestFreshInstalledServiceDial(t *testing.T) {
 			out, e := exec.Command("ip", "netns", "exec", ns, "ip", "-j", "address", "show", "dev", "ppp0").Output()
 			return e == nil && strings.Contains(string(out), fmt.Sprintf("10.77.%d.2", 201+i))
 		})
+		dnsAddresses := integrationAssertClientDNS(t, filepath.Join(root, fmt.Sprintf("client%d.dns", i)))
 		run("ip", "netns", "exec", ns, "ip", "route", "replace", "default", "dev", "ppp0")
 		curlArgs := []string{"netns", "exec", ns, "curl", "--noproxy", "*", "--silent", "--fail", "--max-time", "4", "--cacert", caPath, "https://198.18.0.9/"}
 		if got := run("ip", curlArgs...); strings.TrimSpace(got) != "node0" {
 			t.Fatal("incorrect fixed exit", got)
 		}
-		run("ip", "netns", "exec", ns, "python3", "-c", `import socket,struct
+		run("ip", "netns", "exec", ns, "python3", "-c", `import socket,struct,sys
 q=struct.pack('!HHHHHH',71,0x100,1,0,0,0)+b'\x07example\x03com\x00'+struct.pack('!HH',1,1)
-s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(5);s.sendto(q,('8.8.8.8',53));a=s.recv(4096)
+s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(5);s.sendto(q,(sys.argv[1],53));a=s.recv(4096)
 assert a[:2]==q[:2] and a[-4:]==bytes([198,18,0,9]),a
-`)
+`, dnsAddresses[1])
 		run("ip", "netns", "exec", ns, "python3", "-c", `import socket
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.connect(('198.18.0.9',443));s.send(b'quic-test')
 try:s.recv(256);raise SystemExit('UDP was not rejected')

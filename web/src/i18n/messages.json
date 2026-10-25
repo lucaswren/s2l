@@ -895,10 +895,6 @@
     "en": "Set a pre-shared key before enabling IPsec",
     "tw": "啟用 IPsec 前請設置預共享密鑰"
   },
-  "启用后仅接受通过 IPsec 加密的 L2TP 连接。请放行 UDP 500、4500 和 ESP 协议，客户端填写相同的预共享密钥。现有普通 L2TP 连接需要重新拨号。": {
-    "en": "Accepts only IPsec-encrypted L2TP connections. Allow UDP 500/4500 and ESP; configure the same client pre-shared key. Existing plain L2TP clients must reconnect.",
-    "tw": "啟用后僅接受通過 IPsec 加密的 L2TP 連接。請放行 UDP 500、4500 和 ESP 協議，客戶端填寫相同的預共享密鑰。現有普通 L2TP 連接需要重新撥號。"
-  },
   "启用管理例外": {
     "en": "Enable management exception",
     "tw": "啟用管理例外"
@@ -3257,5 +3253,81 @@
     "cn": "同一账号仅允许一条拨号会话；多设备可共享网关。",
     "tw": "同一帳號僅允許一條撥號工作階段；多裝置可共用閘道。",
     "en": "One session per account. Multiple devices can share the gateway."
+  },
+  "DNS 与客户端路由": {
+    "en": "DNS and client routing",
+    "tw": "DNS 與用戶端路由"
+  },
+  "DoH 地址": {
+    "en": "DoH URL",
+    "tw": "DoH 位址"
+  },
+  "TCP DNS 地址": {
+    "en": "TCP DNS address",
+    "tw": "TCP DNS 位址"
+  },
+  "Windows/macOS：选择客户端支持的接入模式，启用 VPN 默认路由并接受自动 DNS。Linux pppd：启用 usepeerdns，并让网络管理器或拨号脚本应用收到的 DNS。路由器：为需要代理的 LAN 流量配置 L2TP 出口和源 NAT。": {
+    "en": "Windows/macOS: choose a supported VPN mode, enable the VPN default route and accept automatic DNS. Linux pppd: enable usepeerdns and apply received DNS through your network manager or dial-in scripts. Routers: configure the L2TP route and source NAT for the intended LAN traffic.",
+    "tw": "Windows/macOS：選擇用戶端支援的接入模式，啟用 VPN 預設路由並接受自動 DNS。Linux pppd：啟用 usepeerdns，並讓網路管理員或撥號指令碼套用收到的 DNS。路由器：為需要代理的 LAN 流量設定 L2TP 出口和來源 NAT。"
+  },
+  "下发地址是隧道内 DNS 请求的入口标识；实际解析器在映射高级选项配置。所有进入映射的 53 端口请求均经该映射的 SOCKS5，不会在解析失败时改为服务器直连。": {
+    "en": "Offered addresses identify DNS requests inside the tunnel; configure actual resolvers in the mapping advanced options. All port 53 requests entering the mapping use its SOCKS5 upstream, with no direct server fallback on DNS failure.",
+    "tw": "下發位址是隧道內 DNS 請求的入口識別；實際解析器在映射進階選項設定。所有進入映射的 53 連接埠請求均經該映射的 SOCKS5，不會在解析失敗時改為伺服器直連。"
+  },
+  "如果客户端忽略 DNS 下发，请手动填写上方 DNS 地址并将它们路由进隧道。局域网 DNS、浏览器安全 DNS 和分流规则可能绕过 VPN，需分别核对。": {
+    "en": "If the client ignores offered DNS, enter the addresses above manually and route them into the tunnel. Check LAN DNS, browser secure DNS and split-routing rules for VPN bypass.",
+    "tw": "如果用戶端忽略 DNS 下發，請手動填寫上方 DNS 位址並將其路由進隧道。區域網路 DNS、瀏覽器安全 DNS 和分流規則可能繞過 VPN，需分別核對。"
+  },
+  "客户端其他接口的 IPv6 和断线直连需在客户端阻止；服务器只能保护进入隧道的流量。": {
+    "en": "Block IPv6 on other interfaces and direct fallback after disconnection on the client; the server only protects traffic entering the tunnel.",
+    "tw": "用戶端其他介面的 IPv6 和斷線直連需在用戶端阻止；伺服器只能保護進入隧道的流量。"
+  },
+  "拨号下发的 DNS：{0}。升级后重新拨号获取。": {
+    "en": "DNS offered at dial-in: {0}. Reconnect after upgrading to receive it.",
+    "tw": "撥號下發的 DNS：{0}。升級後重新撥號取得。"
+  },
+  "接入验收": {
+    "en": "Client acceptance checks",
+    "tw": "接入驗收"
+  },
+  "接受 VPN 分配的 DNS，并确保 DNS 与需要代理的 IPv4 流量经 L2TP；服务器地址保留原网络路由。": {
+    "en": "Accept VPN-assigned DNS and route DNS and the intended IPv4 traffic through L2TP; keep the VPN server reachable over the original network.",
+    "tw": "接受 VPN 分配的 DNS，並確保 DNS 與需要代理的 IPv4 流量經 L2TP；伺服器位址保留原網路路由。"
+  },
+  "留空使用默认解析器。DoH 必须是无账号、查询参数和片段的 HTTPS URL；TCP DNS 填写主机:端口，IPv6 地址加方括号。解析器域名和所有 DNS 查询均经当前 SOCKS5。": {
+    "en": "Leave blank for default resolvers. DoH requires an HTTPS URL without credentials, query parameters or fragments. TCP DNS uses host:port, with brackets around IPv6 addresses. Resolver names and all DNS queries use the current SOCKS5 upstream.",
+    "tw": "留空使用預設解析器。DoH 必須是無帳號、查詢參數和片段的 HTTPS URL；TCP DNS 填寫主機:連接埠，IPv6 位址加方括號。解析器網域和所有 DNS 查詢均經目前 SOCKS5。"
+  },
+  "等待服务端 DNS 参数": {
+    "en": "Waiting for server DNS parameters",
+    "tw": "等待伺服器 DNS 參數"
+  },
+  "自动模式仅在同一节点内切换 DoH/TCP，不切换节点或直连。自定义 DNS 不改变客户端收到的 DNS 地址；进入隧道的 53 端口请求会使用这里的解析器。": {
+    "en": "Automatic mode switches DoH/TCP only within the same node, without switching nodes or connecting directly. Custom DNS does not change the addresses offered to clients; port 53 requests entering the tunnel use these resolvers.",
+    "tw": "自動模式僅在同一節點內切換 DoH/TCP，不切換節點或直連。自訂 DNS 不改變用戶端收到的 DNS 位址；進入隧道的 53 連接埠請求會使用這裡的解析器。"
+  },
+  "重新拨号后核对分配地址、DNS 和路由；从客户端解析域名并访问 HTTPS，确认出口属于所选 SOCKS5。需要 UDP 的应用须允许 UDP 且上游支持；面板测速不能替代客户端验证。": {
+    "en": "After reconnecting, check the assigned address, DNS and routes. Resolve a name and access HTTPS from the client, then verify the selected SOCKS5 egress. UDP applications require an allowing policy and upstream UDP support; panel speed tests do not replace client validation.",
+    "tw": "重新撥號後核對分配位址、DNS 和路由；從用戶端解析網域並存取 HTTPS，確認出口屬於所選 SOCKS5。需要 UDP 的應用須允許 UDP 且上游支援；面板測速不能替代用戶端驗證。"
+  },
+  "允许 UDP 后，还需放行 SOCKS5 协商返回的 UDP 中继地址和端口，可能不同于代理 TCP 端口。协商成功不等于有回包；DNS 可继续经 DoH/TCP 使用固定出口。": {
+    "en": "After allowing UDP, also permit the UDP relay address and port returned by SOCKS5; these may differ from its TCP endpoint. Association success does not prove replies work. DNS can still use DoH/TCP through the fixed exit.",
+    "tw": "允許 UDP 後，還需放行 SOCKS5 協商回傳的 UDP 中繼位址及連接埠，可能不同於代理 TCP 埠。協商成功不等於有回包；DNS 可繼續經 DoH/TCP 使用固定出口。"
+  },
+  "启用后仅接受通过 IPsec 加密的 L2TP 连接，统一使用 NAT-T。请放行 UDP 500、4500，客户端填写相同的预共享密钥。现有连接需要重新拨号。": {
+    "en": "Accepts only IPsec-encrypted L2TP connections using NAT-T. Allow UDP 500/4500 and configure the same client pre-shared key. Existing clients must reconnect.",
+    "tw": "啟用後僅接受透過 IPsec 加密的 L2TP 連線，統一使用 NAT-T。請放行 UDP 500、4500，用戶端填寫相同的預先共用金鑰。現有連線需要重新撥號。"
+  },
+  "查看映射中的错误详情，核对 SOCKS5 地址和凭据。普通 L2TP 需放行 UDP 1701；IPsec 统一使用 NAT-T，需放行 UDP 500/4500。客户端预共享密钥须与服务器一致。SSH 中执行 s2l 可查看服务状态和日志。": {
+    "en": "Check mapping error details and SOCKS5 credentials. Plain L2TP needs UDP 1701; IPsec enforces NAT-T and needs UDP 500/4500. Match the client pre-shared key to the server. Run s2l over SSH for service status and logs.",
+    "tw": "查看映射錯誤詳情，核對 SOCKS5 位址和憑據。普通 L2TP 需放行 UDP 1701；IPsec 統一使用 NAT-T，需放行 UDP 500/4500。用戶端預先共用金鑰須與伺服器一致。SSH 中執行 s2l 可查看服務狀態和日誌。"
+  },
+  "同一 NAT 下多个 IPsec 客户端可使用 L2TP 源端口 1701，服务器按会话隔离回包。Linux 双客户端已实测；原生 Windows、macOS 和路由器仍需按版本验证。每台独立拨号设备使用自己的映射账号。": {
+    "en": "Multiple IPsec clients behind one NAT may use L2TP source port 1701; the server isolates their replies by session. Two Linux clients have been tested. Validate native Windows, macOS and router versions separately. Each independently dialing device needs its own mapping account.",
+    "tw": "同一 NAT 下多個 IPsec 用戶端可使用 L2TP 來源埠 1701，伺服器按會話隔離回包。Linux 雙用戶端已實測；原生 Windows、macOS 和路由器仍須按版本驗證。每台獨立撥號裝置使用自己的映射帳號。"
+  },
+  "在维护窗口验证上游中断时业务失败而不改走服务器公网出口；再验证恢复和重新拨号。普通 L2TP 需要 UDP 1701，IPsec 使用 NAT-T，需要 UDP 500/4500。仅能访问 HTTPS 的网络不能据此判断可拨号。": {
+    "en": "In a maintenance window, verify that upstream failure stops traffic without using the server public egress, then test recovery and redial. Plain L2TP needs UDP 1701; IPsec uses NAT-T and needs UDP 500/4500. HTTPS reachability alone does not prove VPN connectivity.",
+    "tw": "在維護時段驗證上游中斷時業務失敗而不改走伺服器公網出口；再驗證恢復和重新撥號。普通 L2TP 需要 UDP 1701，IPsec 使用 NAT-T，需要 UDP 500/4500。僅能存取 HTTPS 的網路不能據此判斷可撥號。"
   }
 }

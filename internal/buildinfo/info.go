@@ -30,9 +30,9 @@ func Current() Info {
 		}
 	}
 	result.ReleaseNotes = map[string]string{
-		"zh-CN": "降低后台巡检与 DNS 连接开销，按需启用连接观测，原位修复缺失规则；增加网段和系统资源冲突检查、固定地址账号单会话保护、安装预检、依赖校验与失败恢复。两个独立账号共用节点的并发拨号、故障隔离和整机重启测试通过。固定出口、DoH/TCP、UDP 主动拒绝及防泄漏保护保持不变。",
-		"zh-TW": "降低背景巡檢與 DNS 連線負擔，按需啟用連線觀測，原位修復遺失規則；增加網段與系統資源衝突檢查、固定地址帳號單會話保護、安裝預檢、相依性驗證與失敗恢復。兩個獨立帳號共用節點的並行撥號、故障隔離與整機重啟測試通過。固定出口、DoH/TCP、UDP 主動拒絕與防洩漏保護保持不變。",
-		"en":    "Reduce background checks and reuse DNS connections; make connection observation optional and repair missing rules in place. Add subnet and host-resource validation, single-session protection for fixed peer addresses, installation preflight, dependency checks and failure recovery. Independent accounts sharing one node pass concurrent PPP, fault-isolation and full-reboot tests. Fixed exits, DoH/TCP, active UDP rejection and leak protection remain enabled.",
+		"zh-CN": "补齐 PPP DNS 下发、自定义 DoH/TCP DNS 和客户端接入指引；支持同一 NAT 下多个 L2TP/IPsec 客户端使用源端口 1701，内部端点经隔离与完整空闲核验后自动回收。固定 SOCKS5 出口、UDP 策略及上游/TUN 中断时的防泄漏保护保持有效。升级在停止服务前自动补装缺少的 conntrack，失败时保留现有服务；修复 CI 虚拟机启动阶段的 SSH 超时重试。Linux 实测覆盖并发、重拨、DNS 和 UDP，Windows/macOS 原生拨号尚未验证。",
+		"zh-TW": "補齊 PPP DNS 下發、自訂 DoH/TCP DNS 與用戶端連線指引；支援同一 NAT 下多個 L2TP/IPsec 用戶端使用來源埠 1701，內部端點經隔離及完整閒置核驗後自動回收。固定 SOCKS5 出口、UDP 策略與上游/TUN 中斷時的防洩漏保護維持有效。升級在停止服務前自動補裝缺少的 conntrack，失敗時保留既有服務；修復 CI 虛擬機啟動階段的 SSH 逾時重試。Linux 實測涵蓋並行、重撥、DNS 與 UDP，Windows/macOS 原生撥號尚未驗證。",
+		"en":    "Add PPP DNS advertisement, custom DoH/TCP resolvers and client setup guidance. Isolate L2TP/IPsec clients sharing one NAT and source port 1701; automatically reclaim internal endpoints after quarantine and complete idle checks. Preserve fixed SOCKS5 exits, UDP policies and leak protection during upstream/TUN failures. Install missing conntrack before stopping services; dependency failures leave existing services running. Retry transient SSH timeouts during CI guest startup. Linux live tests cover concurrency, redial, DNS and UDP; native Windows/macOS dialing remains unverified.",
 	}
 	if regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(result.Version) {
 		result.ReleaseURL = "https://github.com/lucaswren/s2l/releases/tag/" + result.Version

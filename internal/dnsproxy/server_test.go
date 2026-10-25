@@ -11,7 +11,7 @@ import (
 )
 
 func TestLocalTCPResolverFramesAndCancellation(t *testing.T) {
-	s, err := Start(model.SocksNode{}, "auto")
+	s, err := Start(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
 	if err != nil {
 		t.Fatal(err)
 	}

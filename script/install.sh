@@ -76,7 +76,7 @@ IPSEC_PREINSTALLED=0
 dpkg-query -W -f='${Status}' strongswan-starter 2>/dev/null | grep -q "install ok installed" && IPSEC_PREINSTALLED=1
 apt_get install -y --no-install-recommends \
   ca-certificates curl wget tar iptables iproute2 psmisc iputils-ping mtr-tiny \
-  xl2tpd ppp openssl python3 build-essential strongswan strongswan-starter kmod
+  xl2tpd ppp openssl python3 build-essential strongswan strongswan-starter kmod conntrack
 
 # Package post-install scripts can start an unconfigured daemon. It was verified
 # inactive before package installation; keep it stopped until guards are ready.
@@ -210,6 +210,7 @@ install -m 700 "${SCRIPT_DIR}/remote_update.sh" "${INSTALL_DIR}/remote_update.sh
 install -m 600 "${SCRIPT_DIR}/manage_config.py" "${INSTALL_DIR}/manage_config.py"
 install -m 600 "${SCRIPT_DIR}/manage_ssh.py" "${INSTALL_DIR}/manage_ssh.py"
 install -m 600 "${SCRIPT_DIR}/manage_ipsec.py" "${INSTALL_DIR}/manage_ipsec.py"
+install -m 600 "${SCRIPT_DIR}/ipsec_nat.py" "${INSTALL_DIR}/ipsec_nat.py"
 install -m 600 "${SCRIPT_DIR}/manage_time.py" "${INSTALL_DIR}/manage_time.py"
 install -m 600 "${SCRIPT_DIR}/manage_update.py" "${INSTALL_DIR}/manage_update.py"
 install -m 600 "${SCRIPT_DIR}/verify_update.py" "${INSTALL_DIR}/verify_update.py"
@@ -242,6 +243,8 @@ mru 1400
 lcp-echo-interval 30
 lcp-echo-failure 4
 connect-delay 5000
+ms-dns 1.1.1.1
+ms-dns 8.8.8.8
 EOF
 
 cat >/etc/xl2tpd/xl2tpd.conf <<'EOF'

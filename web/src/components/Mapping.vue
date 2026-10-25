@@ -71,7 +71,7 @@ const form = reactive({
   subnet: "10.0.101.0/24",
   l2tp_user: "",
   l2tp_pass: "",
-  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto", dns_doh_url: "", dns_tcp_address: "",
 });
 const importText = ref("");
 const importErrors = ref([]);
@@ -122,7 +122,7 @@ function resetForm() {
     subnet: `10.0.${id % 256}.0/24`,
     l2tp_user: `l2tp${id}`,
     l2tp_pass: "",
-  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto", dns_doh_url: "", dns_tcp_address: "",
   });
 }
 
@@ -150,7 +150,7 @@ async function openEdit(m) {
     subnet: m.subnet,
     l2tp_user: m.l2tp_user || "",
     l2tp_pass: m.l2tp_pass || "",
-    mtu: m.mtu || 1400, mss: m.mss || 1200, queue_length: m.queue_length || 1000, udp_policy: m.udp_policy || "reject", dns_mode: m.dns_mode || "auto",
+    mtu: m.mtu || 1400, mss: m.mss || 1200, queue_length: m.queue_length || 1000, udp_policy: m.udp_policy || "reject", dns_mode: m.dns_mode || "auto", dns_doh_url: m.dns_doh_url || "", dns_tcp_address: m.dns_tcp_address || "",
   });
   mode.value = "edit";
 }
@@ -176,7 +176,7 @@ async function save() {
     };
     if (editingId.value) body.id = editingId.value;
     const preview=await api.previewMapping(body,editRevision.value);
-    const labels={get observe_connections(){return tr("连接观测")},get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); },get max_connections() { return tr("连接上限"); },get max_sessions() { return tr("PPP 会话上限"); }};
+    const labels={get dns_doh_url(){return tr("DoH 地址")},get dns_tcp_address(){return tr("TCP DNS 地址")},get observe_connections(){return tr("连接观测")},get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); },get max_connections() { return tr("连接上限"); },get max_sessions() { return tr("PPP 会话上限"); }};
     await ElMessageBox.confirm(tr("变更：{0}。影响 {1} 条映射。{2}", preview.fields.map(f=>labels[f]||f).join('、')||tr("无"), preview.affected.length, preview.message),tr("保存配置"),{get confirmButtonText() { return tr("保存"); },get cancelButtonText() { return tr("返回编辑"); }});
     await api.saveMapping(body,editRevision.value);
     emit("toast", {
@@ -466,6 +466,10 @@ const editingActive = computed(() => {
           <el-form-item :label='tr("接口队列长度")'><el-input-number v-model="form.queue_length" :min="100" :max="10000" :disabled="editingActive" /></el-form-item>
           <el-form-item :label='tr("UDP 策略")'><el-select v-model="form.udp_policy" :disabled="editingActive"><el-option value="reject-quic" :label='tr("拒绝 UDP/443，支持时回退 TCP")' /><el-option value="allow" :label='tr("允许 UDP（需上游支持）")' /><el-option value="reject" :label='tr("主动拒绝 UDP（DNS 走 DoH/TCP，推荐）")' /></el-select></el-form-item>
           <el-form-item :label='tr("DNS 模式")' class="form-wide"><el-select v-model="form.dns_mode" :disabled="editingActive"><el-option value="auto" :label='tr("自动：DoH 故障时切换 TCP DNS")' /><el-option value="doh" :label='tr("仅 DoH")' /><el-option value="tcp" :label='tr("仅 TCP DNS")' /></el-select></el-form-item>
+          <el-form-item :label='tr("DoH 地址")' class="form-wide"><el-input v-model.trim="form.dns_doh_url" name="dns_doh_url" maxlength="2048" placeholder="https://1.1.1.1/dns-query" :disabled="editingActive" /></el-form-item>
+          <el-form-item :label='tr("TCP DNS 地址")' class="form-wide"><el-input v-model.trim="form.dns_tcp_address" name="dns_tcp_address" maxlength="320" placeholder="8.8.8.8:53" :disabled="editingActive" /></el-form-item>
+          <p class="muted form-wide">{{ tr("留空使用默认解析器。DoH 必须是无账号、查询参数和片段的 HTTPS URL；TCP DNS 填写主机:端口，IPv6 地址加方括号。解析器域名和所有 DNS 查询均经当前 SOCKS5。") }}</p>
+          <p class="muted form-wide">{{ tr("自动模式仅在同一节点内切换 DoH/TCP，不切换节点或直连。自定义 DNS 不改变客户端收到的 DNS 地址；进入隧道的 53 端口请求会使用这里的解析器。") }}</p>
           <p class="muted form-wide">{{ tr("默认 MTU 1400、MSS 1200。减小 MTU 时请同步调整 MSS；允许 UDP 无法为不支持 UDP 的节点增加能力。") }}</p>
           </div></details></div></el-form
       ><template #footer

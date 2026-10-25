@@ -21,6 +21,7 @@ func TestMappingNetworkOptionsRoundTripAndRunningProtection(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := model.TunnelMapping{ID: "m", NodeID: "n", TunName: "tun101", TableID: 101, Subnet: "10.0.101.0/24", L2TPUser: "test-user", L2TPPass: "test-password", MTU: 1280, MSS: 1100, QueueLength: 500, UDPPolicy: "allow", DNSMode: "tcp"}
+	m.DNSDoHURL, m.DNSTCPAddress = "https://resolver.example/dns-query", "dns.internal:5353"
 	handler := NewServer(st, nil, nil).Handler()
 	post := func(m model.TunnelMapping) int {
 		body, _ := json.Marshal(m)
@@ -34,18 +35,31 @@ func TestMappingNetworkOptionsRoundTripAndRunningProtection(t *testing.T) {
 		t.Fatal(code)
 	}
 	saved, ok := st.GetMapping("m")
-	if !ok || saved.MTU != 1280 || saved.MSS != 1100 || saved.QueueLength != 500 || saved.UDPPolicy != "allow" || saved.DNSMode != "tcp" {
+	if !ok || saved.MTU != 1280 || saved.MSS != 1100 || saved.QueueLength != 500 || saved.UDPPolicy != "allow" || saved.EffectiveDNSOptions() != m.EffectiveDNSOptions() {
 		t.Fatal("network options lost during persistence", saved)
+	}
+	for _, bad := range []model.DNSOptions{{DoHURL: "http://dns.example/query"}, {DoHURL: "https://dns.example/query#"}, {TCPAddress: "dns.example:0"}} {
+		invalid := m
+		invalid.DNSDoHURL, invalid.DNSTCPAddress = bad.DoHURL, bad.TCPAddress
+		if code := post(invalid); code != http.StatusBadRequest {
+			t.Fatalf("invalid DNS accepted: %+v, code=%d", bad, code)
+		}
+		got, _ := st.GetMapping("m")
+		if got != saved {
+			t.Fatal("invalid DNS changed persisted mapping", got)
+		}
 	}
 	if err := st.UpdateMappingStatus("m", model.StatusRunning, ""); err != nil {
 		t.Fatal(err)
 	}
-	changes := []model.TunnelMapping{m, m, m, m, m}
+	changes := []model.TunnelMapping{m, m, m, m, m, m, m}
 	changes[0].MTU = 1300
 	changes[1].MSS = 1150
 	changes[2].QueueLength = 600
 	changes[3].UDPPolicy = "reject-quic"
 	changes[4].DNSMode = "auto"
+	changes[5].DNSDoHURL = "https://other.example/dns-query"
+	changes[6].DNSTCPAddress = "other.internal:53"
 	for _, change := range changes {
 		if code := post(change); code != http.StatusBadRequest {
 			t.Fatalf("running mapping accepted options change: %+v, code=%d", change, code)

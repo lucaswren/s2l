@@ -10,7 +10,7 @@ import (
 )
 
 func TestCanceledRequestsDoNotDisablePrimary(t *testing.T) {
-	r := New(model.SocksNode{}, "auto")
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
 	defer r.Close()
 	r.exchange = func(ctx context.Context, _ string, _ []byte) ([]byte, error) { <-ctx.Done(); return nil, ctx.Err() }
 	q, _ := QueryA("example.com")
@@ -27,7 +27,7 @@ func TestCanceledRequestsDoNotDisablePrimary(t *testing.T) {
 }
 
 func TestBackupDoesNotWaitForPrimaryRecoveryProbe(t *testing.T) {
-	r := New(model.SocksNode{}, "auto")
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
 	defer r.Close()
 	r.status.Active = "tcp"
 	started := make(chan struct{})
@@ -65,7 +65,7 @@ func TestBackupDoesNotWaitForPrimaryRecoveryProbe(t *testing.T) {
 }
 
 func TestMalformedAnswerCannotBypassFallback(t *testing.T) {
-	r := New(model.SocksNode{}, "auto")
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
 	defer r.Close()
 	q, _ := QueryA("example.com")
 	methods := []string{}

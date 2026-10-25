@@ -132,7 +132,7 @@ func TestGenerateConfigInvalidAddr(t *testing.T) {
 
 func TestRuntimeDNSAndMappingOptions(t *testing.T) {
 	for _, policy := range []string{"allow", "reject-quic", "reject"} {
-		m := model.TunnelMapping{TunName: "tun101", TableID: 101, MTU: 1280, MSS: 1100, UDPPolicy: policy}
+		m := model.TunnelMapping{TunName: "tun101", TableID: 101, MTU: 1280, MSS: 1100, UDPPolicy: policy, DNSDoHURL: "https://resolver.example/dns-query", DNSTCPAddress: "dns.internal:5353"}
 		data, err := GenerateConfig(model.SocksNode{Addr: "1.2.3.4:1080"}, m, "127.0.0.1:19053")
 		if err != nil {
 			t.Fatal(err)
@@ -143,6 +143,9 @@ func TestRuntimeDNSAndMappingOptions(t *testing.T) {
 			t.Fatal("mapping MTU ignored")
 		}
 		dns := cfg["dns"].(map[string]any)
+		if cfg["route"].(map[string]any)["final"] != "proxy" || len(dns["servers"].([]any)) != 1 {
+			t.Fatal("custom DNS introduced a fallback path")
+		}
 		server := dns["servers"].([]any)[0].(map[string]any)
 		if dns["final"] != "local-proxy" || server["address"] != "tcp://127.0.0.1:19053" {
 			t.Fatal("live resolver not wired")

@@ -41,6 +41,8 @@ type TunnelMapping struct {
 	QueueLength        int    `json:"queue_length,omitempty"`
 	UDPPolicy          string `json:"udp_policy,omitempty"` // reject (default) | allow | reject-quic
 	DNSMode            string `json:"dns_mode,omitempty"`   // auto (default) | doh | tcp
+	DNSDoHURL          string `json:"dns_doh_url,omitempty"`
+	DNSTCPAddress      string `json:"dns_tcp_address,omitempty"`
 }
 
 func (m TunnelMapping) EffectiveMTU() int {

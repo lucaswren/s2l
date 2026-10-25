@@ -94,6 +94,8 @@ func SameMappingSettings(a, b model.TunnelMapping) bool {
 		m.QueueLength = m.EffectiveQueueLength()
 		m.UDPPolicy = m.EffectiveUDPPolicy()
 		m.DNSMode = m.EffectiveDNSMode()
+		dns := m.EffectiveDNSOptions()
+		m.DNSDoHURL, m.DNSTCPAddress = dns.DoHURL, dns.TCPAddress
 		return m
 	}
 	return normalize(a) == normalize(b)

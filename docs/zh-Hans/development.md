@@ -2,6 +2,8 @@
 
 [首页](../../README.zh-Hans.md) · [English](../en/development.md) · [繁體中文](../zh-Hant/development.md) · [简体中文](../zh-Hans/development.md)
 
+[客户端接入、DNS 与验收](clients.md)
+
 L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联至 sing-box TUN、策略路由表及防火墙规则，再由 sing-box 连接 SOCKS5 上游。管理界面的 Nginx HTTPS 代理与此数据路径分开。
 
 `cmd/s2l/` 负责启动与关闭；`internal/api/` 提供网页与脚本会话鉴权及管理 API；`internal/service/` 编排映射生命周期。`internal/singbox/`、`network/`、`l2tp/` 负责进程、路由、防火墙与 PPP；`store/`、`model/`、`config/` 处理状态、模型与配置。`web/src/` 是前端源码，`web/dist/` 是须提交的内嵌资源；`script/` 与 `deploy/systemd/` 管理安装及服务。
@@ -56,6 +58,13 @@ node script/test_auth_ui.mjs
 # 仅在隔离 Linux 测试主机运行，需内核 PPP/L2TP 支持及测试依赖。
 go test -c -o /tmp/s2l-l2tp.test ./internal/service
 sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
+for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+  sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --transport "$transport"
+done
 ```
 
-L2TP 测试隔离挂载、网络与 PID 命名空间，验证双固定出口、DNS、UDP 主动拒绝、进程恢复与规则修复。浏览器测试覆盖桌面、390/320 像素、语言切换与未保存表单；鉴权测试使用真实后端与临时数据，覆盖登录、会话保持及退出。页面测试不能替代 Linux 数据路径测试。
+L2TP 测试隔离挂载、网络与 PID 命名空间，通过真实 PPP IPCP 验证 DNS 下发，检查自定义 DoH、同节点 TCP DNS 回退及客户端 UDP/TCP DNS 查询，并验证双固定出口。单个及双上游中断时，HTTPS 与未缓存 DNS 请求须失败，PPP 保持连接。另设可直接到达且证书验证成功的 HTTPS 出口作正向对照；故障与 TUN 消失期间，其出站数据包计数须保持零。也检查 UDP 主动拒绝、进程恢复与规则修复。浏览器测试覆盖桌面、390/320 像素、语言切换与未保存表单；鉴权测试使用真实后端与临时数据，覆盖登录、会话保持及退出。页面测试不能替代 Linux 数据路径测试。
+
+额外模式需要 strongSwan/starter、conntrack 以及内核 XFRM、连接跟踪区和 NAT INPUT 支持。`ipsec` 验证无 NAT 路由器的客户端（仍强制 NAT-T）；`ipsec-nat` 使用不同转换后地址；`ipsec-shared-nat` 共享公网地址、源端口分别为 1701/1702；`ipsec-shared-nat-1701` 同时共享公网地址及源端口 1701。均使用生产配置和 updown 辅助程序，验证 DNS、各节点固定出口、UDP allow/reject-quic、上游/TUN 故障及直连出站计数为零。相同端口模式还延迟 updown 复现早到包、在线修复防火墙并删除回包标记、轮换 CHILD_SA，并让一个客户端断线重拨，核对另一客户端不受影响、退役连接跟踪区为空。入站和出站防护缺失必须被检测并修复。外部节点探测单独运行；Linux 对端通过不代表原生 Windows/macOS 已验证。
+
+相同端口测试还将分配计数置为 65,536，执行四轮端点回收，共新增七次真实重拨，其中三轮为双客户端并发。保留真实的 30 秒隔离期，由生产 updown 自动完成回收。残留 UDP 套接字或控制查询失败必须阻止复用，旧端点回包必须被出站防护拦截；单客户端回收期间持续探测另一个客户端的固定出口。每轮复核 DNS、UDP 策略、SOCKS 身份及 ESP，随后继续执行上游/TUN 中断和直连计数为零的故障测试。Python 回归覆盖 16 个并发进程分配新旧端点、45,540 次模拟生命周期、不完整/变化的全局快照、半开隧道、可恢复的中断日志及查询失败。长循环中的内核观察使用模拟，不代表进行了 45,540 次真实 VPN 拨号。

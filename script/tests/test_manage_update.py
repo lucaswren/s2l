@@ -113,6 +113,7 @@ class WebUpdateTests(unittest.TestCase):
 
     def test_output_is_bounded_and_never_saved_as_failure_message(self):
         for output, reason in (
+            (b'connection timed out\nconntrack dependency installation failed', 'dependency'),
             (b'build cache is required: GOCACHE is not defined', 'build_cache'),
             (b'go.mod requires go >= 1.22', 'toolchain'),
             (b'no space left on device', 'disk_full'),

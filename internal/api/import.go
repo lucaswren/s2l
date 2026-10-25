@@ -165,6 +165,7 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 				m.ObserveConnections = existing.ObserveConnections
 				m.UploadKbps, m.DownloadKbps, m.MaxConnections, m.MaxSessions = existing.UploadKbps, existing.DownloadKbps, existing.MaxConnections, existing.MaxSessions
 				m.UDPPolicy, m.DNSMode = existing.UDPPolicy, existing.DNSMode
+				m.DNSDoHURL, m.DNSTCPAddress = existing.DNSDoHURL, existing.DNSTCPAddress
 			}
 			m.Status = existing.Status
 		} else {

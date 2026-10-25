@@ -10,7 +10,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-go@v7.0.0
@@ -39,10 +39,10 @@ jobs:
           go test -c -o /tmp/s2l-network.test ./internal/network
           sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run 'Test(LeakGuards|PPPManagement)Integration' -test.v
       - run: go vet ./...
-      - name: Verify real L2TP fixed exits, DNS and UDP rejection
-        timeout-minutes: 8
+      - name: Verify real L2TP, IPsec, NAT, DNS and UDP policies
+        timeout-minutes: 18
         run: |
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y xl2tpd ppp curl
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y xl2tpd ppp curl strongswan strongswan-starter conntrack
           # Hosted Azure kernels can omit L2TP from their base module package.
           # Install modules for the running kernel; never skip the real dial test.
           if ! modinfo l2tp_ppp >/dev/null 2>&1; then
@@ -50,8 +50,12 @@ jobs:
           fi
           sudo modprobe ppp_generic
           sudo modprobe l2tp_ppp
+          sudo modprobe xfrm_user
           go test -c -o /tmp/s2l-l2tp.test ./internal/service
           sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox "$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box"
+          for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+            sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox "$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" --transport "$transport"
+          done
       - run: python3 -m unittest discover -s script/tests
       - name: Verify upgrade preservation and failure recovery
         run: sudo env S2L_TEST_GOROOT="$(go env GOROOT)" unshare --mount --net --propagation private /usr/bin/python3 script/test_update_integration.py

@@ -66,6 +66,7 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 	}
 
 	level := "warn"
+	dns := mapping.EffectiveDNSOptions()
 	cfg := map[string]any{
 		"log": map[string]any{
 			"level":     level,
@@ -75,13 +76,13 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 			"servers": []map[string]any{
 				{
 					"tag":      "doh",
-					"address":  "https://1.1.1.1/dns-query",
+					"address":  dns.DoHURL,
 					"detour":   "proxy",
 					"strategy": "ipv4_only",
 				},
 				{
 					"tag":      "tcpdns",
-					"address":  "tcp://8.8.8.8",
+					"address":  "tcp://" + dns.TCPAddress,
 					"detour":   "proxy",
 					"strategy": "ipv4_only",
 				},
@@ -132,6 +133,9 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 			},
 			"final": "proxy",
 		},
+	}
+	if dns.Mode == "tcp" {
+		cfg["dns"].(map[string]any)["final"] = "tcpdns"
 	}
 	if len(resolverAddress) > 0 {
 		host, portText, err := net.SplitHostPort(resolverAddress[0])

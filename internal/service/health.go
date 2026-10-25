@@ -344,19 +344,20 @@ func (s *MappingService) checkMapping(ctx context.Context, m model.TunnelMapping
 	legs.Add(2)
 	go func() {
 		defer legs.Done()
-		report.TCP = s.probes.get(ctx, probeKey{node, "tcp", false}, func() speedtest.HealthReport { return speedtest.HealthReport{TCP: speedtest.ProbeTCP(ctx, node)} }).TCP
+		report.TCP = s.probes.get(ctx, probeKey{Node: node, Mode: "tcp"}, func() speedtest.HealthReport { return speedtest.HealthReport{TCP: speedtest.ProbeTCP(ctx, node)} }).TCP
 	}()
 	go func() {
 		defer legs.Done()
-		report.DNS = s.probes.get(ctx, probeKey{node, "dns:" + m.EffectiveDNSMode(), false}, func() speedtest.HealthReport {
-			return speedtest.HealthReport{DNS: speedtest.ProbeDNS(ctx, node, m.EffectiveDNSMode())}
+		dns := m.EffectiveDNSOptions()
+		report.DNS = s.probes.get(ctx, probeKey{Node: node, Mode: "dns", DNS: dns}, func() speedtest.HealthReport {
+			return speedtest.HealthReport{DNS: speedtest.ProbeDNSWithOptions(ctx, node, dns)}
 		}).DNS
 	}()
 	if probeUDP {
 		legs.Add(1)
 		go func() {
 			defer legs.Done()
-			report.UDP = s.probes.get(ctx, probeKey{node, "udp", true}, func() speedtest.HealthReport { return speedtest.HealthReport{UDP: speedtest.ProbeUDP(ctx, node)} }).UDP
+			report.UDP = s.probes.get(ctx, probeKey{Node: node, Mode: "udp", UDP: true}, func() speedtest.HealthReport { return speedtest.HealthReport{UDP: speedtest.ProbeUDP(ctx, node)} }).UDP
 		}()
 	}
 	legs.Wait()

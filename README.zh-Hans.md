@@ -2,6 +2,8 @@
 
 [English](README.md) · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
+[客户端接入、DNS 与验收](docs/zh-Hans/clients.md)
+
 S2L 在 Linux 上管理 L2TP 客户端连接，通过 sing-box、策略路由与 iptables 将流量导向指定 SOCKS5 上游。Go 服务内嵌 Vue 3 / Element Plus 管理界面，支持节点与映射管理、批量导入、启停、重启恢复、上下行测速与系统设置。管理界面支持简体中文、繁体中文与英文，使用表单登录和会话鉴权；安装消息为简体中文。
 
 仅在获得授权的主机、网络与上游服务上使用。部署前阅读[法律与合规说明](docs/zh-Hans/legal.md)，尤其涉及中国大陆或跨境连接时。软件不提供监管许可，也不保证匿名性。
@@ -26,7 +28,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
 ```
 
-登录显示的 HTTPS 地址，添加授权节点，创建映射并启动至 `running`。客户端使用服务器 IP 与映射账号密码。普通 L2TP 使用 UDP 1701；IPsec 需要 UDP 500/4500 及 ESP（IP 协议 50）。先阅读操作指南再开放端口。更新现有安装不要重跑安装程序。从已审阅源码工作副本安装的方法见[开发指南](docs/zh-Hans/development.md)。
+登录显示的 HTTPS 地址，添加授权节点，创建映射并启动至 `running`。客户端使用服务器 IP 与映射账号密码。普通 L2TP 使用 UDP 1701；IPsec 需要 UDP 500/4500，本项目统一使用 NAT-T 封装，无需单独放行 ESP。先阅读操作指南再开放端口。更新现有安装不要重跑安装程序。从已审阅源码工作副本安装的方法见[开发指南](docs/zh-Hans/development.md)。
 
 持续 PPP 防泄漏、上游 TCP／UDP／DNS 独立健康监控与 sing-box/TUN 自动恢复详见[操作指南](docs/zh-Hans/operations.md)。现有安装须先安装新的防护服务，再重新启动 xl2tpd。
 

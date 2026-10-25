@@ -6,7 +6,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStartPre=/usr/bin/python3 /opt/s2l/manage_ipsec.py firewall
+ExecStartPre=/usr/bin/python3 /opt/s2l/ipsec_nat.py cleanup
 ExecStart=/usr/lib/ipsec/starter --nofork --conf /opt/s2l/ipsec.conf
+ExecStopPost=/usr/bin/python3 /opt/s2l/ipsec_nat.py cleanup
 Restart=on-failure
 RestartSec=3
 TimeoutStopSec=15

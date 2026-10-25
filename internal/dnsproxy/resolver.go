@@ -33,8 +33,9 @@ type Resolver struct {
 	wg                  sync.WaitGroup
 }
 
-func New(node model.SocksNode, mode string) *Resolver {
-	return newResolver(node, mode, "https://1.1.1.1/dns-query", "8.8.8.8:53")
+func New(node model.SocksNode, options model.DNSOptions) *Resolver {
+	options = options.WithDefaults()
+	return newResolver(node, options.Mode, options.DoHURL, options.TCPAddress)
 }
 
 func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolver {

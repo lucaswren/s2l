@@ -25,6 +25,29 @@ def free_port():
         return listener.getsockname()[1]
 
 
+def wait_for_guest(vm, guest, console, previous=None, timeout=240):
+    """Retry transient SSH failures during boot, within one total deadline."""
+    end = time.monotonic() + timeout
+    last = 'SSH not ready'
+    while time.monotonic() < end:
+        if vm.poll() is not None:
+            raise RuntimeError('QEMU exited: ' + console.read_text(errors='replace')[-6000:])
+        remaining = end - time.monotonic()
+        if remaining <= 0:
+            break
+        try:
+            result = guest('cat /proc/sys/kernel/random/boot_id', check=False, timeout=min(15, remaining))
+        except subprocess.TimeoutExpired:
+            last = 'SSH readiness probe timed out'
+        else:
+            boot = result.stdout.strip()
+            if result.returncode == 0 and boot and boot != previous:
+                return boot
+            last = 'waiting for new boot ID' if result.returncode == 0 else 'SSH not ready'
+        time.sleep(min(3, max(0, end - time.monotonic())))
+    raise RuntimeError('guest boot timed out: ' + last)
+
+
 def main():
     repository = Path(__file__).resolve().parents[1]
     for name in ('qemu-system-x86_64', 'qemu-img', 'cloud-localds', 'ssh', 'scp', 'ssh-keygen', 'curl'):
@@ -68,28 +91,18 @@ def main():
         def guest(command, check=True, timeout=900):
             return subprocess.run(ssh_base + ['sudo -n bash -lc ' + shlex.quote('set -euo pipefail; ' + command)],
                                   check=check, text=True, capture_output=True, timeout=timeout)
-        def ready(previous=None):
-            end = time.monotonic() + 240
-            while time.monotonic() < end:
-                if vm.poll() is not None:
-                    raise RuntimeError('QEMU exited: ' + (root / 'console.log').read_text(errors='replace')[-6000:])
-                result = guest('cat /proc/sys/kernel/random/boot_id', check=False, timeout=15)
-                if result.returncode == 0 and result.stdout.strip() and result.stdout.strip() != previous:
-                    return result.stdout.strip()
-                time.sleep(3)
-            raise RuntimeError('guest boot timed out')
         def copy(path, target):
             run(['scp', '-q', '-i', str(key), '-P', str(port), '-o', 'StrictHostKeyChecking=no',
                  '-o', 'UserKnownHostsFile=/dev/null', str(path), 'fixture@127.0.0.1:' + target])
         try:
-            boot = ready()
+            boot = wait_for_guest(vm, guest, root / 'console.log')
             guest('cloud-init status --wait', timeout=180)
             # Current Noble GA 6.8.0-147 has a PPPoL2TP refcount regression
             # (Ubuntu bug 2169477). Use the supported HWE kernel for actual
             # forwarding tests, rather than hiding a guest kernel lockup.
             guest('export DEBIAN_FRONTEND=noninteractive; apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 update -qq; apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 install -y --no-install-recommends linux-generic-hwe-24.04', timeout=900)
             guest('systemctl reboot', check=False, timeout=20)
-            boot = ready(boot)
+            boot = wait_for_guest(vm, guest, root / 'console.log', previous=boot)
             print('Guest kernel: ' + guest('uname -r').stdout.strip(), flush=True)
             source_archive = root / 'source.tgz'
             with tarfile.open(source_archive, 'w:gz') as bundle:
@@ -136,7 +149,7 @@ def main():
             print(result.stdout, flush=True)
             original = guest('sha256sum /opt/s2l/config.json').stdout
             guest('systemctl reboot', check=False, timeout=20)
-            ready(boot)
+            wait_for_guest(vm, guest, root / 'console.log', previous=boot)
             guest('systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; python3 /opt/src/s2l/script/verify_update.py health /opt/s2l/config.json', timeout=150)
             if guest('sha256sum /opt/s2l/config.json').stdout != original:
                 raise RuntimeError('reboot changed installed configuration')

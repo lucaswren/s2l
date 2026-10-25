@@ -185,7 +185,7 @@ async function saveIPsec() {
   try {
     await ElMessageBox.confirm(
       ipsec.enabled
-        ? tr("启用后仅接受通过 IPsec 加密的 L2TP 连接。请放行 UDP 500、4500 和 ESP 协议，客户端填写相同的预共享密钥。现有普通 L2TP 连接需要重新拨号。")
+        ? tr("启用后仅接受通过 IPsec 加密的 L2TP 连接，统一使用 NAT-T。请放行 UDP 500、4500，客户端填写相同的预共享密钥。现有连接需要重新拨号。")
         : tr("关闭后恢复普通 L2TP，客户端需清空预共享密钥并重新拨号。"),
       tr("应用接入设置"),
       {

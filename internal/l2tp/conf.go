@@ -106,6 +106,9 @@ lcp-echo-interval 30
 lcp-echo-failure 4
 connect-delay 5000
 `
+	for _, address := range model.ClientDNSAddresses() {
+		content += "ms-dns " + address + "\n"
+	}
 	if err := c.ensureEventScripts(); err != nil {
 		return err
 	}

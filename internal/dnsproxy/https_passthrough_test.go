@@ -12,7 +12,7 @@ import (
 func TestHTTPSRecordsPassThroughLiveListener(t *testing.T) {
 	for _, mode := range []string{"auto", "doh", "tcp"} {
 		t.Run(mode, func(t *testing.T) {
-			s, err := Start(model.SocksNode{}, mode)
+			s, err := Start(model.SocksNode{}, model.DNSOptions{Mode: mode})
 			if err != nil {
 				t.Fatal(err)
 			}

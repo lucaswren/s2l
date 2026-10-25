@@ -55,7 +55,7 @@ func protocolResult(method string, err error) model.ProtocolHealth {
 }
 
 func checkDNSHealth(ctx context.Context, node model.SocksNode, dnsMode ...string) model.ProtocolHealth {
-	return checkDNSHealthTargets(ctx, node, "https://1.1.1.1/dns-query", "8.8.8.8:53", dnsMode...)
+	return checkDNSHealthTargets(ctx, node, model.DefaultDNSDoHURL, model.DefaultDNSTCPAddress, dnsMode...)
 }
 
 func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget, tcpTarget string, dnsMode ...string) model.ProtocolHealth {
@@ -267,7 +267,14 @@ func ProbeTCP(ctx context.Context, node model.SocksNode) model.ProtocolHealth {
 	return probeHTTPSTargets(ctx, node, healthTargets)
 }
 func ProbeDNS(ctx context.Context, node model.SocksNode, mode string) model.ProtocolHealth {
-	return checkDNSHealth(ctx, node, mode)
+	return ProbeDNSWithOptions(ctx, node, model.DNSOptions{Mode: mode})
+}
+func ProbeDNSWithOptions(ctx context.Context, node model.SocksNode, options model.DNSOptions) model.ProtocolHealth {
+	options = options.WithDefaults()
+	if err := options.Validate(); err != nil {
+		return protocolResult("dns", err)
+	}
+	return checkDNSHealthTargets(ctx, node, options.DoHURL, options.TCPAddress, options.Mode)
 }
 func ProbeUDP(ctx context.Context, node model.SocksNode) model.ProtocolHealth {
 	return checkUDPHealth(ctx, node)

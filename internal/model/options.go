@@ -23,10 +23,5 @@ func (m TunnelMapping) ValidateOptions() error {
 	default:
 		return fmt.Errorf("invalid udp_policy")
 	}
-	switch m.EffectiveDNSMode() {
-	case "auto", "doh", "tcp":
-	default:
-		return fmt.Errorf("invalid dns_mode")
-	}
-	return nil
+	return m.EffectiveDNSOptions().Validate()
 }

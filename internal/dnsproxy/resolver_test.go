@@ -17,7 +17,7 @@ func response(q []byte, rcode byte) []byte {
 	return a
 }
 func TestFallbackCooldownAndHystereticRecovery(t *testing.T) {
-	r := New(model.SocksNode{}, "auto")
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
 	defer r.Close()
 	q, _ := QueryA("images.example.com")
 	var primaryOK atomic.Bool
@@ -103,7 +103,7 @@ func TestNegativeAnswersAndInvalidResponses(t *testing.T) {
 func TestForcedModeNeverUsesOtherTransport(t *testing.T) {
 	for _, mode := range []string{"doh", "tcp"} {
 		t.Run(mode, func(t *testing.T) {
-			r := New(model.SocksNode{}, mode)
+			r := New(model.SocksNode{}, model.DNSOptions{Mode: mode})
 			defer r.Close()
 			calls := 0
 			r.exchange = func(_ context.Context, method string, _ []byte) ([]byte, error) {

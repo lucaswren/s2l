@@ -386,6 +386,48 @@ func TestDNSCompressedCNAMEChain(t *testing.T) {
 	}
 }
 
+func TestProbeDNSUsesConfiguredRemoteResolver(t *testing.T) {
+	const endpoint = "dns.fixture.invalid:5353"
+	var calls atomic.Int32
+	proxy := socksFixture(t, func(conn net.Conn) {
+		if !fixtureGreeting(conn, false) {
+			return
+		}
+		var request [4]byte
+		if _, err := io.ReadFull(conn, request[:]); err != nil {
+			return
+		}
+		target, err := readSOCKSAddress(conn, request[3])
+		if err != nil || target != endpoint || request[1] != 1 || request[3] != 3 {
+			t.Errorf("configured resolver was not sent as a SOCKS5 domain: %v %q %v", request, target, err)
+			return
+		}
+		calls.Add(1)
+		conn.Write([]byte{5, 0, 0, 1, 127, 0, 0, 1, 0, 53})
+		var size [2]byte
+		if _, err := io.ReadFull(conn, size[:]); err != nil {
+			return
+		}
+		q := make([]byte, binary.BigEndian.Uint16(size[:]))
+		if _, err := io.ReadFull(conn, q); err != nil {
+			return
+		}
+		a := dnsAnswer(q)
+		binary.BigEndian.PutUint16(size[:], uint16(len(a)))
+		conn.Write(append(size[:], a...))
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	result := ProbeDNSWithOptions(ctx, model.SocksNode{Addr: proxy}, model.DNSOptions{Mode: "tcp", TCPAddress: endpoint})
+	if result.State != "healthy" || result.Method != "tcp" || calls.Load() != 1 {
+		t.Fatal("probe did not use configured resolver", result, calls.Load())
+	}
+	result = ProbeDNSWithOptions(ctx, model.SocksNode{Addr: proxy}, model.DNSOptions{TCPAddress: "dns.fixture.invalid:0"})
+	if result.State != "unavailable" || calls.Load() != 1 {
+		t.Fatal("invalid configuration reached SOCKS5", result, calls.Load())
+	}
+}
+
 func FuzzDNSResponseValidation(f *testing.F) {
 	q, _ := dnsQuery()
 	q[0], q[1] = 0x12, 0x34 // Stable across fuzz worker processes; production IDs stay random.

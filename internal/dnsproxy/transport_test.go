@@ -81,6 +81,12 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 	defer proxy.Close()
 	dohAddr := doh.Listener.Addr().String()
 	tcpAddr := tcpListener.Addr().String()
+	_, dohPort, _ := net.SplitHostPort(dohAddr)
+	_, tcpPort, _ := net.SplitHostPort(tcpAddr)
+	// These names are resolved only inside the SOCKS fixture. The .invalid
+	// destination cannot accidentally succeed through the host resolver.
+	dohName := net.JoinHostPort("example.com", dohPort)
+	tcpName := net.JoinHostPort("resolver.example.invalid", tcpPort)
 	var mu sync.Mutex
 	targets := map[string]int{}
 	go func() {
@@ -104,21 +110,26 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 				if _, e := io.ReadFull(c, h); e != nil {
 					return
 				}
-				if h[0] != 5 || h[1] != 1 || h[3] != 1 {
+				if h[0] != 5 || h[1] != 1 || h[3] != 3 {
 					return
 				}
-				address := make([]byte, 6)
+				var size [1]byte
+				if _, e := io.ReadFull(c, size[:]); e != nil {
+					return
+				}
+				address := make([]byte, int(size[0])+2)
 				if _, e := io.ReadFull(c, address); e != nil {
 					return
 				}
-				target := net.JoinHostPort(net.IP(address[:4]).String(), fmt.Sprint(binary.BigEndian.Uint16(address[4:])))
-				if target != dohAddr && target != tcpAddr {
+				target := net.JoinHostPort(string(address[:size[0]]), fmt.Sprint(binary.BigEndian.Uint16(address[size[0]:])))
+				upstream := map[string]string{dohName: dohAddr, tcpName: tcpAddr}[target]
+				if upstream == "" {
 					return
 				}
 				mu.Lock()
 				targets[target]++
 				mu.Unlock()
-				remote, e := net.DialTimeout("tcp", target, time.Second)
+				remote, e := net.DialTimeout("tcp", upstream, time.Second)
 				if e != nil {
 					return
 				}
@@ -133,12 +144,16 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 			}()
 		}
 	}()
-	r := newResolver(model.SocksNode{Addr: proxy.Addr().String()}, "auto", doh.URL+"/dns-query", tcpAddr)
-	defer r.Close()
+	s, err := Start(model.SocksNode{Addr: proxy.Addr().String()}, model.DNSOptions{Mode: "auto", DoHURL: "https://" + dohName + "/dns-query", TCPAddress: tcpName})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	r := s.Resolver
 	r.transport.TLSClientConfig = doh.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
 	q, _ := QueryA("images.example.com")
 	for i := 0; i < 2; i++ {
-		a, e := r.Resolve(context.Background(), q)
+		a, e := s.Query(context.Background(), q)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -176,9 +191,25 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 		t.Fatal("live primary did not recover")
 	}
 	mu.Lock()
-	tcpConnects, dohConnects := targets[tcpAddr], targets[dohAddr]
+	tcpConnects, dohConnects := targets[tcpName], targets[dohName]
 	mu.Unlock()
 	if int(tcpQueries.Load()) != tcpConnects || tcpConnects < 4 || dohConnects < 1 || dohQueries.Load() < 4 || dohHTTP2.Load() < 4 {
 		t.Fatalf("DNS bypassed SOCKS: TCP queries=%d CONNECTs=%d DoH CONNECTs=%d", tcpQueries.Load(), tcpConnects, dohConnects)
+	}
+	// Even if both actual resolvers are directly reachable on this host, an
+	// unavailable SOCKS upstream must never trigger a direct DNS connection.
+	proxy.Close()
+	blocked, err := Start(model.SocksNode{Addr: proxy.Addr().String()}, model.DNSOptions{DoHURL: doh.URL + "/dns-query", TCPAddress: tcpAddr})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocked.Close()
+	blocked.Resolver.transport.TLSClientConfig = doh.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
+	beforeTCP, beforeDoH := tcpQueries.Load(), dohQueries.Load()
+	if _, err := blocked.Query(context.Background(), q); err == nil {
+		t.Fatal("DNS succeeded with unavailable SOCKS upstream")
+	}
+	if tcpQueries.Load() != beforeTCP || dohQueries.Load() != beforeDoH {
+		t.Fatal("failed SOCKS connection fell back to direct DNS")
 	}
 }

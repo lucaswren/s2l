@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/lucaswren/s2l/internal/config"
+	"github.com/lucaswren/s2l/internal/model"
 )
 
 func (s *Server) ConfigureSettings(path string) {
@@ -96,7 +97,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	_, helperErr := os.Stat("/opt/s2l/manage_ssh.py")
 	webURL, webPort, webEnabled := s.webPortSettings()
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, map[string]any{"public_url": webURL, "web_port": webPort, "web_port_enabled": enabled && webEnabled, "admin_user": user, "account_enabled": enabled && s.configPath != "", "ssh_ports": ports, "ssh_password_enabled": enabled && s.configPath != "" && sshPasswordAvailable(), "ipsec": readIPsecStatus(), "ssh_enabled": enabled && s.configPath != "" && runtime.GOOS == "linux" && err == nil && helperErr == nil})
+	writeJSON(w, 200, map[string]any{"client_dns": model.ClientDNSAddresses(), "public_url": webURL, "web_port": webPort, "web_port_enabled": enabled && webEnabled, "admin_user": user, "account_enabled": enabled && s.configPath != "", "ssh_ports": ports, "ssh_password_enabled": enabled && s.configPath != "" && sshPasswordAvailable(), "ipsec": readIPsecStatus(), "ssh_enabled": enabled && s.configPath != "" && runtime.GOOS == "linux" && err == nil && helperErr == nil})
 }
 
 func (s *Server) webPortSettings() (string, int, bool) {

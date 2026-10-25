@@ -16,7 +16,7 @@ class Handler(SimpleHTTPRequestHandler):
  def do_GET(self):
   if self.path=='/api/auth/status':return self.reply(dict(enabled=False,authenticated=True))
   if self.path=='/api/settings/ppp-management':return self.reply(dict(available=True,access=dict(enabled=False,destination_ip='',source_cidrs=[],tcp_ports=[]),sources=[dict(id='m',subnet='10.0.101.0/24',name='account-a')],detected_ports=[38866,51234],configured_ports=[38866,51234],port_check_available=True,local_ipv4=['156.245.235.230']))
-  if self.path=='/api/settings':return self.reply(dict(account_enabled=False,ssh_enabled=False,ssh_ports=[51234],ipsec=dict(available=False)))
+  if self.path=='/api/settings':return self.reply(dict(client_dns=["1.1.1.1","8.8.8.8"],account_enabled=False,ssh_enabled=False,ssh_ports=[51234],ipsec=dict(available=False)))
   if self.path=='/api/settings/time':return self.reply(dict(available=True,timezone='Asia/Shanghai',timezones=['UTC','Asia/Shanghai','America/New_York'],server_time=now,auto_sync=True,synchronized=False,mode='system',custom_available=True,servers=[]))
   if self.path=='/api/backups':return self.reply([dict(id='backup-2-2.json',created_at=now,nodes=1,mappings=1),dict(id='backup-1-1.json',created_at=now,nodes=1,mappings=1)])
   if self.path=='/api/debug':return self.reply(dict(enabled=False))
@@ -39,7 +39,7 @@ class Handler(SimpleHTTPRequestHandler):
     if n=='n':rows[3].update(tls='unavailable',http='not_tested',status=0,stage='tls')
     return dict(node_id=n,node_name='固定出口 A' if n=='n' else '对照出口 B',checked_at=now,targets=rows,exit=dict(healthy,exit_ip='203.0.113.5'),scope='服务器 → 固定 SOCKS5，不经过手机/接入网络',quic='未发送 UDP/QUIC；不证明 客户端 已回退。')
    return self.reply(dict(kind='google',schema_version=1,ok=False,client_path='unverified',google=[report('n')]+([report('n2')] if body.get('compare_node') else []),mapping_policies=[dict(mapping_id='m',node_id='n',udp_policy='reject',dns_mode='auto',max_connections=0,max_sessions=0,mapping_dns=dict(state='unavailable',report=report('n')))]))
-  if self.path=='/api/mappings?preview=1':return self.reply({'fields':['l2tp_pass','upload_kbps','download_kbps'],'affected':['m'],'message':'保存前已校验，测试配置预览。'})
+  if self.path=='/api/mappings?preview=1':return self.reply({'fields':['l2tp_pass','upload_kbps','download_kbps','dns_doh_url','dns_tcp_address'],'affected':['m'],'message':'保存前已校验，测试配置预览。'})
   if self.path.startswith('/api/mappings/'):
    return self.reply({'ok':True,'rules':healthy,'forwarding':dict(healthy,exit_ip='203.0.113.5'),'node':dict(healthy,exit_ip='203.0.113.5'),'exit_comparison':'same','scope':'PPP 模拟入口 → 现有策略路由与防火墙 → TUN → 固定 SOCKS5；不包含 L2TP 认证'})
   return self.reply({'kind':body.get('kind'),'ok':False,'protocols':{'tcp':dict(healthy,state='restricted',status_code=403,error='目标已响应 HTTP 403')},'target':body.get('target')})

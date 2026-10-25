@@ -12,6 +12,7 @@ type probeKey struct {
 	Node model.SocksNode
 	Mode string
 	UDP  bool
+	DNS  model.DNSOptions
 }
 type probeEntry struct {
 	done     chan struct{}
@@ -84,11 +85,17 @@ func (s *MappingService) ProbeNode(ctx context.Context, node model.SocksNode) sp
 	s.mu.Unlock()
 	report := speedtest.ProbeHealth(ctx, node)
 	for _, t := range targets {
-		measured := report
-		if t.m.EffectiveDNSMode() != "auto" {
-			measured.DNS = model.ProtocolHealth{}
-		}
+		measured := nodeReportForMapping(report, t.m)
 		s.finishProbe(ctx, t.m, node, t.h, t.generation, measured)
+	}
+	return report
+}
+
+// A node-wide probe uses default DNS. Never overwrite a mapping's custom DNS
+// health with results for a different resolver or transport policy.
+func nodeReportForMapping(report speedtest.HealthReport, m model.TunnelMapping) speedtest.HealthReport {
+	if m.EffectiveDNSOptions() != (model.DNSOptions{}).WithDefaults() {
+		report.DNS = model.ProtocolHealth{}
 	}
 	return report
 }

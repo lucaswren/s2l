@@ -96,7 +96,7 @@ func (r Report) Healthy() bool {
 // Google resolves through this node only, then pins each HTTPS dial to the
 // returned IPv4 address. No host DNS, alternate node or UDP is used.
 func Google(ctx context.Context, node model.SocksNode) Report {
-	doh, tcp := dnsproxy.New(node, "doh"), dnsproxy.New(node, "tcp")
+	doh, tcp := dnsproxy.New(node, model.DNSOptions{Mode: "doh"}), dnsproxy.New(node, model.DNSOptions{Mode: "tcp"})
 	defer doh.Close()
 	defer tcp.Close()
 	return google(ctx, node, googleHosts, doh, tcp, probe, speedtest.ProbeExitIP)

@@ -2,6 +2,8 @@
 
 [Home](../../README.md) · [English](../en/development.md) · [繁體中文](../zh-Hant/development.md) · [简体中文](../zh-Hans/development.md)
 
+[Client setup, DNS and acceptance checks](clients.md)
+
 ## Data path and responsibilities
 
 An L2TP/PPP client connects to xl2tpd. S2L associates mapping credentials and an IPv4 subnet with a sing-box TUN interface, policy routing table and firewall rules. sing-box forwards mapped traffic to the selected SOCKS5 node. Nginx terminates management HTTPS and proxies to the Go HTTP backend; it is separate from the tunnel path.
@@ -81,6 +83,13 @@ node script/test_auth_ui.mjs
 # Disposable Linux host only: requires PPP/L2TP kernel support and test dependencies.
 go test -c -o /tmp/s2l-l2tp.test ./internal/service
 sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
+for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+  sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --transport "$transport"
+done
 ```
 
-The L2TP runner isolates mount, network and PID namespaces. It checks two fixed exits, DNS over TCP, active UDP rejection, process recovery and missing-rule repair against local fixtures. Browser checks cover desktop and 390/320-pixel layouts, language switching and unsaved forms. The authentication runner uses the real backend with disposable data to test sign-in, session persistence and sign-out. These do not replace Linux data-plane tests.
+The L2TP runner isolates mount, network and PID namespaces. It negotiates DNS through real PPP IPCP, checks custom DoH and same-node TCP DNS fallback for both UDP/TCP client queries, and verifies two fixed exits. Single and simultaneous upstream outages must fail client HTTPS and uncached DNS while keeping PPP connected. A separately reachable, certificate-verified HTTPS uplink is a positive control; an egress counter must remain zero throughout faults and TUN loss. The fixture also checks active UDP rejection, process recovery and missing-rule repair. Browser checks cover desktop and 390/320-pixel layouts, language switching and unsaved forms. The authentication runner uses the real backend with disposable data to test sign-in, session persistence and sign-out. These do not replace Linux data-plane tests.
+
+Additional modes require strongSwan/starter, conntrack and kernel XFRM/conntrack-zone/NAT-INPUT support. `ipsec` tests clients without a NAT router (NAT-T is enforced), `ipsec-nat` uses separate translated addresses, `ipsec-shared-nat` shares an address with ports 1701/1702, and `ipsec-shared-nat-1701` shares both the public address and source port 1701. All use production configuration and the updown helper, checking DNS, per-node fixed exits, UDP allow/reject-quic, upstream/TUN failure and zero direct egress. The identical-port mode deliberately delays updown to exercise early packets, repairs the firewall with both SAs active, removes a response mark, rekeys a CHILD_SA and disconnects/redials one client while verifying the other remains usable and the retired conntrack zone is empty. Missing inbound/outbound guards must be detected and repaired. External node probes are separate; Linux peers do not establish native Windows/macOS compatibility.
+
+The identical-port test also forces the allocation high-water counter to 65,536 and performs four recycling rounds (seven additional real redials, including three concurrent two-client rounds). It uses the actual 30-second quarantine and lets production updown reclaim the endpoints automatically. A retained UDP socket and a failed control query must prevent reuse; stale replies must hit the output guard. The other client is continuously probed while one endpoint retires/reconnects. DNS, UDP policy, fixed SOCKS identities and ESP are checked after each round, followed by the existing upstream/TUN outage and zero-direct-egress checks. Python regressions cover 16 concurrent processes allocating both fresh and recycled slots, 45,540 simulated lifetimes, incomplete/changed global snapshots, half-open tunnels, crash-recoverable journals and inspection failures. These long-loop kernel observations are mocked; they do not represent 45,540 real VPN dials.
