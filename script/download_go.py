@@ -39,7 +39,10 @@ def install(arch):
         raise RuntimeError('invalid Go release metadata')
     with tempfile.TemporaryDirectory(prefix='.s2l-go-', dir='/usr/local') as temporary:
         archive = Path(temporary) / 'go.tgz'
-        subprocess.run(['curl', '-fSL', '--retry', '2', '--connect-timeout', '15', '--max-time', '180',
+        # Avoid stalled HTTP/2 downloads through cloud NAT/proxies. A transfer
+        # making no useful progress should enter curl's bounded retry promptly.
+        subprocess.run(['curl', '-fSL', '--http1.1', '--retry', '2', '--connect-timeout', '15',
+                        '--speed-limit', '1024', '--speed-time', '30', '--max-time', '180',
                         'https://go.dev/dl/' + asset['filename'], '-o', str(archive)], check=True, timeout=600)
         digest = hashlib.sha256()
         with archive.open('rb') as content:

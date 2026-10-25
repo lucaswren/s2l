@@ -49,12 +49,19 @@ func integrationDirectUplink(t *testing.T, root string, cert tls.Certificate, ca
 	if err := os.WriteFile(keyPath, key, 0600); err != nil {
 		t.Fatal(err)
 	}
-	start("ip", "netns", "exec", ns, "python3", "-c", `import http.server,ssl,sys
+	// HTTPServer.server_bind performs a reverse DNS lookup before listening.
+	// The isolated uplink has no resolver; use its literal address as the name
+	// so this positive control does not depend on external DNS or retry timing.
+	start("ip", "netns", "exec", ns, "python3", "-c", `import http.server,socketserver,ssl,sys
 class Handler(http.server.BaseHTTPRequestHandler):
  def do_GET(self):
   body=b'direct-uplink';self.send_response(200);self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
  def log_message(self,*args):pass
-server=http.server.HTTPServer(('198.18.0.9',443),Handler)
+class Server(http.server.HTTPServer):
+ def server_bind(self):
+  socketserver.TCPServer.server_bind(self)
+  self.server_name,self.server_port=self.server_address[:2]
+server=Server(('198.18.0.9',443),Handler)
 tls=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);tls.load_cert_chain(sys.argv[1],sys.argv[2]);server.socket=tls.wrap_socket(server.socket,server_side=True)
 server.serve_forever()
 `, caPath, keyPath)

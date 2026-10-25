@@ -114,8 +114,10 @@ def main():
             # Existing incompatible sing-box must be rejected without application writes.
             guest("printf '#!/bin/sh\\necho sing-box version 1.12.0\\n' > /usr/local/bin/sing-box; chmod 755 /usr/local/bin/sing-box")
             failed = guest(install, check=False)
-            if failed.returncode == 0 or '1.11.15' not in failed.stdout + failed.stderr:
+            if failed.returncode == 0:
                 raise RuntimeError('incompatible sing-box was accepted: ' + failed.stdout + failed.stderr)
+            if '1.11.15' not in failed.stdout + failed.stderr:
+                raise RuntimeError('installation failed before the incompatible sing-box check: ' + failed.stdout + failed.stderr)
             guest('test ! -e /opt/s2l/config.json; test -x /usr/local/go/bin/go; rm /usr/local/bin/sing-box')
             print('PASS incompatible dependency rejection', flush=True)
             # A service start failure must restore files, sysctl and firewall state.
