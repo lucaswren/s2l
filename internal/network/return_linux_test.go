@@ -48,6 +48,7 @@ func TestLeakGuardsIntegrationReturnTraffic(t *testing.T) {
 		must("ip", "netns", "exec", link.ns, "ip", "link", "set", "lo", "up")
 	}
 	must("ip", "netns", "exec", client, "ip", "route", "add", "default", "via", "10.88.1.1")
+	must("ip", "netns", "exec", upstream, "ip", "route", "add", "default", "via", "198.19.1.1")
 	must("ip", "route", "add", "default", "via", "198.19.2.2", "metric", "32760")
 	defer run("ip", "route", "del", "default", "via", "198.19.2.2", "metric", "32760")
 	if err := ensureIPForward(); err != nil {
@@ -111,7 +112,8 @@ data, peer = s.recvfrom(256)
 s.sendto(data, peer)
 print('connected', flush=True)
 for line in sys.stdin:
-    s.sendto(b'late-reply', peer)
+    target = peer if line.strip() == 'reply' else ('10.88.1.2', 46001)
+    s.sendto(b'late-reply', target)
     print('sent', flush=True)
 `)
 	in, err := server.StdinPipe()
@@ -144,6 +146,7 @@ for line in sys.stdin:
 	must("ip", "netns", "exec", client, "python3", "-c", `
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind(('10.88.1.2', 46001))
 s.settimeout(5)
 s.sendto(b'fixed-return', ('198.19.1.2', 5000))
 assert s.recv(256) == b'fixed-return'
@@ -174,9 +177,9 @@ assert s.recv(256) == b'fixed-return'
 		t.Fatal("counter missing", text)
 		return -1
 	}
-	send := func() {
+	send := func(command string) {
 		t.Helper()
-		if _, err := fmt.Fprintln(in, "reply"); err != nil {
+		if _, err := fmt.Fprintln(in, command); err != nil {
 			t.Fatal(err)
 		}
 		waitLine("sent")
@@ -192,7 +195,7 @@ assert s.recv(256) == b'fixed-return'
 	// be ESTABLISHED and hit the WAN counter, reproducing the old vulnerability.
 	positive := []string{"S2L_RETURN", "-i", m.TunName, "-m", "state", "--state", "ESTABLISHED", "-j", "ACCEPT"}
 	must("iptables", append([]string{"-I"}, positive...)...)
-	send()
+	send("reply")
 	deadline := time.Now().Add(5 * time.Second)
 	for count("mangle", "S2L_RETURN_TEST", "RETURN") == 0 && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
@@ -201,19 +204,20 @@ assert s.recv(256) == b'fixed-return'
 		t.Fatal("established late reply did not exercise WAN fallback")
 	}
 	must("iptables", append([]string{"-D"}, positive...)...)
-	blocked := func() {
+	blocked := func(command string) {
 		t.Helper()
 		before := count("filter", "S2L_RETURN", "DROP")
-		send()
+		send(command)
 		deadline := time.Now().Add(5 * time.Second)
 		for count("filter", "S2L_RETURN", "DROP") == before && time.Now().Before(deadline) {
 			time.Sleep(20 * time.Millisecond)
 		}
-		if count("filter", "S2L_RETURN", "DROP") != before+1 || count("mangle", "S2L_RETURN_TEST", "RETURN") != 1 {
-			t.Fatal("late TUN reply was not dropped before the WAN")
+		dropped, escaped := count("filter", "S2L_RETURN", "DROP"), count("mangle", "S2L_RETURN_TEST", "RETURN")
+		if dropped != before+1 || escaped != 1 {
+			t.Fatalf("late TUN reply: drop counter %d -> %d, WAN counter %d (want 1 positive control)", before, dropped, escaped)
 		}
 	}
-	blocked()
+	blocked("reply")
 	// Reconnect remains functional; stopping the mapping must still drop any
 	// replies queued by the TUN process before it exits.
 	must("ip", "route", "add", m.Subnet, "dev", "ppp91")
@@ -222,5 +226,7 @@ assert s.recv(256) == b'fixed-return'
 		t.Fatal(err)
 	}
 	must("ip", "route", "del", m.Subnet, "dev", "ppp91")
-	blocked()
+	// After NAT teardown, target the client directly so this still exercises
+	// FORWARD even if the kernel retired the old masqueraded connection.
+	blocked("direct")
 }
