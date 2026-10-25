@@ -281,7 +281,8 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 			integrationAssertIPsecTraffic(t, ns)
 		}
 		if transport == "ipsec-shared-nat-1701" {
-			integrationIPsecLifecycle(t, root, caPath, run)
+			assertNoDirectEgress()
+			integrationIPsecLifecycle(t, root, caPath, run, assertNoDirectEgress)
 		}
 	}
 	if proxyState["node1"].dohQueries.Load() == 0 || proxyState["node1"].tcpQueries.Load() != 0 {

@@ -17,7 +17,7 @@ import (
 
 // Exercise a deliberately exhausted high-water counter with real SAs, xl2tpd
 // control replies, PPP and conntrack. The production quarantine is not shortened.
-func integrationIPsecRecycling(t *testing.T, root, caPath string, run func(...string) string) {
+func integrationIPsecRecycling(t *testing.T, root, caPath string, run func(...string) string, assertNoDirectEgress func()) {
 	t.Helper()
 	scripts := os.Getenv("S2L_FIXTURE_SCRIPT_DIR")
 	pid := func(name string) string {
@@ -218,5 +218,6 @@ assert len(s['free'])==len(set(s['free'])) and not set(s['free'])&set(slots)
 assert len(s['active'])+len(s['retired'])+len(s['free'])==int(sys.argv[2])
 print('reused active slots:',sorted(slots))`, poolSize)))
 		t.Logf("recycle round %d: %d real redials, distinct reused endpoints, DNS/UDP/fixed SOCKS exits and ESP verified", round+1, len(clients))
+		assertNoDirectEgress()
 	}
 }

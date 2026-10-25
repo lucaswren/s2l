@@ -233,7 +233,7 @@ assert counts==[0],'server sent bare L2TP instead of ESP'
 	}
 }
 
-func integrationIPsecLifecycle(t *testing.T, root, caPath string, run func(...string) string) {
+func integrationIPsecLifecycle(t *testing.T, root, caPath string, run func(...string) string, assertNoDirectEgress func()) {
 	t.Helper()
 	pid := func(peer string) string {
 		b, err := os.ReadFile(filepath.Join(root, "ipsec-"+peer, "pid"))
@@ -407,5 +407,6 @@ rows=subprocess.check_output(['iptables','-nvxL','S2L-IPSEC'],text=True).splitli
 assert int(sys.argv[1])+sum(int(p[0]) for r in rows if len(p:=r.split())>2 and p[2]=='DROP')>2,'delayed updown did not exercise early encrypted arrivals'
 `, droppedBeforeRepair)
 	t.Log("shared NAT with identical 1701: response-mark failure blocked, other peer unaffected, CHILD_SA rekey and redial passed, retired conntrack zone removed")
-	integrationIPsecRecycling(t, root, caPath, run)
+	assertNoDirectEgress()
+	integrationIPsecRecycling(t, root, caPath, run, assertNoDirectEgress)
 }

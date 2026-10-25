@@ -72,6 +72,22 @@ server.serve_forever()
 	// Count all packets actually leaving for the direct uplink, including host
 	// DNS bootstrap attempts and forwarded client traffic. Install after the
 	// positive control so every subsequent packet is unexpected.
+	// Keep bounded headers only, never payloads or credentials, so a nonzero
+	// counter identifies the unexpected protocol/source instead of just a total.
+	start("python3", "-u", "-c", `import json,socket,struct
+s=socket.socket(socket.AF_PACKET,socket.SOCK_RAW,socket.htons(3));s.bind(('fixture-wan',0))
+count=0
+while True:
+ p,a=s.recvfrom(65535)
+ if a[2]!=socket.PACKET_OUTGOING or len(p)<34 or p[12:14]!=b'\x08\x00':continue
+ h=14+(p[14]&15)*4;proto=p[23]
+ row=dict(src=socket.inet_ntoa(p[26:30]),dst=socket.inet_ntoa(p[30:34]),proto=proto,length=int.from_bytes(p[16:18],'big'))
+ if proto in (6,17) and len(p)>=h+4:row['ports']=struct.unpack('!HH',p[h:h+4])
+ if proto==6 and len(p)>=h+14:row['tcp_flags']=p[h+13]
+ if proto==1 and len(p)>=h+2:row['icmp_type_code']=list(p[h:h+2])
+ if count<64:print('direct-uplink packet header: '+json.dumps(row),flush=True)
+ count+=1
+`)
 	run("iptables", "-t", "mangle", "-N", "S2L_FIXTURE_EGRESS")
 	run("iptables", "-t", "mangle", "-A", "S2L_FIXTURE_EGRESS", "-j", "RETURN")
 	run("iptables", "-t", "mangle", "-A", "POSTROUTING", "-o", "fixture-wan", "-j", "S2L_FIXTURE_EGRESS")
