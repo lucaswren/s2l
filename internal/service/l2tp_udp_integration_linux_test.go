@@ -63,7 +63,7 @@ func integrationUDPRelay(control net.Conn, id string) {
 
 func integrationClientUDP(t *testing.T, ns, node, policy string, healthy bool) {
 	t.Helper()
-	out, err := exec.Command("ip", "netns", "exec", ns, "python3", "-c", `import socket,sys
+	out, err := exec.Command("ip", "netns", "exec", ns, "python3", "-c", `import errno,socket,sys
 node,policy,healthy=sys.argv[1],sys.argv[2],sys.argv[3]=='true'
 for port in (9999,443):
  reject=policy=='reject' or (policy=='reject-quic' and port==443)
@@ -72,19 +72,33 @@ for port in (9999,443):
  s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.bind(('0.0.0.0',40000+port%1000));s.settimeout(1.5);s.connect(('198.18.0.9',port))
  try:
   for size in (32,512,1200):
-   payload=bytes((i%251 for i in range(size)));s.send(payload)
-   try:
-    answer=s.recv(65535)
-    assert healthy and not reject,'UDP bypassed policy or outage guard'
-    assert answer==node.encode()+b':'+payload,'UDP fixed exit or payload changed'
-   except OSError as e:
-    if healthy and not reject:raise
-    if healthy and reject:assert not isinstance(e,TimeoutError),'UDP was dropped instead of actively rejected'
-    break
+   payload=bytes((i%251 for i in range(size)))
+   # Linux rate-limits ICMP errors per destination. Fast CI can exhaust the
+   # burst while testing outages; waiting alone cannot resend the dropped
+   # error. Retry the same datagram, still requiring a real port-unreachable.
+   for attempt in range(4):
+    try:
+     s.send(payload);answer=s.recv(65535)
+     assert healthy and not reject,'UDP bypassed policy or outage guard'
+     assert answer==node.encode()+b':'+payload,'UDP fixed exit or payload changed'
+     break
+    except TimeoutError:
+     if healthy and reject and attempt<3:
+      print('retrying UDP rejection probe after timeout',port,attempt+1)
+      continue
+     assert not healthy,'UDP timed out without the required reply or active rejection'
+     break
+    except OSError as e:
+     if healthy:assert reject and e.errno==errno.ECONNREFUSED,'expected ICMP port-unreachable: '+str(e)
+     break
+   if reject or not healthy:break
  finally:s.close()
 `, node, policy, strconv.FormatBool(healthy)).CombinedOutput()
 	if err != nil {
 		t.Fatalf("UDP %s policy=%s healthy=%v: %v %s", ns, policy, healthy, err, out)
+	}
+	if len(out) > 0 {
+		t.Logf("UDP %s: %s", ns, out)
 	}
 	t.Logf("UDP %s: policy=%s healthy=%v, ports 9999/443, payloads 32/512/1200 bytes", ns, policy, healthy)
 }
