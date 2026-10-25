@@ -226,11 +226,16 @@ except ConnectionRefusedError:pass
 		value, _ := pids[tun].(float64)
 		return int(value)
 	}
-	secondPID := pid("tun202")
-	oldPID := pid("tun201")
-	if oldPID < 2 {
-		t.Fatal("missing running process")
-	}
+	// /api/status intentionally shares a five-second runtime snapshot. Fast
+	// guests can finish all dial/duplicate-login checks before the initial empty
+	// sample expires, even though both real client paths already work. Wait for
+	// both live PIDs before taking the baseline used by the fault assertions.
+	var oldPID, secondPID int
+	integrationWait(t, 15*time.Second, func() bool {
+		oldPID, secondPID = pid("tun201"), pid("tun202")
+		return oldPID > 1 && secondPID > 1 && oldPID != secondPID &&
+			syscall.Kill(oldPID, 0) == nil && syscall.Kill(secondPID, 0) == nil
+	})
 	online(false)
 	if exec.Command("ip", curlArgs...).Run() == nil {
 		t.Fatal("offline upstream unexpectedly forwarded")
