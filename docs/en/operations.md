@@ -18,6 +18,8 @@ It runs as root and selects the latest stable Release by default; an explicit `B
 
 ## Upstream health and leak protection
 
+TUN replies are accepted only for established or related connections returning through PPP to the mapping's client subnet. If PPP disconnects and the client route disappears, late replies are dropped before reaching the default uplink. Each managed TUN's return hook and terminal drop survive mapping teardown until host reboot; stopping a mapping removes its allowance, and repeated redials on the same interface do not accumulate rules. Upgrades remove legacy broad allowances, and health repair restores missing return protection in place.
+
 Mapping `running` and upstream health are separate. The monitor reports TCP, UDP and DNS independently:
 
 | Check | Actual probe | Interpretation |

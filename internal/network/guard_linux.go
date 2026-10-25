@@ -17,13 +17,15 @@ func (c *Controller) EnsureGuard() error {
 }
 
 func ensureGuard(options ...model.ManagementAccess) error {
-	if err := run("iptables", "-N", "S2L_FORWARD"); err != nil {
-		if _, check := output("iptables", "-S", "S2L_FORWARD"); check != nil {
+	for _, chain := range []string{"S2L_FORWARD", "S2L_RETURN"} {
+		if err := run("iptables", "-N", chain); err != nil {
+			if _, check := output("iptables", "-S", chain); check != nil {
+				return err
+			}
+		}
+		if err := ensureRule("iptables", "-A", chain, "-j", "DROP"); err != nil {
 			return err
 		}
-	}
-	if err := ensureRule("iptables", "-A", "S2L_FORWARD", "-j", "DROP"); err != nil {
-		return err
 	}
 	for _, rule := range [][]string{
 		{"FORWARD", "-i", "ppp+", "-j", "S2L_FORWARD"},

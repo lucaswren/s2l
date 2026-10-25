@@ -58,12 +58,14 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 		return err
 	}
 	checks := [][]string{
+		{"-C", "FORWARD", "-i", m.TunName, "-j", "S2L_RETURN"},
+		{"-C", "S2L_RETURN", "-j", "DROP"},
 		{"-C", "FORWARD", "-i", "ppp+", "-j", "S2L_FORWARD"},
 		{"-C", "INPUT", "-i", "ppp+", "-j", "DROP"},
 		{"-C", "S2L_FORWARD", "-j", "DROP"},
 		{"-C", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)},
 		{"-t", "nat", "-C", "POSTROUTING", "-o", m.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", mappingComment(m)},
-		{"-C", "FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)},
+		append([]string{"-C", "S2L_RETURN"}, mappingReturnArgs(m)...),
 	}
 	for _, direction := range []string{"-i", "-o"} {
 		checks = append(checks, append([]string{"-t", "mangle", "-C", "FORWARD"}, mappingMSSArgs(m, direction)...))
@@ -196,16 +198,17 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 				}
 			}
 			chain := args[check+1]
-			if chain == "S2L_FORWARD" && strings.Contains(strings.Join(args, " "), "-j ACCEPT") {
-				snapshot, e := outputContext(ctx, "iptables", "-S", "S2L_FORWARD")
+			guardChain := chain == "S2L_FORWARD" || chain == "S2L_RETURN"
+			if guardChain && strings.Contains(strings.Join(args, " "), "-j ACCEPT") {
+				snapshot, e := outputContext(ctx, "iptables", "-S", chain)
 				if e != nil {
 					return e
 				}
 				position, terminal := 0, false
 				for _, line := range strings.Split(snapshot, "\n") {
-					if strings.HasPrefix(line, "-A S2L_FORWARD ") {
+					if strings.HasPrefix(line, "-A "+chain+" ") {
 						position++
-						if strings.TrimSpace(line) == "-A S2L_FORWARD -j DROP" {
+						if strings.TrimSpace(line) == "-A "+chain+" -j DROP" {
 							terminal = true
 							break
 						}
@@ -216,19 +219,20 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 				}
 				args[check] = "-I"
 				args = append(args[:check+2], append([]string{strconv.Itoa(position)}, args[check+2:]...)...)
-			} else if chain == "S2L_FORWARD" && len(args) == 4 {
+			} else if guardChain && len(args) == 4 {
 				args[check] = "-A" // Restore only the terminal guard, after existing rules.
 			} else {
 				position := 1
-				if missing.command == "iptables" && chain == "FORWARD" && args[len(args)-1] == "S2L_FORWARD" {
-					if _, err := outputContext(ctx, "iptables", "-S", "S2L_FORWARD"); err != nil {
+				target := args[len(args)-1]
+				if missing.command == "iptables" && chain == "FORWARD" && (target == "S2L_FORWARD" || target == "S2L_RETURN") {
+					if _, err := outputContext(ctx, "iptables", "-S", target); err != nil {
 						if !IsMissingState(missingFirewall(err, "iptables", nil)) {
 							return err
 						}
-						if err := runContext(ctx, "iptables", "-N", "S2L_FORWARD"); err != nil {
+						if err := runContext(ctx, "iptables", "-N", target); err != nil {
 							return err
 						}
-						if err := runContext(ctx, "iptables", "-A", "S2L_FORWARD", "-j", "DROP"); err != nil {
+						if err := runContext(ctx, "iptables", "-A", target, "-j", "DROP"); err != nil {
 							return err
 						}
 					}

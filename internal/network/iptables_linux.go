@@ -15,13 +15,16 @@ const (
 	tcpmssComment = "s2l-tcpmss"
 )
 
-// AddFirewall 为映射添加 NAT / FORWARD 规则：
-//
-//	iptables -t nat -A POSTROUTING -o <TunName> -j MASQUERADE
-//	iptables -A FORWARD -s <Subnet> -o <TunName> -j ACCEPT
-//	iptables -A FORWARD -o <TunName> -m state --state RELATED,ESTABLISHED -j ACCEPT
+// AddFirewall permits PPP traffic only through its fixed TUN and permits TUN
+// replies only back to that mapping's PPP subnet. Both directions fail closed.
 func AddFirewall(m model.TunnelMapping) error {
 	if err := validateMapping(m); err != nil {
+		return err
+	}
+	// Install before removing legacy broad return allowances. This hook and the
+	// terminal DROP survive teardown, including packets queued during PPP exit.
+	// Key the hook by interface, so reconnects never accumulate duplicate rules.
+	if err := ensureRule("iptables", "-I", "FORWARD", "-i", m.TunName, "-j", "S2L_RETURN"); err != nil {
 		return err
 	}
 	if err := DelFirewall(m); err != nil {
@@ -51,23 +54,7 @@ func AddFirewall(m model.TunnelMapping) error {
 	); err != nil {
 		return errors.Join(err, DelFirewall(m))
 	}
-	if err := run("iptables", "-A", "FORWARD",
-		"-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT",
-		"-m", "comment", "--comment", cmt,
-	); err != nil {
-		return errors.Join(err, DelFirewall(m))
-	}
-	if err := run("iptables", "-A", "FORWARD",
-		"-o", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT",
-		"-m", "comment", "--comment", cmt,
-	); err != nil {
-		return errors.Join(err, DelFirewall(m))
-	}
-	// Accept related and established return traffic arriving through the TUN interface.
-	if err := run("iptables", "-A", "FORWARD",
-		"-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT",
-		"-m", "comment", "--comment", cmt,
-	); err != nil {
+	if err := run("iptables", append([]string{"-I", "S2L_RETURN", "1"}, mappingReturnArgs(m)...)...); err != nil {
 		return errors.Join(err, DelFirewall(m))
 	}
 	return nil
@@ -87,6 +74,7 @@ func DelFirewall(m model.TunnelMapping) error {
 	}
 	return errors.Join(
 		errors.Join(udpErrors...),
+		deleteFirewallRule(append([]string{"-D", "S2L_RETURN"}, mappingReturnArgs(m)...)...),
 		deleteFirewallRule(mappingMSSDeleteArgs(m, "-i")...),
 		deleteFirewallRule(mappingMSSDeleteArgs(m, "-o")...),
 		deleteFirewallRule("-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
@@ -95,6 +83,10 @@ func DelFirewall(m model.TunnelMapping) error {
 		deleteFirewallRule("-D", "FORWARD", "-o", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 	)
+}
+
+func mappingReturnArgs(m model.TunnelMapping) []string {
+	return []string{"-i", m.TunName, "-o", "ppp+", "-d", m.Subnet, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)}
 }
 
 func mappingUDPRejectArgs(m model.TunnelMapping) []string {
@@ -137,7 +129,7 @@ func deleteFirewallRule(args ...string) error {
 	for i := 0; i < 8; i++ {
 		if err := run("iptables", args...); err != nil {
 			msg := strings.ToLower(err.Error())
-			if strings.Contains(msg, "bad rule") || strings.Contains(msg, "no such file or directory") {
+			if IsMissingState(missingFirewall(err, "iptables", args)) || strings.Contains(msg, "no such file or directory") {
 				return nil
 			}
 			return err
