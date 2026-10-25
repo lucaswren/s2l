@@ -4,8 +4,16 @@ package network
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/lucaswren/s2l/internal/model"
 )
+
+// Match only the exact broad return rule emitted by older S2L versions. Reading
+// kernel rules keeps guard-only independent of application config/state, which
+// can be unavailable during failed upgrades. Never claim unrelated interfaces.
+var legacyReturnRule = regexp.MustCompile(`^-A FORWARD -i ([A-Za-z0-9_.-]{1,15}) -m state --state (?:RELATED,ESTABLISHED|ESTABLISHED,RELATED) -m comment --comment (?:"s2l:[^"]*"|s2l:[^ ]+) -j ACCEPT$`)
 
 // EnsureGuard must run before xl2tpd can accept clients. Guards intentionally
 // survive teardown: an existing PPP session must never use the host's uplink.
@@ -33,6 +41,19 @@ func ensureGuard(options ...model.ManagementAccess) error {
 	} {
 		if err := ensureRule("iptables", "-I", rule...); err != nil {
 			return err
+		}
+	}
+	// The updater calls guard-only before stopping old PPP/TUN processes. Guard
+	// their existing interfaces now, rather than waiting for mapping recreation.
+	legacy, err := output("iptables", "-S", "FORWARD")
+	if err != nil {
+		return err
+	}
+	for _, line := range strings.Split(legacy, "\n") {
+		if match := legacyReturnRule.FindStringSubmatch(strings.TrimSpace(line)); match != nil {
+			if err := ensureRule("iptables", "-I", "FORWARD", "-i", match[1], "-j", "S2L_RETURN"); err != nil {
+				return err
+			}
 		}
 	}
 	// Fail startup if IPv6 is enabled but cannot be filtered. The installer

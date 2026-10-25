@@ -54,19 +54,22 @@ func TestLeakGuardsIntegrationReturnTraffic(t *testing.T) {
 		t.Fatal(err)
 	}
 	controller := NewController()
+	m := model.TunnelMapping{ID: "return-test", TunName: "replytun", TableID: 191, Subnet: "10.88.1.0/24", UDPPolicy: "allow"}
+	// Simulate an older running installation before the upgrade's guard-only
+	// call, so PPP shutdown is protected before mappings can be recreated.
+	legacy := []string{"FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)}
+	must("iptables", append([]string{"-A"}, legacy...)...)
 	if err := controller.EnsureGuard(); err != nil {
 		t.Fatal(err)
 	}
-	m := model.TunnelMapping{ID: "return-test", TunName: "replytun", TableID: 191, Subnet: "10.88.1.0/24", UDPPolicy: "allow"}
+	must("iptables", "-C", "FORWARD", "-i", m.TunName, "-j", "S2L_RETURN")
 	if err := AddPolicyRoute(m); err != nil {
 		t.Fatal(err)
 	}
 	defer DelPolicyRoute(m)
 	defer DelFirewall(m)
-	// Seed the old broad allowance to verify upgrades remove it. Repeated setup
+	// Verify upgrades remove the old broad allowance. Repeated setup
 	// must retain exactly one persistent TUN hook and one return allowance.
-	legacy := []string{"FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)}
-	must("iptables", append([]string{"-A"}, legacy...)...)
 	for i := 0; i < 2; i++ {
 		if err := AddFirewall(m); err != nil {
 			t.Fatal(err)
