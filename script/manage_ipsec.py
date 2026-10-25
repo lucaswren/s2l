@@ -26,6 +26,10 @@ OUT_CHAIN = 'S2L-IPSEC-OUT'
 PEER_CHAIN = 'S2L-IPSEC-PEERS'
 INCLUDE = 'include /opt/s2l/ipsec.secrets'
 FILES = (STATE, CONF, SECRET, SYSTEM_SECRET)
+APPARMOR_PROFILE = Path('/etc/apparmor.d/usr.lib.ipsec.charon')
+APPARMOR_LOCAL = Path('/etc/apparmor.d/local/usr.lib.ipsec.charon')
+APPARMOR_ENABLED = Path('/sys/module/apparmor/parameters/enabled')
+APPARMOR_SECRET_RULE = '"/opt/s2l/ipsec.secrets" r, # s2l-managed-secret'
 
 
 def run(*args, check=True, input=None):
@@ -51,6 +55,28 @@ def ready():
             and shutil.which('iptables-restore') is not None
             and shutil.which('conntrack') is not None
             and (ROOT / 'ipsec_nat.py').is_file())
+
+
+def prepare_apparmor():
+    """Allow only the managed PSK file, preserving the packaged confinement."""
+    if not APPARMOR_PROFILE.is_file():
+        return
+    if not re.search(r'#include\s+<local/usr\.lib\.ipsec\.charon>', APPARMOR_PROFILE.read_text()):
+        raise RuntimeError('charon AppArmor profile lacks its local include; refusing startup')
+    enabled = APPARMOR_ENABLED.exists() and APPARMOR_ENABLED.read_text().strip().lower() == 'y'
+    parser = shutil.which('apparmor_parser') if enabled else None
+    if enabled and not parser:
+        raise RuntimeError('AppArmor is enabled but apparmor_parser is missing; refusing startup')
+    if APPARMOR_LOCAL.is_symlink():
+        raise RuntimeError('charon AppArmor local include is a symlink; refusing replacement')
+    original = APPARMOR_LOCAL.read_text() if APPARMOR_LOCAL.exists() else ''
+    if APPARMOR_SECRET_RULE not in original.splitlines():
+        APPARMOR_LOCAL.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(APPARMOR_LOCAL, (original.rstrip('\n') + '\n' + APPARMOR_SECRET_RULE + '\n').encode())
+    if enabled:
+        # Also retry reload when a previous attempt wrote the include but failed
+        # to load it. Never disable AppArmor or replace administrator rules.
+        run(parser, '-r', str(APPARMOR_PROFILE))
 
 
 def firewall_rules():
@@ -271,6 +297,7 @@ def main():
         if enabled:
             if not ready():
                 raise RuntimeError('IPsec dependencies missing (conntrack/ipsec_nat.py); refusing startup')
+            prepare_apparmor()
             # Upgrade/restart refreshes generated transport settings, preserving PSK.
             write_atomic(CONF, render_conf())
     elif mode == 'apply':

@@ -143,6 +143,13 @@ def main():
             print(result.stdout[-5000:], flush=True)
             print('PASS crash recovery and full fresh installation', flush=True)
             guest('rm /usr/local/bin/systemctl; systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; test ! -e /var/lib/s2l-install/journal.json')
+            # Exercise the installed helper under Ubuntu's enforcing AppArmor
+            # profile. A loaded connection alone does not prove PSK readability.
+            guest("printf '%s\\n' '{\"enabled\":true,\"psk\":\"fixture-ipsec-secret\"}' | python3 /opt/s2l/manage_ipsec.py apply")
+            guest('ipsec rereadsecrets')
+            guest("python3 - <<'PY'\nfrom pathlib import Path\nimport subprocess,time\npid=Path('/run/charon.pid').read_text().strip()\nprofile=Path('/proc')/pid/'attr/current'\nassert '/usr/lib/ipsec/charon (enforce)' in profile.read_text(), 'charon is not confined'\nfor _ in range(20):\n log=subprocess.check_output(['journalctl','-u','s2l-ipsec','--no-pager','-o','cat'],text=True)\n if \"loading secrets from '/opt/s2l/ipsec.secrets'\" in log and 'loaded IKE secret for %any' in log: break\n time.sleep(.25)\nelse: raise AssertionError('managed PSK was not loaded by confined charon')\nPY")
+            guest("printf '%s\\n' '{\"enabled\":false}' | python3 /opt/s2l/manage_ipsec.py apply")
+            print('PASS managed IPsec PSK loading with AppArmor enforcement preserved', flush=True)
             guest('cd /opt/src/s2l; /usr/local/go/bin/go test -c -o /opt/src/s2l/bin/s2l-fresh.test ./internal/service', timeout=300)
             dial = 'S2L_FRESH_VM_TEST=1 /opt/src/s2l/bin/s2l-fresh.test -test.run ^TestFreshInstalledServiceDial$ -test.v -test.timeout 240s'
             result = guest(dial, timeout=270)

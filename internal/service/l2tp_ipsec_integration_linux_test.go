@@ -47,25 +47,27 @@ func integrationIPsecAccess(t *testing.T, root, mode string, start func(string, 
 			}
 		}
 		files := map[string]string{
-			"ipsec.conf": conf,
-			"secrets":    ": PSK \"fixture-ipsec-secret\"\n",
-			"strongswan.conf": fmt.Sprintf(`charon {
+			"ipsec.conf":                 conf,
+			"run/charon.fixture.secrets": ": PSK \"fixture-ipsec-secret\"\n",
+			// Ubuntu's charon AppArmor profile allows /run/charon.*, but
+			// deliberately denies arbitrary fixture paths under /tmp.
+			"run/charon.fixture.conf": `charon {
  load = random nonce openssl aes sha1 sha2 hmac kdf gmp kernel-netlink socket-default stroke updown
  user = root
  group = root
  install_routes = no
  plugins {
   stroke {
-   secrets_file = %s/secrets
+   secrets_file = /run/charon.fixture.secrets
   }
  }
 }
-`, dir),
+`,
 			"launch.py": `import os,pathlib,subprocess,sys
 p=pathlib.Path(sys.argv[1])
 subprocess.run(['mount','--bind',str(p/'run'),'/run'],check=True)
 (p/'pid').write_text(str(os.getpid()))
-os.environ['STRONGSWAN_CONF']=str(p/'strongswan.conf')
+os.environ['STRONGSWAN_CONF']='/run/charon.fixture.conf'
 starter=next((x for x in ['/usr/lib/ipsec/starter','/usr/lib/strongswan/starter'] if pathlib.Path(x).is_file()),None)
 if not starter:raise SystemExit('strongSwan starter is required')
 os.execl(starter,starter,'--nofork','--conf',str(p/'ipsec.conf'))

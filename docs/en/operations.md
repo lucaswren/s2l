@@ -79,6 +79,8 @@ The 45,536 limit now applies to active plus not-yet-safe endpoints, not cumulati
 
 The updater preserves the IPsec enabled/running state and refreshes generated settings on service startup. Missing `conntrack` is installed automatically as described in the upgrade section.
 
+On Ubuntu hosts with the packaged charon AppArmor profile, IPsec startup adds only read permission for `/opt/s2l/ipsec.secrets` to `/etc/apparmor.d/local/usr.lib.ipsec.charon` and reloads the profile. Other administrator rules and enforcement are retained. An unsupported local profile or reload failure prevents IPsec startup; the narrow read rule remains for retries and older deployed versions.
+
 Node speed tests use Cloudflare through the selected SOCKS5 upstream, transferring 5 MB per direction by default. They consume bandwidth and do not measure the full L2TP client path; one direction's failure can coexist with the other's successful result.
 
 ## Management and credentials

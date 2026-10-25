@@ -75,6 +75,8 @@ updown 輔助程式在 `/run/s2l-ipsec-nat` 記錄自有規則、串行處理並
 
 升級保留 IPsec 啟用及執行狀態，並於服務啟動時更新產生的設定；缺少的 `conntrack` 會依升級章節自動補裝。
 
+Ubuntu 使用套件附帶的 charon AppArmor 設定時，IPsec 啟動僅在 `/etc/apparmor.d/local/usr.lib.ipsec.charon` 增加對 `/opt/s2l/ipsec.secrets` 的讀取權限並重新載入設定，保留其他管理員規則與強制約束。自訂設定不受支援或重新載入失敗時拒絕啟動 IPsec；這條精確讀取規則會保留，供重試及舊版本使用。
+
 測速經所選上游連至 Cloudflare，預設每方向 5 MB，會消耗流量；結果不代表完整 L2TP 用戶端效能，單向失敗仍可能保留另一方向結果。
 
 ## 管理

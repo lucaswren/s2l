@@ -48,6 +48,8 @@ updown 辅助程序在 `/run/s2l-ipsec-nat` 记录自有规则、串行处理并
 
 升级保留 IPsec 启用及运行状态，并在服务启动时刷新生成的配置；缺少的 `conntrack` 会按升级章节自动补装。
 
+Ubuntu 使用软件包附带的 charon AppArmor 配置时，IPsec 启动仅在 `/etc/apparmor.d/local/usr.lib.ipsec.charon` 增加对 `/opt/s2l/ipsec.secrets` 的读取权限并重载配置，保留其他管理员规则和强制约束。自定义配置不受支持或重载失败时拒绝启动 IPsec；这条精确读取规则会保留，供重试及旧版本使用。
+
 普通 L2TP 需在安全组放行 UDP 1701。管理页面能修改网络并查看凭据，请限制 HTTPS 管理端口的来源 IP。
 
 配置：`/opt/s2l/config.json`；运行数据：`/opt/s2l/data/state.json`。数据文件含代理和拨号凭据，请限制访问权限。
