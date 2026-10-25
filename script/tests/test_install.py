@@ -10,8 +10,48 @@ import download_go
 import tarfile
 import os
 import subprocess
+import socket
 
 class InstallChecks(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux socket reuse semantics')
+    def test_backend_time_wait_does_not_block_reinstallation(self):
+        with socket.socket() as listener, socket.socket() as client:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+            listener.listen()
+            client.settimeout(2)
+            client.connect(('127.0.0.1', port))
+            connection, _ = listener.accept()
+            with connection:
+                connection.settimeout(2)
+                connection.shutdown(socket.SHUT_WR)
+                self.assertEqual(client.recv(1), b'')
+                client.close()
+                self.assertEqual(connection.recv(1), b'')
+        # Prove the fixture has the same stale TCP state seen after rollback.
+        with socket.socket() as probe:
+            with self.assertRaises(OSError):
+                probe.bind(('0.0.0.0', port))
+        install_preflight.check_listener_port(port, socket.SOCK_STREAM)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux socket reuse semantics')
+    def test_active_backend_listener_still_blocks_installation(self):
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            listener.listen()
+            with self.assertRaisesRegex(OSError, 'TCP port'):
+                install_preflight.check_listener_port(listener.getsockname()[1], socket.SOCK_STREAM)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux socket reuse semantics')
+    def test_active_udp_socket_still_blocks_installation(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            with self.assertRaisesRegex(OSError, 'UDP port'):
+                install_preflight.check_listener_port(listener.getsockname()[1], socket.SOCK_DGRAM)
+
     def test_kernel_regression_guard(self):
         for release in ('6.8.0-146-generic', '6.8.0-147-generic'):
             with self.assertRaisesRegex(RuntimeError, '2169477'):

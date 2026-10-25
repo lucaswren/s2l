@@ -62,6 +62,19 @@ def system():
             raise RuntimeError('existing tunnel service is active: ' + unit)
 
 
+def check_listener_port(port, kind):
+    with socket.socket(socket.AF_INET, kind) as probe:
+        if kind == socket.SOCK_STREAM:
+            # Match Go's Linux listener: a stopped backend may leave TIME_WAIT
+            # sockets after readiness checks. Active listeners must still fail.
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(('0.0.0.0', port))
+        except OSError as error:
+            protocol = 'TCP' if kind == socket.SOCK_STREAM else 'UDP'
+            raise OSError(error.errno, f'{protocol} port {port} is unavailable: {error.strerror}') from error
+
+
 def capabilities():
     import fcntl
     for module in ('tun', 'ppp_generic', 'l2tp_ppp'):
@@ -81,9 +94,8 @@ def capabilities():
     for chain in ('S2L_FORWARD', 'S2L_MANAGEMENT'):
         if subprocess.run(['iptables', '-w', '5', '-S', chain], capture_output=True).returncode == 0:
             raise RuntimeError('existing S2L firewall state detected; recover previous installation first')
-    for family, kind, port in ((socket.AF_INET, socket.SOCK_STREAM, 8080), (socket.AF_INET, socket.SOCK_DGRAM, 1701)):
-        with socket.socket(family, kind) as probe:
-            probe.bind(('0.0.0.0', port))
+    check_listener_port(8080, socket.SOCK_STREAM)
+    check_listener_port(1701, socket.SOCK_DGRAM)
 
 
 if __name__ == '__main__':
