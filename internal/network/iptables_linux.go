@@ -5,6 +5,7 @@ package network
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/lucaswren/s2l/internal/model"
@@ -17,7 +18,7 @@ const (
 
 // AddFirewall permits PPP traffic only through its fixed TUN and permits TUN
 // replies only back to that mapping's PPP subnet. Both directions fail closed.
-func AddFirewall(m model.TunnelMapping) error {
+func AddFirewall(m model.TunnelMapping) (result error) {
 	if err := validateMapping(m); err != nil {
 		return err
 	}
@@ -30,39 +31,51 @@ func AddFirewall(m model.TunnelMapping) error {
 	if err := DelFirewall(m); err != nil {
 		return fmt.Errorf("clear old firewall rules: %w", err)
 	}
+	defer func() {
+		if result != nil {
+			result = errors.Join(result, DelFirewall(m))
+		}
+	}()
 
 	cmt := mappingComment(m)
-	if err := run("iptables", "-I", "S2L_FORWARD", "1", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt); err != nil {
+	// A first packet accepted before MASQUERADE can create a persistent
+	// un-NATed conntrack entry. Keep ingress closed until the entire path exists.
+	if err := addMappingTCPMSS(m); err != nil {
 		return err
 	}
+	if err := run("iptables", "-t", "nat", "-A", "POSTROUTING", "-o", m.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", cmt); err != nil {
+		return err
+	}
+	if err := run("iptables", append([]string{"-I", "S2L_RETURN", "1"}, mappingReturnArgs(m)...)...); err != nil {
+		return err
+	}
+	acceptPosition := 1
 	// Reject at PPP ingress, before NAT and the userspace TUN stack. This
 	// guarantees an ICMP error reaches the real client instead of relying on
 	// a particular tun stack's error translation. DNS remains intercepted.
 	if args := mappingUDPRejectArgs(m); len(args) > 0 {
 		if err := run("iptables", append([]string{"-I", "S2L_FORWARD", "1"}, args...)...); err != nil {
-			return errors.Join(err, DelFirewall(m))
+			return err
 		}
+		acceptPosition++
 	}
 	if args := connectionLimitArgs(m); len(args) > 0 {
 		if err := run("iptables", append([]string{"-I", "S2L_FORWARD", "1"}, args...)...); err != nil {
-			return errors.Join(err, DelFirewall(m))
+			return err
 		}
+		acceptPosition++
 	}
-	if err := run("iptables", "-t", "nat", "-A", "POSTROUTING",
-		"-o", m.TunName, "-j", "MASQUERADE",
-		"-m", "comment", "--comment", cmt,
-	); err != nil {
-		return errors.Join(err, DelFirewall(m))
-	}
-	if err := run("iptables", append([]string{"-I", "S2L_RETURN", "1"}, mappingReturnArgs(m)...)...); err != nil {
-		return errors.Join(err, DelFirewall(m))
-	}
-	return nil
+	// Keep this mapping's UDP/connection restrictions ahead of its allowance.
+	return run("iptables", "-I", "S2L_FORWARD", strconv.Itoa(acceptPosition), "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt)
 }
 
 // DelFirewall 按 comment 删除该映射相关的 iptables 规则
 func DelFirewall(m model.TunnelMapping) error {
 	cmt := mappingComment(m)
+	// Close ingress before removing NAT, MSS or restrictions, including on rollback.
+	if err := deleteFirewallRule("-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt); err != nil {
+		return err
+	}
 	var udpErrors []error
 	if args := connectionLimitArgs(m); len(args) > 0 {
 		udpErrors = append(udpErrors, deleteFirewallRule(append([]string{"-D", "S2L_FORWARD"}, args...)...))
@@ -77,7 +90,6 @@ func DelFirewall(m model.TunnelMapping) error {
 		deleteFirewallRule(append([]string{"-D", "S2L_RETURN"}, mappingReturnArgs(m)...)...),
 		deleteFirewallRule(mappingMSSDeleteArgs(m, "-i")...),
 		deleteFirewallRule(mappingMSSDeleteArgs(m, "-o")...),
-		deleteFirewallRule("-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-t", "nat", "-D", "POSTROUTING", "-o", m.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-o", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),

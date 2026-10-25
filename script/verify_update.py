@@ -1,10 +1,13 @@
 """Validate the managed layout and check the local authenticated API after upgrade."""
 from http.cookiejar import CookieJar
+from http.client import HTTPSConnection, HTTPException
 import json
 import ipaddress
 from pathlib import Path
 import sys
+import ssl
 import time
+from urllib.parse import urlsplit
 from urllib.error import HTTPError
 from urllib.request import Request, build_opener, ProxyHandler, HTTPRedirectHandler, HTTPCookieProcessor
 
@@ -60,6 +63,41 @@ def locally_ready(status, expected_ids=None, auto_restore=True):
         if m.get("status") != "running" or not isinstance(h, dict) or h.get("local_state") != "healthy" or not isinstance(pids.get(m.get("tun_name")), int) or pids.get(m.get("tun_name"), 0) <= 0:
             return False
     return True
+
+
+def check_https(config, certificate, attempts=30, delay=1):
+    address = urlsplit(config.get('public_url', ''))
+    if address.scheme != 'https' or not address.hostname:
+        raise ValueError('HTTPS 管理地址无效')
+    expected = ssl.PEM_cert_to_DER_cert(Path(certificate).read_text(encoding='ascii'))
+    # The certificate is self-signed for the public IP, while the probe must stay
+    # on loopback. Pin its exact bytes rather than disabling identity checks.
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    last = 'listener not ready'
+    for attempt in range(attempts):
+        connection = HTTPSConnection('127.0.0.1', address.port or 443, context=context, timeout=2)
+        try:
+            connection.connect()
+            if connection.sock.getpeercert(binary_form=True) != expected:
+                raise ValueError('HTTPS 监听证书尚未更新')
+            connection.request('GET', '/api/auth/status', headers={'Host': address.netloc})
+            response = connection.getresponse()
+            body = response.read(4096)
+            if response.status != 200:
+                raise ValueError(f'HTTPS 后端返回 HTTP {response.status}')
+            status = json.loads(body)
+            if not isinstance(status, dict) or not isinstance(status.get('authenticated'), bool) or not isinstance(status.get('enabled'), bool):
+                raise ValueError('HTTPS 后端响应无效')
+            return
+        except (OSError, ValueError, HTTPException) as error:
+            last = str(error)
+        finally:
+            connection.close()
+        if attempt + 1 < attempts:
+            time.sleep(delay)
+    raise ValueError('本机 HTTPS 验证失败: ' + last)
 
 
 def check_health(config, attempts=120, delay=1, expected_ids=None):
@@ -121,14 +159,17 @@ def check_health(config, attempts=120, delay=1, expected_ids=None):
 
 if __name__ == "__main__":
     try:
-        config = preflight(sys.argv[2])
-        if sys.argv[1] == "health":
+        # HTTPS setup also supports existing installations with custom data paths.
+        config = json.loads(Path(sys.argv[2]).read_text(encoding='utf-8')) if sys.argv[1] in ('https', 'ready') else preflight(sys.argv[2])
+        if sys.argv[1] in ("health", "ready"):
             expected = None
             if len(sys.argv) > 3:
                 state_path = Path(sys.argv[3])
                 old_state = json.loads(state_path.read_text(encoding="utf-8")) if state_path.exists() else {"mappings": []}
                 expected = [m["id"] for m in old_state["mappings"] if m.get("status") == "running"]
             check_health(config, expected_ids=expected)
+        elif sys.argv[1] == "https":
+            check_https(config, sys.argv[3])
         elif sys.argv[1] != "preflight":
             raise ValueError("未知验证模式")
     except (OSError, ValueError, TypeError, IndexError):

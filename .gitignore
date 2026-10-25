@@ -3,6 +3,7 @@
 *.test
 /bin/
 /tmp/
+/.test-tmp/
 .idea/
 *.tmp
 web/node_modules/

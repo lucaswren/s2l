@@ -44,8 +44,19 @@ def check_available_port(port):
 
 
 def random_port():
+    # Avoid ports the kernel can allocate to outgoing package/download requests
+    # between this availability check and nginx binding its listener.
+    try:
+        lower, upper = map(int, Path('/proc/sys/net/ipv4/ip_local_port_range').read_text().split())
+        if not 1 <= lower <= upper <= 65535:
+            raise ValueError('invalid ephemeral range')
+    except (OSError, ValueError):
+        lower, upper = 32768, 65535
+    candidates = [port for port in range(10000, 60001) if not lower <= port <= upper]
+    if not candidates:
+        raise RuntimeError("临时端口范围覆盖全部随机管理端口，请显式指定端口")
     for _ in range(128):
-        port = 10000 + secrets.randbelow(50001)
+        port = candidates[secrets.randbelow(len(candidates))]
         try:
             check_available_port(port)
             return port

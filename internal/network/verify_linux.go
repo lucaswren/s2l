@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -92,6 +93,17 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 	}
 	if strings.TrimSpace(string(enabled)) != "1" {
 		return missingState("IPv4 forwarding disabled", "sysctl", "-w", "net.ipv4.ip_forward=1")
+	}
+	// Linux uses max(all, interface) for rp_filter. Checking only PPP tuning
+	// misses global/TUN changes made by network services after initial setup.
+	for _, name := range []string{"all", "default", m.TunName} {
+		value, err := os.ReadFile(filepath.Join("/proc/sys/net/ipv4/conf", name, "rp_filter"))
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(string(value)) != "0" {
+			return missingState("reverse path filtering enabled on "+name, "sysctl", "-w", "net/ipv4/conf/"+name+"/rp_filter=0")
+		}
 	}
 	return verifyBandwidth(ctx, m)
 }

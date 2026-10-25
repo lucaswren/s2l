@@ -31,7 +31,7 @@ func mappingKey(m model.TunnelMapping) string {
 	return m.TunName
 }
 
-// Setup 在 sing-box TUN 已就绪后调用：开转发 → 策略路由 → 防火墙 → TCPMSS
+// Setup 在 sing-box TUN 已就绪后准备转发路径，最后放行映射流量。
 func (c *Controller) Setup(m model.TunnelMapping) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -54,16 +54,14 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 	if err := AddPolicyRoute(m); err != nil {
 		return fmt.Errorf("policy route: %w", err)
 	}
-	if err := AddFirewall(m); err != nil {
-		routeErr := DelPolicyRoute(m)
-		return errors.Join(fmt.Errorf("firewall: %w", err), routeErr)
-	}
-	if err := addMappingTCPMSS(m); err != nil {
-		return errors.Join(fmt.Errorf("tcpmss: %w", err), DelFirewall(m), DelPolicyRoute(m))
-	}
-
 	if err := applyBandwidth(m); err != nil {
 		return errors.Join(fmt.Errorf("bandwidth: %w", err), DelFirewall(m), DelPolicyRoute(m))
+	}
+	if err := TunePeers(m); err != nil {
+		return errors.Join(fmt.Errorf("tune connected PPP interfaces: %w", err), DelFirewall(m), DelPolicyRoute(m))
+	}
+	if err := AddFirewall(m); err != nil {
+		return errors.Join(fmt.Errorf("firewall: %w", err), DelPolicyRoute(m))
 	}
 	c.active[mappingKey(m)] = m
 	c.tcpmssOn = true

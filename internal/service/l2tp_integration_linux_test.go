@@ -113,7 +113,21 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sb := singbox.NewManager(sbBin)
+	// A slow first sing-box launch must not expose its L2TP credentials early.
+	// Inspect from inside the launched process, before it creates the TUN.
+	wrappedSB := filepath.Join(tools, "singbox-start-check")
+	if err := os.WriteFile(wrappedSB, []byte(`#!/bin/sh
+if [ "$S2L_TEST_CHAP_UNPUBLISHED" = 1 ] && grep -q user0 /etc/ppp/chap-secrets 2>/dev/null; then
+ echo 'L2TP account published before the forwarding path' >&2
+ exit 71
+fi
+exec "$S2L_TEST_REAL_SB" "$@"
+`), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("S2L_TEST_REAL_SB", sbBin)
+	t.Setenv("S2L_TEST_CHAP_UNPUBLISHED", "1")
+	sb := singbox.NewManager(wrappedSB)
 	controller := network.NewController()
 	l2 := l2tp.NewManager("/etc/ppp/chap-secrets", filepath.Join(root, "server.conf"), filepath.Join(root, "server.options"))
 	svc := NewMappingService(st, sb, controller, l2)
@@ -152,6 +166,7 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 		if err := svc.Start(m.ID); err != nil {
 			t.Fatal(err)
 		}
+		t.Setenv("S2L_TEST_CHAP_UNPUBLISHED", "0")
 	}
 	start := func(name string, args ...string) {
 		cmd := exec.Command(name, args...)

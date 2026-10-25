@@ -137,7 +137,7 @@ func (s *MappingService) SynchronizeState(change func()) {
 	change()
 }
 
-// Start 启动一条映射：L2TP → sing-box → 策略路由/iptables
+// Start 启动一条映射：sing-box → 策略路由/iptables → L2TP 账号
 func (s *MappingService) Start(id string) error {
 	s.stateGate.RLock()
 	defer s.stateGate.RUnlock()
@@ -197,31 +197,28 @@ func (s *MappingService) startLocked(id string) error {
 		return fmt.Errorf("pre-start cleanup: %w", err)
 	}
 
-	active := s.activeAfter(m, true)
 	previousActive := s.activeAfter(m, false)
-	if hardErr, reloadErr := s.l2tp.ApplyStart(m, active); hardErr != nil {
-		_ = s.store.UpdateMappingStatus(id, model.StatusError, hardErr.Error())
-		return hardErr
-	} else if reloadErr != nil {
-		return s.failStart(m, previousActive, fmt.Errorf("xl2tpd reload: %w", reloadErr))
-	}
-
 	if err := s.singbox.Start(node, m); err != nil {
 		return s.failStart(m, previousActive, fmt.Errorf("sing-box: %w", err))
 	}
 	// TUN 由 sing-box 异步创建，必须等网卡就绪再加策略路由
 	if err := network.WaitInterface(m.TunName, 15*time.Second); err != nil {
-		_ = s.singbox.Stop(m.TunName)
 		msg := fmt.Sprintf("%v; enable Debug and export logs from settings", err)
 		return s.failStart(m, previousActive, fmt.Errorf("tun: %s", msg))
 	}
 	if err := s.net.Setup(m); err != nil {
-		_ = s.singbox.Stop(m.TunName)
 		return s.failStart(m, previousActive, fmt.Errorf("network: %w", err))
 	}
 
 	if err := s.net.Verify(m); err != nil {
-		return s.failStart(m, previousActive, errors.Join(err, s.cleanupRuntime(m)))
+		return s.failStart(m, previousActive, err)
+	}
+	// New clients may authenticate as soon as chap-secrets is written. Publish
+	// the account only once TUN, NAT and forwarding checks have succeeded.
+	if hardErr, reloadErr := s.l2tp.ApplyStart(m, s.activeAfter(m, true)); hardErr != nil {
+		return s.failStart(m, previousActive, hardErr)
+	} else if reloadErr != nil {
+		return s.failStart(m, previousActive, fmt.Errorf("xl2tpd reload: %w", reloadErr))
 	}
 	if err := s.store.UpdateMappingStatus(id, model.StatusRunning, ""); err != nil {
 		cleanupErr := s.cleanupRuntime(m)
@@ -362,6 +359,7 @@ func (s *MappingService) cleanupRuntime(m model.TunnelMapping) error {
 }
 
 func (s *MappingService) failStart(m model.TunnelMapping, previous []model.TunnelMapping, cause error) error {
+	cause = errors.Join(cause, s.cleanupRuntime(m))
 	rollbackErr := s.l2tp.ApplyStop(m.ID, previous)
 	if rollbackErr != nil {
 		cause = errors.Join(cause, fmt.Errorf("L2TP rollback: %w", rollbackErr))

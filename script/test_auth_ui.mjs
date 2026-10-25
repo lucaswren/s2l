@@ -1,25 +1,24 @@
 // Real backend authentication and embedded UI, with disposable loopback data.
 import {spawn,execFileSync} from 'node:child_process';
-import {mkdir,mkdtemp,writeFile} from 'node:fs/promises';
-import {createServer} from 'node:net';
+import {writeFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
+import {pause,freePort,createFixtureDir,disposeFixture} from './ui_test_helpers.mjs';
 const cwd=fileURLToPath(new URL('../',import.meta.url));
-const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const htmlLanguage=value=>({'zh-CN':'zh-Hans','zh-TW':'zh-Hant'}[value]||value);
-async function port(){return new Promise((resolve,reject)=>{const server=createServer();server.on('error',reject);server.listen(0,'127.0.0.1',()=>{const value=server.address().port;server.close(()=>resolve(value))})})}
-await mkdir(cwd+'/tmp',{recursive:true});
-const dir=await mkdtemp(cwd+'/tmp/auth-ui-'),httpPort=await port(),cdpPort=await port();
+const httpPort=await freePort(),cdpPort=await freePort(),dir=await createFixtureDir(cwd,'auth-ui-');
 const binary=dir+(process.platform==='win32'?'/api.test.exe':'/api.test');
-execFileSync('go',['test','-c','-o',binary,'./internal/api'],{cwd,windowsHide:true,stdio:'inherit'});
-const backend=spawn(binary,['-test.run','^TestAuthBrowserFixture$','-test.timeout','5m'],{cwd,env:{...process.env,S2L_AUTH_UI_FIXTURE:`127.0.0.1:${httpPort}`},windowsHide:true,stdio:'ignore'});
-const chrome=spawn(process.env.S2L_CHROME_BIN||(process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'google-chrome'),['--headless=new','--disable-gpu','--no-first-run',`--remote-debugging-port=${cdpPort}`,`--user-data-dir=${dir}/profile`,'about:blank'],{cwd,windowsHide:true,stdio:['ignore','ignore','pipe']});
-let chromeLog='',chromeError;
-chrome.stderr.on('data',data=>{chromeLog=(chromeLog+data.toString()).slice(-6000)});
-chrome.on('error',error=>{chromeError=error});
-let socket;
+let backend,chrome,socket;
 try {
+  execFileSync('go',['test','-c','-o',binary,'./internal/api'],{cwd,windowsHide:true,stdio:'inherit'});
+  backend=spawn(binary,['-test.run','^TestAuthBrowserFixture$','-test.timeout','5m'],{cwd,env:{...process.env,TMPDIR:dir,TEMP:dir,TMP:dir,S2L_AUTH_UI_FIXTURE:`127.0.0.1:${httpPort}`},windowsHide:true,stdio:'ignore'});
+  let backendError;
+  backend.on('error',error=>{backendError=error});
+  chrome=spawn(process.env.S2L_CHROME_BIN||(process.platform==='win32'?'C:/Program Files/Google/Chrome/Application/chrome.exe':'google-chrome'),['--headless=new','--disable-gpu','--no-first-run',`--remote-debugging-port=${cdpPort}`,`--user-data-dir=${dir}/profile`,'about:blank'],{cwd,windowsHide:true,stdio:['ignore','ignore','pipe']});
+  let chromeLog='',chromeError;
+  chrome.stderr.on('data',data=>{chromeLog=(chromeLog+data.toString()).slice(-6000)});
+  chrome.on('error',error=>{chromeError=error});
   let pages;
-  for(let i=0;i<300;i++){if(chromeError||chrome.exitCode!==null)throw Error('browser exited before readiness: '+(chromeError||chrome.exitCode)+' '+chromeLog);try{pages=await(await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();if(pages.length&&(await fetch(`http://127.0.0.1:${httpPort}/api/auth/status`)).ok)break}catch{}await pause(100)}
+  for(let i=0;i<300;i++){if(backendError)throw backendError;if(chromeError||chrome.exitCode!==null)throw Error('browser exited before readiness: '+(chromeError||chrome.exitCode)+' '+chromeLog);try{pages=await(await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();if(pages.length&&(await fetch(`http://127.0.0.1:${httpPort}/api/auth/status`)).ok)break}catch{}await pause(100)}
   if(!pages?.length)throw Error('authentication browser fixture unavailable after 30s: '+chromeLog);
   const target=await(await fetch(`http://127.0.0.1:${cdpPort}/json/new?about:blank`,{method:'PUT'})).json();
   socket=new WebSocket(target.webSocketDebuggerUrl);await new Promise((resolve,reject)=>{socket.onopen=resolve;socket.onerror=reject});
@@ -77,4 +76,4 @@ try {
   if(errors.length)throw Error(errors.join('\n'));
   console.log(JSON.stringify({results,consoleErrors:errors}));
   await send('Browser.close');
-} finally {socket?.close();backend.kill();chrome.kill()}
+} finally {socket?.close();await disposeFixture(cwd,dir,[backend,chrome])}

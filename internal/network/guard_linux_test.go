@@ -85,6 +85,12 @@ func TestLeakGuardsIntegration(t *testing.T) {
 		t.Fatalf("MSS protection must cover both PPP directions once: %s %v", mssRules, err)
 	}
 	controller := NewController()
+	if err := ensureIPForward(); err != nil {
+		t.Fatal(err)
+	}
+	if err := TuneInterface(m.TunName, m.EffectiveMTU()); err != nil {
+		t.Fatal(err)
+	}
 	if err := controller.Verify(m); err != nil {
 		t.Fatal("complete forwarding path rejected", err)
 	}

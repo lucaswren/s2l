@@ -21,6 +21,17 @@ class PortTests(unittest.TestCase):
         with patch.object(manage_config.secrets, "randbelow", side_effect=[1, 2]), patch.object(manage_config, "check_available_port", side_effect=[OSError(), None]):
             self.assertEqual(manage_config.random_port(), 10002)
 
+    def test_random_port_excludes_custom_ephemeral_range(self):
+        with patch.object(Path, 'read_text', return_value='10000 40000'), \
+                patch.object(manage_config.secrets, 'randbelow', return_value=0), \
+                patch.object(manage_config, 'check_available_port'):
+            self.assertEqual(manage_config.random_port(), 40001)
+
+    def test_random_port_requires_explicit_choice_when_ephemeral_range_covers_candidates(self):
+        with patch.object(Path, 'read_text', return_value='1024 65535'):
+            with self.assertRaises(RuntimeError):
+                manage_config.random_port()
+
     def test_web_port_preserves_ipv6_address_and_credentials(self):
         original = dict(listen="[::1]:8080", admin_user="admin", admin_pass="a" * 12, data_dir="/opt/s2l/data")
         updated = manage_config.update_config(original.copy(), "listen_port", "40001")

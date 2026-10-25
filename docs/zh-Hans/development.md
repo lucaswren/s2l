@@ -10,6 +10,8 @@ L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联
 
 `internal/dnsproxy/` 负责每条映射的 DoH/TCP；`internal/diagnostics/` 与 `speedtest/` 负责分阶段检测；`history/`、`operations/`、`debuglog/` 分别保留有界历史、事件通知与临时日志。`web/src/i18n/` 集中存放三语言文案，页面复用 `components/` 与 `utils/`。
 
+源码发布须保留 `web/dist/`、依赖锁定文件、第三方许可证声明与各平台 Go 实现。`bin/`、`tmp/`、`.test-tmp/`、`web/node_modules/` 及 Python 缓存属于本地产物，清理前先结束相关测试进程，保留仍需分析的诊断资料。浏览器测试共用 `script/ui_test_helpers.mjs`，每次结束后停止自己的子进程并删除临时配置与后端数据，截图则保留在 `tmp/`。
+
 ## 配置
 
 未指定 `-config` 时使用默认配置；明确指定的文件必须存在且内容为 JSON 对象。文件不存在或内容为 `null` 时会停止启动，不会悄悄改用默认值。
@@ -39,7 +41,7 @@ go test ./...
 python3 -m unittest discover -s script/tests
 ```
 
-`make build` 包含前端构建；`make test` 执行 Go 测试。`npm --prefix web run dev` 的 API 代理至本机 8080。非 Linux 测试不验证实际 Linux 隧道，集成验证须使用授权、可丢弃的 Linux VM。`make run`、`make install-service` 可能修改主机与 PPP，且不等同完整 HTTPS 安装。
+`make build` 包含前端构建；`make test` 执行 Go 测试。`npm --prefix web run dev` 的 API 代理至本机 8080。非 Linux 测试不验证实际 Linux 隧道，集成验证须使用授权、可丢弃的 Linux VM。`make run` 启动本机后端，可能修改主机网络与 PPP 文件。`make install-service` 统一调用 `script/install.sh`，包括依赖、HTTPS 与服务配置，仅在预定全新安装的主机执行；已有安装使用 `script/update.sh`。
 
 变更须说明触发条件、结果与相关验证；勿提交运行配置、状态、依赖或秘密。前端变更须重建并提交 `web/dist/`。文档先更新英文，再繁体、简体中文，保持命令、默认值与法律语义一致。法律来源使用官方链接并记录核查日期；仅提交有权按 Apache-2.0 许可的内容，保留第三方声明。依赖更新后执行 `python3 script/collect_frontend_licenses.py` 并提交声明清单。
 

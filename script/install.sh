@@ -62,13 +62,12 @@ wait_for_apt() {
 }
 
 apt_get() { timeout 240s apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 "$@"; }
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=l
 command -v python3 >/dev/null || { wait_for_apt; apt_get update -y; apt_get install -y --no-install-recommends python3; }
 python3 "${SCRIPT_DIR}/install_state.py" recover
 python3 "${SCRIPT_DIR}/install_preflight.py" system
 info "1/7 安装系统依赖..."
-export DEBIAN_FRONTEND=noninteractive
-# 确保 fuser 可用（来自 psmisc）
-command -v fuser >/dev/null 2>&1 || true
 wait_for_apt
 apt_get update -y
 wait_for_apt
@@ -285,8 +284,8 @@ systemctl enable "${APP_NAME}"
 systemctl restart "${APP_NAME}"
 
 info "7/7 检查服务状态..."
-sleep 1
-if systemctl is-active --quiet "${APP_NAME}"; then
+# Type=simple being active does not mean initialization or HTTP binding finished.
+if python3 "${SCRIPT_DIR}/verify_update.py" health "${INSTALL_DIR}/config.json"; then
   info "生成自签证书并启用 HTTPS..."
   # Execute as a separate command so setup_https.sh retains its ERR rollback trap.
   # Never report installation success while the management endpoint lacks TLS.

@@ -42,8 +42,26 @@ if [[ -e "$SITE" ]] && ! grep -q '^# Managed by s2l HTTPS' "$SITE"; then
 fi
 if ! command -v nginx >/dev/null || ! command -v openssl >/dev/null; then
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
-  apt-get install -y --no-install-recommends nginx openssl ca-certificates
+  # Cloud images may still be running unattended upgrades. Keep package hooks
+  # from restarting S2L while its HTTPS transaction is being prepared.
+  export NEEDRESTART_MODE=l
+  apt_get() { timeout 240s apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 "$@"; }
+  wait_for_apt() {
+    local waited=0
+    command -v fuser >/dev/null 2>&1 || return 0
+    while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; do
+      if (( waited >= ${APT_WAIT_SEC:-600} )); then
+        echo "HTTPS 依赖安装等待 apt 锁超时，请稍后重试" >&2
+        return 1
+      fi
+      sleep 5
+      waited=$((waited + 5))
+    done
+  }
+  wait_for_apt
+  apt_get update -qq
+  wait_for_apt
+  apt_get install -y --no-install-recommends nginx openssl ca-certificates
 fi
 CERT=/opt/s2l/tls/self-signed.crt
 KEY=/opt/s2l/tls/self-signed.key
@@ -108,7 +126,9 @@ mkdir -p /opt/s2l/tls
 chmod 700 /opt/s2l/tls
 if [[ ! -f "$CERT" || ! -f "$KEY" ]] \
   || ! openssl x509 -in "$CERT" -noout -checkend 86400 >/dev/null 2>&1 \
-  || ! openssl x509 -in "$CERT" -noout -checkip "$IP" >/dev/null 2>&1; then
+  || ! openssl x509 -in "$CERT" -noout -checkip "$IP" >/dev/null 2>&1 \
+  || ! openssl pkey -in "$KEY" -noout -check >/dev/null 2>&1 \
+  || [[ "$(openssl x509 -in "$CERT" -pubkey -noout)" != "$(openssl pkey -in "$KEY" -pubout 2>/dev/null)" ]]; then
   temporary="$(mktemp -d /opt/s2l/tls/.generate-XXXXXXXX)"
   chmod 700 "$temporary"
   openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \
@@ -186,11 +206,13 @@ finally:
 PY
 if [[ "$RESTART_REQUIRED" == 1 ]]; then
   systemctl restart s2l
-  sleep 2
 fi
-systemctl is-active --quiet s2l
+python3 "${SCRIPT_DIR}/verify_update.py" ready "$CONFIG"
 systemctl enable --now nginx
 systemctl reload nginx
+# reload returns before the new workers necessarily listen. Verify the actual
+# certificate and proxied API, allowing bounded time for worker startup.
+python3 "${SCRIPT_DIR}/verify_update.py" https "$CONFIG" "$CERT"
 if systemctl cat s2l-cert-renew.timer >/dev/null 2>&1; then
   systemctl disable --now s2l-cert-renew.timer
 fi

@@ -37,6 +37,7 @@ wait_for_apt() {
 }
 
 export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=l
 wait_for_apt
 timeout 240s apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -y
 wait_for_apt

@@ -2,6 +2,9 @@ from pathlib import Path
 import json
 import sys
 import tempfile
+import shutil
+import ssl
+import subprocess
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -12,6 +15,47 @@ import verify_update
 
 
 class UpdateVerificationTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('openssl'), 'requires openssl TLS fixture')
+    def test_https_retries_backend_and_pins_certificate_on_loopback(self):
+        class Handler(BaseHTTPRequestHandler):
+            statuses = [502, 200]
+            hosts = []
+            body = b'{"authenticated":false,"enabled":true}'
+            def do_GET(self):
+                type(self).hosts.append(self.headers.get('Host'))
+                self.send_response(self.statuses.pop(0) if self.statuses else 200)
+                self.end_headers()
+                self.wfile.write(self.body)
+            def log_message(self, *args):
+                pass
+        with tempfile.TemporaryDirectory() as root:
+            cert, key = Path(root)/'cert.pem', Path(root)/'key.pem'
+            subprocess.run(['openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+                            '-subj', '/CN=203.0.113.9', '-keyout', str(key), '-out', str(cert)],
+                           check=True, capture_output=True, timeout=30)
+            server = HTTPServer(('127.0.0.1', 0), Handler)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert, key)
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+            thread = threading.Thread(target=server.serve_forever)
+            thread.start()
+            try:
+                config = {'public_url': f'https://203.0.113.9:{server.server_port}'}
+                verify_update.check_https(config, cert, attempts=2, delay=0)
+                self.assertEqual(Handler.hosts, [f'203.0.113.9:{server.server_port}'] * 2)
+                with patch.object(verify_update.ssl, 'PEM_cert_to_DER_cert', return_value=b'old cert'):
+                    with self.assertRaisesRegex(ValueError, 'HTTPS'):
+                        verify_update.check_https(config, cert, attempts=1)
+                self.assertEqual(len(Handler.hosts), 2, 'must reject wrong certificate before sending HTTP')
+                Handler.body = b'{}'
+                with self.assertRaisesRegex(ValueError, 'HTTPS'):
+                    verify_update.check_https(config, cert, attempts=1)
+                Handler.statuses = [302]
+                with self.assertRaisesRegex(ValueError, 'HTTP 302'):
+                    verify_update.check_https(config, cert, attempts=1)
+            finally:
+                server.shutdown(); thread.join(); server.server_close()
+
     @unittest.skipUnless(sys.platform.startswith("linux"), "Linux managed paths")
     def test_rejects_external_backend_and_custom_state(self):
         with tempfile.TemporaryDirectory() as root:

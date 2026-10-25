@@ -67,3 +67,27 @@ class InstallChecks(unittest.TestCase):
                 start=source.index('wait_for_apt()');end=source.index('\n}',start)+2
                 result=subprocess.run(['bash','-c',source[start:end]+'\nwait_for_apt'],env={**os.environ,'PATH':str(tools)+':'+os.environ['PATH']},capture_output=True,text=True,timeout=2)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux HTTPS apt lock probe')
+    def test_https_waits_for_apt_lock_and_has_a_deadline(self):
+        source = Path(__file__).resolve().parents[1].joinpath('setup_https.sh').read_text()
+        start = source.index('  wait_for_apt()')
+        end = source.index('\n  }', start) + 4
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = {
+                'fuser': 'n=$(cat "$S2L_APT_TEST_COUNT" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$S2L_APT_TEST_COUNT"; test "$n" -le 2',
+                'sleep': 'exit 0',
+            }
+            for name, body in scripts.items():
+                path = root/name; path.write_text('#!/bin/sh\n'+body+'\n'); path.chmod(0o755)
+            counter = root/'count'
+            env = dict(os.environ, PATH=str(root)+':'+os.environ['PATH'], S2L_APT_TEST_COUNT=str(counter), APT_WAIT_SEC='15')
+            command = ['bash', '-c', 'set -euo pipefail\n'+source[start:end]+'\nwait_for_apt']
+            result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=3)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(counter.read_text().strip(), '3')
+            counter.unlink()
+            result = subprocess.run(command, env={**env, 'APT_WAIT_SEC': '0'}, capture_output=True, text=True, timeout=3)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(counter.read_text().strip(), '1')

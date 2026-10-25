@@ -21,6 +21,8 @@ An L2TP/PPP client connects to xl2tpd. S2L associates mapping credentials and an
 | `web/src/`, `web/src/i18n/`, `web/dist/` | Vue UI, language catalog and committed embedded assets |
 | `script/`, `deploy/systemd/` | Privileged installation, management helpers and units |
 
+Keep `web/dist/`, lockfiles, third-party notices and platform-specific Go implementations in the source distribution. `bin/`, `tmp/`, `.test-tmp/`, `web/node_modules/` and Python caches are local artifacts. Stop their test processes before cleaning them; preserve any diagnostic evidence still needed. Browser runners share `script/ui_test_helpers.mjs` to stop their own child processes and remove temporary profiles and backend data after each run, while retaining screenshots in `tmp/`.
+
 ## Configuration
 
 Start with `config.example.json`; run `./bin/s2l -config /path/to/config.json` only on a suitable test host. Relative `data_dir` is resolved from the working directory; the installed service works in `/opt/s2l`.
@@ -64,7 +66,7 @@ go test ./...
 python3 -m unittest discover -s script/tests
 ```
 
-`make build` also builds the frontend; `make test` runs Go tests. `npm --prefix web run dev` starts Vite with an API proxy to localhost:8080. Non-Linux builds exercise stubs, not real Linux integration. Automated tests do not prove firewall, PPP, IPsec or client compatibility; use a disposable authorized Linux VM for privileged integration checks. Do not run `make run` or `make install-service` casually: these can modify host services and PPP files, and are not equivalent to the full HTTPS installer.
+`make build` also builds the frontend; `make test` runs Go tests. `npm --prefix web run dev` starts Vite with an API proxy to localhost:8080. Non-Linux builds exercise stubs, not real Linux integration. Use a disposable authorized Linux VM for privileged integration checks. `make run` starts the local backend and can modify host networking and PPP files. `make install-service` delegates to `script/install.sh`, including dependencies, HTTPS and service setup; run it only on a host intended for a fresh installation. Existing installations use `script/update.sh`.
 
 Keep changes focused, explain their trigger and behavior, and include relevant validation. Never commit runtime configuration, state, dependencies or secrets. Commit rebuilt `web/dist/` with frontend edits. Documentation should be updated in English first, then Traditional Chinese, then Simplified Chinese; retain matching commands, defaults and legal meaning. Link official legal sources with a check date. Contribute only content you have the right to submit under Apache-2.0; retain third-party notices. Run `python3 script/collect_frontend_licenses.py` after dependency updates and commit the generated inventory.
 

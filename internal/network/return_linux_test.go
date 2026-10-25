@@ -26,6 +26,10 @@ func TestLeakGuardsIntegrationReturnTraffic(t *testing.T) {
 	must := func(name string, args ...string) {
 		t.Helper()
 		if err := run(name, args...); err != nil {
+			for _, inspect := range [][]string{{"iptables", "-nvxL"}, {"iptables", "-t", "nat", "-nvxL"}, {"ip", "-4", "route", "show", "table", "all"}, {"sh", "-c", "cat /proc/sys/net/ipv4/conf/*/rp_filter"}} {
+				state, _ := exec.Command(inspect[0], inspect[1:]...).CombinedOutput()
+				t.Logf("%v: %s", inspect, state)
+			}
 			t.Fatal(err)
 		}
 	}
@@ -56,6 +60,12 @@ func TestLeakGuardsIntegrationReturnTraffic(t *testing.T) {
 	}
 	controller := NewController()
 	m := model.TunnelMapping{ID: "return-test", TunName: "replytun", TableID: 191, Subnet: "10.88.1.0/24", UDPPolicy: "allow"}
+	// This veth stands in for PPP but has no point-to-point peer attribute,
+	// so TunePeers cannot discover it. Apply the same per-interface tuning
+	// that real PPP connections receive before exercising forwarding.
+	if err := TuneInterface("ppp91", m.EffectiveMTU()); err != nil {
+		t.Fatal(err)
+	}
 	// Simulate an older running installation before the upgrade's guard-only
 	// call, so PPP shutdown is protected before mappings can be recreated.
 	legacy := []string{"FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)}
@@ -99,6 +109,17 @@ func TestLeakGuardsIntegrationReturnTraffic(t *testing.T) {
 		}
 		if err := controller.RepairContext(context.Background(), m); err != nil {
 			t.Fatal("return protection repair", err)
+		}
+	}
+	// A network daemon can restore strict reverse-path filtering after setup.
+	// Repair must detect it without restarting the tunnel or changing routes.
+	for _, name := range []string{"all", "default", m.TunName} {
+		must("sysctl", "-w", "net/ipv4/conf/"+name+"/rp_filter=1")
+		if !IsMissingState(controller.Verify(m)) {
+			t.Fatal("reverse-path filter drift was reported healthy", name)
+		}
+		if err := controller.RepairContext(context.Background(), m); err != nil {
+			t.Fatal("reverse-path filter repair", err)
 		}
 	}
 
