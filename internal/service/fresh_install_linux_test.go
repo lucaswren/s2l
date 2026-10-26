@@ -68,10 +68,20 @@ func TestFreshInstalledServiceDial(t *testing.T) {
 	json.NewDecoder(response.Body).Decode(&mappings)
 	response.Body.Close()
 	if len(mappings) == 0 {
-		api("POST", "/api/nodes", map[string]any{"id": "fixture-node", "name": "fixture-node", "addr": addr})
+		result := api("POST", "/api/nodes/import", map[string]any{"nodes": []any{map[string]any{"id": "fixture-node", "name": "fixture-node", "addr": addr}}})
+		if result["created"] != float64(1) || result["skipped"] != float64(0) {
+			t.Fatal("SOCKS node import failed", result)
+		}
+		result = api("POST", "/api/nodes/import", map[string]any{"text": addr})
+		if result["created"] != float64(0) || result["updated"] != float64(1) || result["skipped"] != float64(0) {
+			t.Fatal("SOCKS node reimport did not reuse its identity", result)
+		}
 		for i := 0; i < 2; i++ {
 			id := fmt.Sprintf("fixture%d", i)
-			api("POST", "/api/mappings", map[string]any{"id": id, "node_id": "fixture-node", "tun_name": fmt.Sprintf("tun%d", 201+i), "table_id": 201 + i, "subnet": fmt.Sprintf("10.77.%d.0/24", 201+i), "l2tp_user": id, "l2tp_pass": "fixture-dial-password", "dns_mode": "tcp", "udp_policy": "reject", "max_sessions": 0})
+			result = api("POST", "/api/mappings/import", map[string]any{"mappings": []any{map[string]any{"id": id, "node_id": "fixture-node", "tun_name": fmt.Sprintf("tun%d", 201+i), "table_id": 201 + i, "subnet": fmt.Sprintf("10.77.%d.0/24", 201+i), "l2tp_user": id, "l2tp_pass": "fixture-dial-password", "dns_mode": "tcp", "udp_policy": "reject", "max_sessions": 0}}})
+			if result["created"] != float64(1) || result["skipped"] != float64(0) {
+				t.Fatal("mapping import failed", result)
+			}
 			api("POST", "/api/mappings/"+id+"/action", map[string]any{"action": "start"})
 		}
 	} else {

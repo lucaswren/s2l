@@ -71,6 +71,7 @@ func TestTextImportPreservesNetworkTuning(t *testing.T) {
 	}
 	m := model.TunnelMapping{ID: "m", NodeID: "n", TableID: 101, TunName: "tun101", Subnet: "10.0.101.0/24", L2TPUser: "user", L2TPPass: "old", Status: model.StatusStopped, MTU: 1280, MSS: 1100, QueueLength: 500, UDPPolicy: "reject", DNSMode: "tcp", ObserveConnections: true, UploadKbps: 1000, DownloadKbps: 2000, MaxConnections: 50, MaxSessions: 2}
 	m.DNSDoHURL, m.DNSTCPAddress = "https://dns.example/dns-query", "dns.example:5353"
+	m.Group = "saved-group"
 	if err := st.UpsertMapping(m); err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +80,9 @@ func TestTextImportPreservesNetworkTuning(t *testing.T) {
 	w := httptest.NewRecorder()
 	NewServer(st, nil, nil).Handler().ServeHTTP(w, r)
 	got, _ := st.GetMapping("m")
+	if got.Group != m.Group {
+		t.Fatal("text import replaced the mapping group")
+	}
 	if got.EffectiveDNSOptions() != m.EffectiveDNSOptions() {
 		t.Fatal("text import replaced custom DNS", got.EffectiveDNSOptions())
 	}

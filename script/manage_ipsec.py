@@ -170,8 +170,21 @@ def firewall(enabled):
     payload += [shlex.join(['-A', CHAIN, *rule]) for rule in firewall_rules()]
     payload += [f'-D INPUT -j {CHAIN}' for line in incoming
                 if shlex.split(line) == ['-A', 'INPUT', '-j', CHAIN]]
+    # Keep PPP isolation/management ahead of IPsec transport admission. Moving
+    # this jump to position 1 on every repair both bypassed PPP restrictions for
+    # IKE/ESP and made the Go and Python health checks disagree about ordering.
+    position = 1
+    for line in incoming:
+        row = shlex.split(line)
+        if row[:2] != ['-A', 'INPUT'] or row == ['-A', 'INPUT', '-j', CHAIN]:
+            continue
+        if row in (['-A', 'INPUT', '-i', 'ppp+', '-j', 'S2L_MANAGEMENT'],
+                   ['-A', 'INPUT', '-i', 'ppp+', '-j', 'DROP']):
+            position += 1
+        else:
+            break
     outgoing = ipt('-S', 'OUTPUT').stdout.splitlines()
-    payload += [f'-I INPUT 1 -j {CHAIN}', f':{OUT_CHAIN} - [0:0]', f'-F {OUT_CHAIN}']
+    payload += [f'-I INPUT {position} -j {CHAIN}', f':{OUT_CHAIN} - [0:0]', f'-F {OUT_CHAIN}']
     payload += [shlex.join(['-A', OUT_CHAIN, *rule]) for rule in outgoing_rules()]
     payload += [f'-D OUTPUT -j {OUT_CHAIN}' for line in outgoing
                 if shlex.split(line) == ['-A', 'OUTPUT', '-j', OUT_CHAIN]]

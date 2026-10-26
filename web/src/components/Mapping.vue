@@ -497,7 +497,7 @@ const editingActive = computed(() => {
       ><div class="format-list">
         <el-tag v-for="f in mapFormats" :key="f" type="info">{{ f }}</el-tag>
       </div>
-      <p class="muted"> {{ tr("每行一条；节点可用名称、ID 或地址；简写自动生成接口与子网。") }} </p>
+      <p class="muted"> {{ tr("每行一条；节点可用唯一名称、唯一地址或 ID；有重名或共用地址时请用 ID；简写自动生成接口与子网。") }} </p>
       <el-input
         v-model="importText"
         :disabled="busy"

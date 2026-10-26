@@ -285,7 +285,7 @@ async function speedTest(n) {
       :show-close="!busy"
       @close="close"
       ><el-alert
-        :title='tr("每行一条；同名或同地址会更新现有节点。")'
+        :title='tr("每行一条；地址、账号、密码完全相同才更新现有节点，不同凭据新建节点。修改原节点凭据请使用编辑。")'
         type="info"
         :closable="false"
       />

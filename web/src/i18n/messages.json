@@ -2019,13 +2019,13 @@
     "en": "One per line, e.g. 10.0.101.0/24",
     "tw": "每行一個，例如 10.0.101.0/24"
   },
-  "每行一条；同名或同地址会更新现有节点。": {
-    "en": "One per line; matching names or addresses update existing nodes.",
-    "tw": "每行一條；同名或同位址會更新現有節點。"
+  "每行一条；地址、账号、密码完全相同才更新现有节点，不同凭据新建节点。修改原节点凭据请使用编辑。": {
+    "en": "One per line; only identical addresses, usernames and passwords update existing nodes. Different credentials create new nodes. Use Edit to change an existing node's credentials.",
+    "tw": "每行一條；位址、帳號、密碼完全相同才更新現有節點，不同憑證新建節點。修改原節點憑證請使用編輯。"
   },
-  "每行一条；节点可用名称、ID 或地址；简写自动生成接口与子网。": {
-    "en": "One per line; identify nodes by name, ID or address. Short format generates interfaces and subnets.",
-    "tw": "每行一條；節點可用名稱、ID 或位址；簡寫自動生成接口與子網。"
+  "每行一条；节点可用唯一名称、唯一地址或 ID；有重名或共用地址时请用 ID；简写自动生成接口与子网。": {
+    "en": "One per line; use a unique node name, unique address or ID. Use IDs for duplicate names or shared addresses. Short format generates interfaces and subnets.",
+    "tw": "每行一條；節點可用唯一名稱、唯一位址或 ID；有重名或共用位址時請用 ID；簡寫自動生成介面與子網。"
   },
   "测试 S2L 服务器到节点的网络路径。": {
     "en": "Test the network path from the S2L server to the node.",

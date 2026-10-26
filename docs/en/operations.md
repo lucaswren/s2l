@@ -50,6 +50,14 @@ S2L owns its PPP/TUN forwarding guards, not the host's complete public firewall.
 
 Health checks detect S2L entry hooks shadowed by earlier rules and restore their priority without flushing foreign rules. Each address family's filter change is committed together and PPP management exceptions remain first. This is periodic repair, not protection against a continuously competing firewall manager or separate native nftables base chains. Keep one consistent iptables backend and avoid concurrent rule replacement. Generated PPP options omit proxy ARP because client subnets are routed through TUNs, not bridged onto the host LAN; existing sessions adopt option changes only after reconnecting.
 
+## Importing SOCKS5 nodes and mappings
+
+Text imports reuse a node only when its address, username and password all match exactly. The same address with different credentials creates separate nodes, because providers can select different exits by account. Reimporting an unnamed node preserves its saved name and group. To replace existing credentials, use Edit or a JSON import with its explicit ID; stop linked mappings first. Ambiguous duplicate nodes are rejected instead of choosing one arbitrarily.
+
+Use `socks5://user:password@host:port` with percent-encoded credentials for special characters or numeric passwords that make an `@` format ambiguous. For example, encode `@` as `%40` and a space as `%20`; IPv6 endpoints need brackets. JSON and URL imports preserve credential whitespace. Delimited text trims fields and does not support quoted separators; use a URL or JSON instead. Extra fields, URL paths and query strings are rejected rather than silently discarded. Batch responses list rejected rows, including when every row fails; valid rows are still saved.
+
+Mappings may refer to a unique node name, unique address or explicit node ID. Shared addresses or duplicate names require the ID. Text reimports preserve mapping groups and network tuning, and require the mapping to be stopped. JSON imports use submitted fields.
+
 ## Upstream health and leak protection
 
 TUN replies are accepted only for established or related connections returning through PPP to the mapping's client subnet. If PPP disconnects and the client route disappears, late replies are dropped before reaching the default uplink. Each managed TUN's return hook and terminal drop survive mapping teardown until host reboot; stopping a mapping removes its allowance, and repeated redials on the same interface do not accumulate rules. Upgrades remove legacy broad allowances, and health repair restores missing return protection in place.

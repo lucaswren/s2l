@@ -87,6 +87,17 @@ class IPsecFirewallTests(unittest.TestCase):
                 manage_ipsec.firewall(True)
         self.assertFalse(any('-D' in c.args or '-F' in c.args for c in run.call_args_list))
 
+    def test_ipsec_repair_preserves_leading_ppp_management_and_drop(self):
+        self.incoming = ('-A INPUT -i ppp+ -j S2L_MANAGEMENT\n'
+                         '-A INPUT -j S2L-IPSEC\n'
+                         '-A INPUT -i ppp+ -j DROP\n' + self.incoming)
+        with patch.object(manage_ipsec, 'firewall_protected', return_value=False), \
+                patch.object(manage_ipsec, 'run', side_effect=self.commands) as run:
+            manage_ipsec.firewall(True)
+        restore = next(c for c in run.call_args_list if c.args[0] == 'iptables-restore')
+        self.assertIn('-I INPUT 3 -j S2L-IPSEC', restore.kwargs['input'])
+        self.assertNotIn('-D INPUT -i ppp+', restore.kwargs['input'])
+
     def test_healthy_guard_is_not_rebuilt(self):
         with patch.object(manage_ipsec, 'firewall_protected', return_value=True), \
                 patch.object(manage_ipsec, 'run', side_effect=self.commands) as run:
