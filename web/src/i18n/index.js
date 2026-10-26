@@ -2,9 +2,9 @@ import { ref } from 'vue';
 import messages from './messages.json' with { type: 'json' };
 
 export const languages = [
-  { value: 'zh-CN', label: '简体中文' },
-  { value: 'zh-TW', label: '繁體中文' },
   { value: 'en', label: 'English' },
+  { value: 'zh-TW', label: '繁體中文' },
+  { value: 'zh-CN', label: '简体中文' },
 ];
 export function normalizeLanguage(value) {
   if (/^zh-(TW|HK|MO|Hant)/i.test(value || '')) return 'zh-TW';
@@ -20,7 +20,7 @@ function initialLanguage() {
 }
 export const language = ref(initialLanguage());
 export const serverLanguage = ref(''), canPersistLanguage = ref(false);
-const htmlLanguages = {en:'en','zh-CN':'zh-Hans','zh-TW':'zh-Hant'};
+const htmlLanguages = {en:'en','zh-TW':'zh-Hant','zh-CN':'zh-Hans'};
 export function setLanguage(value) {
   language.value = normalizeLanguage(value);
   try { globalThis.localStorage?.setItem('s2l-language', language.value); } catch { /* Optional persistence. */ }

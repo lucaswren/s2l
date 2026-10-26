@@ -204,6 +204,7 @@ fi''',
                     assert not (state / "s2l").exists(), "stopped service was started"
                     assert not (state / "xl2tpd").exists()
                     assert (app / 'ipsec_nat.py').is_file()
+                    assert (app / 'manage_kernel.py').read_bytes() == (checkout / 'script/manage_kernel.py').read_bytes()
                     assert (state / 's2l-ipsec').exists() == (scenario == 'success_ipsec')
                     if scenario == 'success_ipsec':
                         assert json.loads((app / 'ipsec-settings.json').read_text()) == dict(enabled=True, psk='fixture-unchanged-psk')

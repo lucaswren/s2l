@@ -10,6 +10,8 @@ import struct
 import subprocess
 import sys
 
+from manage_kernel import affected_kernel
+
 
 def command(*args):
     return subprocess.run(args, check=True, capture_output=True, text=True, timeout=15).stdout
@@ -27,18 +29,15 @@ def singbox_version(text):
 
 
 def kernel_version(distro, release):
-    # Ubuntu bug 2169477: PPPoL2TP session refcount regression. The VM's
-    # 6.8.0-147 kernel locked up in l2tp_tunnel_get_session after redial.
-    if distro == 'ubuntu' and re.fullmatch(r'6\.8\.0-(146|147)-generic', release):
+    if affected_kernel(distro, release):
         raise RuntimeError('当前 Ubuntu 内核存在已知 L2TP 崩溃问题（2169477）；请切换已修复内核或 HWE 内核并重启后重试')
 
 
-def system():
+def system(check_kernel=True):
     if sys.platform != 'linux' or os.geteuid() != 0:
         raise RuntimeError('requires Linux root')
     release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
     distro = release.get('ID', '').strip('"')
-    kernel_version(distro, os.uname().release)
     if distro not in ('ubuntu', 'debian'):
         raise RuntimeError('installer supports Ubuntu and Debian only')
     if not Path('/run/systemd/system').is_dir() or command('systemctl', 'show', '--property=Version').strip() == '':
@@ -60,6 +59,9 @@ def system():
     for unit in ('xl2tpd', 's2l'):
         if subprocess.run(['systemctl', 'is-active', '--quiet', unit], capture_output=True).returncode == 0:
             raise RuntimeError('existing tunnel service is active: ' + unit)
+    # Kernel preparation may only run after every dedicated/fresh-host check.
+    if check_kernel:
+        kernel_version(distro, os.uname().release)
 
 
 def check_listener_port(port, kind):

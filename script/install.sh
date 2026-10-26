@@ -66,6 +66,10 @@ export DEBIAN_FRONTEND=noninteractive
 export NEEDRESTART_MODE=l
 command -v python3 >/dev/null || { wait_for_apt; apt_get update -y; apt_get install -y --no-install-recommends python3; }
 python3 "${SCRIPT_DIR}/install_state.py" recover
+info "0/7 检查内核与新安装条件..."
+# Exit 20 stops before PPP dependencies, application files or install journal
+# creation. A prepared kernel only takes effect after an operator's reboot.
+python3 "${SCRIPT_DIR}/manage_kernel.py"
 python3 "${SCRIPT_DIR}/install_preflight.py" system
 info "1/7 安装系统依赖..."
 wait_for_apt
@@ -211,6 +215,7 @@ install -m 600 "${SCRIPT_DIR}/manage_ssh.py" "${INSTALL_DIR}/manage_ssh.py"
 install -m 600 "${SCRIPT_DIR}/manage_ipsec.py" "${INSTALL_DIR}/manage_ipsec.py"
 install -m 600 "${SCRIPT_DIR}/ipsec_nat.py" "${INSTALL_DIR}/ipsec_nat.py"
 install -m 600 "${SCRIPT_DIR}/manage_time.py" "${INSTALL_DIR}/manage_time.py"
+install -m 600 "${SCRIPT_DIR}/manage_kernel.py" "${INSTALL_DIR}/manage_kernel.py"
 install -m 600 "${SCRIPT_DIR}/manage_update.py" "${INSTALL_DIR}/manage_update.py"
 install -m 600 "${SCRIPT_DIR}/verify_update.py" "${INSTALL_DIR}/verify_update.py"
 install -m 644 "${ROOT_DIR}/deploy/systemd/s2l-ipsec.service" /etc/systemd/system/s2l-ipsec.service

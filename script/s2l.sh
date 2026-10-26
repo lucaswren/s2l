@@ -5,13 +5,13 @@ APP_NAME="s2l"
 CONFIG_FILE="/opt/s2l/config.json"
 DIRECT=0
 if (( $# > 1 )); then
-  echo "用法：s2l [0-11]" >&2
+  echo "用法：s2l [0-12|kernel-upgrade]" >&2
   exit 2
 fi
 if (( $# == 1 )); then
   case "$1" in
-    -h|--help) echo "用法：s2l 打开菜单；s2l 1 查看地址；s2l 2 查看状态；s2l 4 查看日志；其余编号与菜单一致。"; exit 0 ;;
-    0|1|2|3|4|5|6|7|8|9|10|11) DIRECT=1 ;;
+    -h|--help) echo "用法：s2l 打开菜单；s2l 1 查看地址；s2l 2 查看状态；s2l 4 查看日志；s2l kernel-upgrade 准备内核（不自动重启）；其余编号与菜单一致。"; exit 0 ;;
+    0|1|2|3|4|5|6|7|8|9|10|11|12|kernel-upgrade) DIRECT=1 ;;
     *) echo "无效编号：$1；使用 s2l --help 查看用法。" >&2; exit 2 ;;
   esac
 fi
@@ -179,6 +179,7 @@ dispatch() {
     9) change_setting listen_port ;;
     10) change_ssh_port ;;
     11) local result=0; bash /opt/s2l/remote_update.sh || result=$?; pause; return "$result" ;;
+    12|kernel-upgrade) local result=0; python3 /opt/s2l/manage_kernel.py --upgrade || result=$?; pause; return "$result" ;;
     0) exit 0 ;;
     *) echo "无效选项"; pause ;;
   esac
@@ -204,8 +205,9 @@ while true; do
   echo "9) 修改网页管理端口"
   echo "10) 修改 SSH 端口"
   echo "11) 升级 S2L（保留配置）"
+  echo "12) 准备 Ubuntu 24.04 内核（不自动重启）"
   echo "0) 退出"
   echo
-  read -r -p "请选择操作 [0-11]: " choice
+  read -r -p "请选择操作 [0-12]: " choice
   dispatch "${choice}" || true
 done

@@ -12,7 +12,7 @@ exec 9>/run/s2l-update.lock
 flock -n 9 || { echo "[ERROR] 另一个 S2L 升级正在运行。" >&2; exit 1; }
 python3 "$ROOT_DIR/script/verify_update.py" preflight /opt/s2l/config.json
 [[ -x /opt/s2l/s2l && -f "$ROOT_DIR/web/dist/index.html" ]] || { echo "[ERROR] 缺少已安装程序或内嵌前端。" >&2; exit 1; }
-for file in deploy/systemd/{s2l,s2l-guard,s2l-ipsec}.service deploy/systemd/xl2tpd-s2l.conf script/{s2l.sh,remote_update.sh,manage_config.py,manage_ssh.py,manage_ipsec.py,ipsec_nat.py,manage_time.py,manage_update.py,verify_update.py}; do
+for file in deploy/systemd/{s2l,s2l-guard,s2l-ipsec}.service deploy/systemd/xl2tpd-s2l.conf script/{s2l.sh,remote_update.sh,manage_config.py,manage_ssh.py,manage_ipsec.py,ipsec_nat.py,manage_time.py,manage_kernel.py,manage_update.py,verify_update.py}; do
   [[ -f "$ROOT_DIR/$file" ]] || { echo "[ERROR] 源码不完整：$file" >&2; exit 1; }
 done
 report_web_update() {
@@ -126,7 +126,7 @@ report_web_update installing
 install -m 755 "$work/s2l" /opt/s2l/s2l
 install -m 755 "$ROOT_DIR/script/s2l.sh" /usr/local/bin/s2l
 install -m 700 "$ROOT_DIR/script/remote_update.sh" /opt/s2l/remote_update.sh
-for file in manage_config.py manage_ssh.py manage_ipsec.py ipsec_nat.py manage_time.py manage_update.py verify_update.py; do install -m 600 "$ROOT_DIR/script/$file" "/opt/s2l/$file"; done
+for file in manage_config.py manage_ssh.py manage_ipsec.py ipsec_nat.py manage_time.py manage_kernel.py manage_update.py verify_update.py; do install -m 600 "$ROOT_DIR/script/$file" "/opt/s2l/$file"; done
 for unit in s2l s2l-guard s2l-ipsec; do install -m 644 "$ROOT_DIR/deploy/systemd/$unit.service" "/etc/systemd/system/$unit.service"; done
 mkdir -p /etc/systemd/system/xl2tpd.service.d
 install -m 644 "$ROOT_DIR/deploy/systemd/xl2tpd-s2l.conf" /etc/systemd/system/xl2tpd.service.d/s2l.conf

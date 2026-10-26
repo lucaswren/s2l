@@ -8,6 +8,8 @@
 #   BRANCH=main
 #   HTTPS_PORT=8443 # 不指定则随机生成 HTTPS 端口
 #   PUBLIC_IP=1.2.3.4 # 默认自动检测公网 IPv4
+#   S2L_KERNEL_UPGRADE=auto # 已知问题内核自动准备 HWE；off 则仅拒绝安装
+# 准备内核后退出 20；不会重启。人工重启后使用原参数重跑此命令。
 set -euo pipefail
 
 REPO_URL="${REPO_URL:-https://github.com/lucaswren/s2l.git}"

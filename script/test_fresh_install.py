@@ -97,13 +97,6 @@ def main():
         try:
             boot = wait_for_guest(vm, guest, root / 'console.log')
             guest('cloud-init status --wait', timeout=180)
-            # Current Noble GA 6.8.0-147 has a PPPoL2TP refcount regression
-            # (Ubuntu bug 2169477). Use the supported HWE kernel for actual
-            # forwarding tests, rather than hiding a guest kernel lockup.
-            guest('export DEBIAN_FRONTEND=noninteractive; apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 update -qq; apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 install -y --no-install-recommends linux-generic-hwe-24.04', timeout=900)
-            guest('systemctl reboot', check=False, timeout=20)
-            boot = wait_for_guest(vm, guest, root / 'console.log', previous=boot)
-            print('Guest kernel: ' + guest('uname -r').stdout.strip(), flush=True)
             source_archive = root / 'source.tgz'
             with tarfile.open(source_archive, 'w:gz') as bundle:
                 for name in ('cmd', 'internal', 'deploy', 'script', 'web', 'go.mod'):
@@ -111,6 +104,25 @@ def main():
             copy(source_archive, '/tmp/source.tgz')
             guest("mkdir -p /opt/src/s2l; tar -xzf /tmp/source.tgz -C /opt/src/s2l; test ! -e /usr/local/go; ! command -v go; printf '%s\\n' disposable-qemu-s2l-fixture > /etc/s2l-fresh-vm")
             install = 'cd /opt/src/s2l && env ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash script/install.sh 2>&1 | tee /tmp/install-last.log'
+            # Exercise production kernel preparation before PPP can run on a
+            # regressed Noble image. Only this disposable fixture reboots itself.
+            prepared = guest('python3 /opt/src/s2l/script/manage_kernel.py', check=False, timeout=3800)
+            if prepared.returncode == 20:
+                print(prepared.stdout[-5000:], flush=True)
+                guest('test ! -e /opt/s2l/config.json; test ! -e /var/lib/s2l-install/journal.json; test "$(cat /proc/sys/kernel/random/boot_id)" = ' + shlex.quote(boot))
+                repeated = guest(install, check=False, timeout=120)
+                if repeated.returncode != 20 or '[INFO] 从系统 APT 源准备' in repeated.stdout:
+                    raise RuntimeError('prepared kernel was not reused before reboot: ' + repeated.stdout + repeated.stderr)
+                guest('test ! -e /opt/s2l/config.json; test ! -e /var/lib/s2l-install/journal.json')
+                guest('systemctl reboot', check=False, timeout=20)
+                boot = wait_for_guest(vm, guest, root / 'console.log', previous=boot)
+                guest('python3 /opt/src/s2l/script/manage_kernel.py')
+                print('PASS kernel preparation, exit 20, reuse and deliberate reboot', flush=True)
+            elif prepared.returncode != 0:
+                raise RuntimeError('kernel preparation failed: ' + prepared.stdout + prepared.stderr)
+            else:
+                print('PASS image kernel does not require known-regression preparation', flush=True)
+            print('Guest kernel: ' + guest('uname -r').stdout.strip(), flush=True)
             # Existing incompatible sing-box must be rejected without application writes.
             guest("printf '#!/bin/sh\\necho sing-box version 1.12.0\\n' > /usr/local/bin/sing-box; chmod 755 /usr/local/bin/sing-box")
             failed = guest(install, check=False)
@@ -145,6 +157,7 @@ def main():
             print(result.stdout[-5000:], flush=True)
             print('PASS crash recovery and full fresh installation', flush=True)
             guest('rm /usr/local/bin/systemctl; systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; test ! -e /var/lib/s2l-install/journal.json')
+            guest('cmp /opt/src/s2l/script/manage_kernel.py /opt/s2l/manage_kernel.py; s2l --help | grep -q kernel-upgrade')
             # Exercise the installed helper under Ubuntu's enforcing AppArmor
             # profile. A loaded connection alone does not prove PSK readability.
             guest("printf '%s\\n' '{\"enabled\":true,\"psk\":\"fixture-ipsec-secret\"}' | python3 /opt/s2l/manage_ipsec.py apply")
@@ -157,6 +170,15 @@ def main():
             result = guest(dial, timeout=270)
             print(result.stdout, flush=True)
             original = guest('sha256sum /opt/s2l/config.json').stdout
+            # Run the shipped maintenance command against an installed system.
+            # Only this fixture's later reboot may change the boot ID or daemons.
+            live_identity = 'cat /proc/sys/kernel/random/boot_id; systemctl show -p MainPID --value s2l xl2tpd nginx'
+            before_kernel = guest(live_identity).stdout
+            prepared = guest('s2l kernel-upgrade', timeout=3800)
+            print(prepared.stdout[-3000:], flush=True)
+            if guest(live_identity).stdout != before_kernel or guest('sha256sum /opt/s2l/config.json').stdout != original:
+                raise RuntimeError('kernel maintenance restarted a service, rebooted or changed S2L configuration')
+            print('PASS installed kernel-upgrade command preserves boot, service processes and configuration', flush=True)
             guest('systemctl reboot', check=False, timeout=20)
             wait_for_guest(vm, guest, root / 'console.log', previous=boot)
             guest('systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; python3 /opt/src/s2l/script/verify_update.py health /opt/s2l/config.json', timeout=150)

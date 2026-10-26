@@ -38,6 +38,44 @@ DNS 探測查詢公開名稱 `example.com`，目標流量均使用選定代理�
 
 S2L 必須使用專用主機：持續防護涵蓋**所有 `ppp+` 介面**。PPP IPv4 僅允許已設定來源子網經對應 TUN 轉發；其他轉發及 PPP 對主機本機的存取均丟棄，明確設定的本機管理存取例外除外，PPP IPv6 亦阻擋。TUN 消失時，終止查找的不可達路由阻止回退至主路由表。停止 S2L 或映射後仍保留阻斷規則，避免既有 PPP 連線由主機出口繞行。`s2l-guard.service` 在 xl2tpd 前安裝規則，失敗時阻止 xl2tpd/S2L 啟動。勿清空這些規則或讓其他防火牆管理器覆寫。用戶端分流與其他網路介面不在伺服器控制範圍內。
 
+## 核心準備與手動升級
+
+首次安裝會檢查執行中的核心與 `/boot` 內已安裝的最高 generic 核心。Ubuntu `6.8.0-146-generic`、`6.8.0-147-generic` 有已知 PPPoL2TP 回歸（2169477）。預設 `S2L_KERNEL_UPGRADE=auto`：只在專用新主機、Ubuntu 24.04、標準 GRUB 預設啟動項下，從系統 APT 來源準備 `linux-generic-hwe-24.04`。既有安裝、活動 PPP／隧道服務、容器與自訂啟動選擇均拒絕自動準備；其他系統版本須手動處理。未命中拒絕清單不代表已驗證相容。
+
+流程檢查空間、套件設定、映像、initramfs、離線 PPP/L2TP/TUN 模組及 GRUB 項目，保留舊核心並抑制 needrestart 自動重啟服務。**退出碼 20** 表示「核心已準備、S2L 尚未安裝」。安裝器不會重啟或自動續裝；確認控制台回復入口與維護時段後，人工重啟、檢查 `uname -r`，再以**原參數**重跑安裝。未重啟時重跑會重用完整核心，不重複下載。不儲存密碼或安裝參數；核心套件不屬於 S2L 安裝回復範圍。`S2L_KERNEL_UPGRADE=off` 關閉自動準備，但不能繞過問題核心檢查。
+
+已安裝此功能的既有伺服器只需執行一條命令，或在選單選擇 **12**：
+
+```bash
+sudo s2l kernel-upgrade
+```
+
+腳本自動檢查 Ubuntu 24.04 generic 核心、空間、套件狀態及標準 GRUB 預設項，將啟動設定備份至 `/var/backups/s2l-kernel-*`，安裝 HWE 並核驗啟動檔案和 PPP/L2TP/TUN 模組。保留舊核心，不呼叫服務重啟或修改 S2L 設定；重跑會重用已準備完整的新核心。
+
+顯示新核心已準備後，確認主機商控制台可用，於允許斷線時**單獨執行** `sudo reboot`。重連後核對 `uname -r` 並測試實際 L2TP 上網。沒有自動重啟，不需關閉本地 iWAN；伺服器重啟仍會中斷 SSH/L2TP。已有 S2L 不必重裝。舊版 CLI 沒有此命令時，可在包含此功能的已審閱原始碼目錄執行 `sudo python3 script/manage_kernel.py --upgrade`。其他系統或自訂啟動項須手動處理；準備失敗時勿重啟，套件驗證不等於實際撥號驗證。
+
+<details>
+<summary>展開逐項手動操作與回復說明</summary>
+
+已有線上服務的 Ubuntu 24.04 主機使用下方手動流程，勿重跑首次安裝。先建立主機商快照、備份 S2L／PPP／憑證及 GRUB 設定，確認 VNC／序列埠／救援控制台可用。切換核心需要重啟，所有 SSH/L2TP 都會中斷，即使本地 iWAN 仍在執行也無法避免。以下在 root shell 執行前先檢查 `uname -r`、`/etc/os-release`、`df -h / /boot`、`dpkg --audit`：
+
+```bash
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 update
+apt-cache policy linux-generic-hwe-24.04
+apt-get -s --no-remove --no-install-recommends install linux-generic-hwe-24.04 kmod
+# 審閱模擬結果後安裝；此處不執行 reboot。
+apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 \
+  install -y --no-remove --no-install-recommends linux-generic-hwe-24.04 kmod
+dpkg-query -W -f='${Depends}\n' linux-image-generic-hwe-24.04
+```
+
+依最後輸出的實際核心版本，檢查 `/boot/vmlinuz-版本`、`/boot/initrd.img-版本`，並以 `modinfo -k 版本` 分別核對 `tun`、`ppp_generic`、`l2tp_ppp`。勿在執行中的舊核心載入新模組。執行 `update-grub`，確認預設啟動項；`saved` 或自訂項可能繼續選舊核心。若選單隱藏且等待為零，備份後可在新的 `/etc/default/grub.d/99-s2l-maintenance.cfg` 設定 `GRUB_TIMEOUT_STYLE=menu`、`GRUB_TIMEOUT=8`，再執行 `update-grub`，以便控制台回復；不要覆寫既有同名自訂檔案。
+
+[官方 HWE 路徑](https://ubuntu.com/kernel/lifecycle)提供受支援核心，但套件可安裝不代表 L2TP 已驗證，應先在隔離環境測試撥號／重撥。不要順便執行整機升級或刪除舊核心。確認維護時段後單獨重啟，核對 `uname -r`、`systemctl is-active s2l xl2tpd nginx`、實際用戶端 DNS／出口，以及 `journalctl -k -b` 有無引用計數、use-after-free、lockup 異常。無法啟動或網路失效時，經主機商控制台選 GRUB Advanced options 中先前驗證可用的核心；146/147 不可當作穩定回退目標，老舊核心僅供暫時恢復。一次性啟動選擇不保證卡死後會自動重啟回退。
+
+</details>
+
 ## 升級
 
 既有預設 `/opt/s2l` 安裝執行：
@@ -94,6 +132,7 @@ Ubuntu 使用套件附帶的 charon AppArmor 設定時，IPsec 啟動僅在 `/et
 | 7 / 8 | 管理密碼 / 帳號 |
 | 9 / 10 | 管理埠 / SSH 埠 |
 | 11 | 升級 S2L，保留設定 |
+| 12 / `kernel-upgrade` | 準備 Ubuntu 24.04 核心，不自動重啟 |
 | 0 | 離開 |
 
 管理密碼 12–128 字元，安裝與 CLI 限制可用字元。CLI 帳密變更重啟服務，可能中斷隧道；網頁變更立即生效，無須重啟，之後重新登入。網址優先採用 `public_url`，否則依監聽與公網 IP 產生，偵測退回本機地址時提示 NAT。
@@ -207,7 +246,7 @@ PPP 會話顯示介面、對端位址、實際 MTU、計數和首次觀測時間
 
 ## 登入、語言與 TCP 優先
 
-管理頁提供簡體中文、繁體中文和英文，語言選擇儲存在伺服器設定中，並快取於瀏覽器；服務重新啟動或清除瀏覽器快取後仍可還原。頂部保留語言與說明，登出位於頂部最右側。表單登入由後端驗證既有管理帳號，瀏覽器不儲存密碼。工作階段 Cookie 使用 HttpOnly、SameSite=Strict，HTTPS 下啟用 Secure；最長 12 小時、閒置 30 分鐘失效。登出、修改帳號或服務重新啟動會使工作階段失效。登入連續失敗會暫時限流；指令碼統一透過 JSON 登入介面取得工作階段；升級自檢在本機登入，完成後銷毀工作階段。
+管理頁提供英文、繁體中文和簡體中文，語言選擇儲存在伺服器設定中，並快取於瀏覽器；服務重新啟動或清除瀏覽器快取後仍可還原。頂部保留語言與說明，登出位於頂部最右側。表單登入由後端驗證既有管理帳號，瀏覽器不儲存密碼。工作階段 Cookie 使用 HttpOnly、SameSite=Strict，HTTPS 下啟用 Secure；最長 12 小時、閒置 30 分鐘失效。登出、修改帳號或服務重新啟動會使工作階段失效。登入連續失敗會暫時限流；指令碼統一透過 JSON 登入介面取得工作階段；升級自檢在本機登入，完成後銷毀工作階段。
 
 管理例外可從本機 IPv4 清單選擇。伺服器確認目前存取 IP 屬於本機時優先帶入；只有一個本機位址時自動帶入；多個位址時由使用者選擇。公網 NAT 位址需另行核對，不會自動啟用例外。
 
@@ -239,4 +278,4 @@ CI 另啟動全新 Ubuntu 24.04 amd64 QEMU 客體，驗證不相容依賴拒絕�
 
 全新系統測試另驗證兩個閘道以獨立帳號、獨立映射共用同一 SOCKS 節點：並行轉送、重複帳號拒絕、上游中斷防洩漏，以及單映射修復和停止不影響另一映射；整機重啟後重複執行。
 
-安裝預檢拒絕存在已知 PPPoL2TP 崩潰回歸的 Ubuntu 6.8.0-146-generic 與 6.8.0-147-generic（Ubuntu 缺陷 2169477）。請先切換已修復核心或 HWE 核心並重啟；安裝程式不會自動更換生產系統核心。完整虛擬機測試使用 Ubuntu 24.04 HWE 核心。
+安裝預檢拒絕存在已知 PPPoL2TP 崩潰回歸的 Ubuntu 6.8.0-146-generic 與 6.8.0-147-generic（Ubuntu 缺陷 2169477）。新主機核心準備及線上主機手動流程見上文。完整虛擬機測試在映像需要時驗證核心準備、退出碼 20、重用與人工重啟；無已知問題時直接繼續，實際撥號測試使用真正啟動的核心。

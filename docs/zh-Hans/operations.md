@@ -16,6 +16,10 @@
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 ```
 
+首次安装在部署 PPP/S2L 前自动检查内核：Ubuntu `6.8.0-146-generic`、`6.8.0-147-generic` 存在已知 L2TP 回归，也会检查 `/boot` 中已安装的最高版本 generic 内核，避免下次重启进入已知问题版本。默认 `S2L_KERNEL_UPGRADE=auto`：仅在专用新主机、Ubuntu 24.04、标准 GRUB 默认启动项下，从系统 APT 源准备 `linux-generic-hwe-24.04`。会检查空间、内核镜像、initramfs、GRUB 启动项及 PPP/L2TP/TUN 模块，不加载新模块、不重启、不删除旧内核，也不部署 S2L。
+
+内核准备成功后以 **退出码 20** 结束，表示“等待人工重启”，不是安装成功。确认控制台回退入口及维护窗口后手动重启，检查 `uname -r`，再用**原参数**重跑安装命令；未重启重跑时，会检查并复用已准备好的内核。没有自动续装服务，不保存管理密码或安装参数。安装的软件包不属于 S2L 安装回滚范围。APT 失败、目标文件不完整或仍是问题内核时拒绝继续。设置 `S2L_KERNEL_UPGRADE=off` 可关闭自动准备，但不能绕过问题内核检查。Debian、其他 Ubuntu 版本、自定义引导和现有安装均不会通过此流程自动升级内核；参阅下方手动方案。未命中已知版本仅表示不在当前拒绝名单，不代表所有内核都经过验证。
+
 新服务器安装会**自动启用 HTTPS**，默认使用有效期 **365 天** 的自签证书，无需申请公网证书。访问管理界面需放行 HTTPS 管理端口；实际拨号还需按所选模式放行隧道端口。成功后显示 `https://服务器IP:端口`、管理账号与 **16 位随机密码**。HTTPS 管理端口随机选择 **10000-60000** 范围内的空闲端口，内部后端固定监听 **127.0.0.1:8080**，SSH 端口保留现有设置；自定义密码至少 **12 位**。
 
 公网 IPv4 默认自动识别；需指定时，将安装命令末尾的 `sudo bash` 替换为 `sudo env PUBLIC_IP=服务器公网IPv4 bash`。后端端口无需指定，也无需对外放行；HTTPS 端口不能使用 8080。使用 `HTTPS_PORT` 指定 HTTPS 管理端口，例如：
@@ -77,6 +81,88 @@ DNS 探测查询公开名称 `example.com`，目标流量均使用选定代理�
 S2L 必须使用专用主机：持续防护覆盖**所有 `ppp+` 接口**。PPP IPv4 仅允许已配置来源子网经对应 TUN 转发；其他转发及 PPP 对服务器本机的访问均丢弃，明确配置的本机管理访问例外除外，PPP IPv6 也被阻断。TUN 消失时，终止查找的不可达路由阻止回退到主路由表。停止 S2L 或映射后仍保留阻断规则，避免现有 PPP 连接从主机出口绕行。`s2l-guard.service` 在 xl2tpd 前安装规则，失败时阻止 xl2tpd/S2L 启动。不要清空这些规则或让其他防火墙管理器覆盖。客户端分流与其他网络接口不在服务器控制范围内。
 
 ## 升级
+
+### 一条命令准备内核（Ubuntu 24.04）
+
+在包含此功能的 S2L 版本中，只需执行：
+
+```bash
+sudo s2l kernel-upgrade
+```
+
+也可在菜单选择 **12**。脚本自动检查系统、空间、软件包状态和 GRUB，备份启动配置至 `/var/backups/s2l-kernel-*`，安装 HWE 内核并核验启动文件、PPP/L2TP/TUN 模块。保留旧内核，不调用服务重启或修改 S2L 配置；重复执行会复用已准备好的新内核。
+
+看到“新内核已准备”后，确认主机商控制台可用，等允许断网时**单独执行** `sudo reboot`。重连后检查 `uname -r` 和实际 L2TP 上网。脚本不会自动重启，也不需要关闭本地 iWAN；服务器重启仍会断开 SSH/L2TP。已有 S2L 不必重装。
+
+旧版 CLI 没有此命令时，可在包含此功能的已审阅源码目录直接运行 `sudo python3 script/manage_kernel.py --upgrade`。仅支持 Ubuntu 24.04 generic 内核和标准 GRUB 默认启动项；其他部署停止并提示手动处理。包安装成功不代表真实拨号已验证，失败时不要重启。
+
+<details>
+<summary>展开逐项手动操作与回退说明</summary>
+
+适用于已有在线 S2L 的 Ubuntu 24.04 主机；**不要重跑首次安装脚本**。先做好主机商快照，确认 VNC/串口/救援控制台可以使用，保存 S2L 配置、证书、PPP 配置及 GRUB 设置。SSH 不能代替启动失败后的控制台恢复通道。内核安装只准备下次启动文件；真正切换需要重启，会断开所有 L2TP/SSH，即使本地 iWAN 仍在运行也不能避免。
+
+先检查系统、空间和软件包状态；以下命令在服务器的 root shell 执行：
+
+```bash
+uname -r
+cat /etc/os-release
+df -h / /boot
+dpkg --audit
+apt-cache policy linux-generic-hwe-24.04
+```
+
+仅在系统版本确认为 Ubuntu 24.04、没有未完成的软件包配置并备好回退后继续。HWE 是 [Ubuntu 官方支持的内核路径](https://ubuntu.com/kernel/lifecycle)，具体版本随软件源变化。可安装不等于已验证 L2TP；目标内核应先在隔离环境通过拨号/重拨测试。使用官方源，保留旧内核，不执行整机 `full-upgrade` 或 `autoremove`。
+
+```bash
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 \
+  -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+apt-get -s --no-remove --no-install-recommends install linux-generic-hwe-24.04 kmod
+# 审阅模拟结果后安装；此步骤不执行 reboot。
+apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 \
+  -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 \
+  install -y --no-remove --no-install-recommends linux-generic-hwe-24.04 kmod
+dpkg-query -W -f='${Depends}\n' linux-image-generic-hwe-24.04
+```
+
+从最后输出的 `linux-image-版本-generic` 确认准确版本，再设置下面变量；**不要直接复制示例版本当作当前候选**：
+
+```bash
+S2L_NEW_KERNEL='7.0.0-38-generic' # 替换为上一步实际安装的版本
+test -s "/boot/vmlinuz-$S2L_NEW_KERNEL" || exit 1
+test -s "/boot/initrd.img-$S2L_NEW_KERNEL" || exit 1
+for module in tun ppp_generic l2tp_ppp; do
+  modinfo -k "$S2L_NEW_KERNEL" "$module" || exit 1
+done
+update-grub
+grep -F "$S2L_NEW_KERNEL" /boot/grub/grub.cfg
+uname -r # 此时仍是旧内核，这是正常现象
+```
+
+任一检查失败都不要重启。确认 GRUB 默认会选择目标内核；若设置为 `saved` 或指定旧内核，应按实际菜单 ID 调整，不能只看 `/boot` 中最高版本。对于当前隐藏且零等待的标准 GRUB，可先备份 `/etc/default/grub` 和 `/etc/default/grub.d`，再添加菜单等待配置以便控制台恢复：
+
+```bash
+install -d -m 755 /etc/default/grub.d
+test ! -e /etc/default/grub.d/99-s2l-maintenance.cfg || exit 1
+printf '%s\n' 'GRUB_TIMEOUT_STYLE=menu' 'GRUB_TIMEOUT=8' \
+  > /etc/default/grub.d/99-s2l-maintenance.cfg
+update-grub
+```
+
+此配置只展示菜单，不选择或验证新内核。不要覆盖已有同名自定义文件。确认维护窗口后**单独执行** `reboot`。重连后验证：
+
+```bash
+uname -r
+systemctl is-active s2l xl2tpd nginx
+ip -br address
+journalctl -k -b --no-pager | grep -Ei 'refcount|use-after-free|l2tp|lockup|panic'
+```
+
+核对实际运行的是目标内核、L2TP 账号与映射恢复、DNS/出口正常，并进行一次受控客户端重拨验证。若不能启动或网络失效，通过主机商控制台进入 GRUB 的 Advanced options，选择先前验证可用的内核；不要将 `6.8.0-146/147` 当作稳定回退目标。老旧内核仅作为临时恢复，后续仍需迁移到受支持且验证通过的版本。一次性引导选择也不保证系统卡死后自动重启回退。
+
+</details>
+
+### 更新 S2L 应用
 
 现有默认 `/opt/s2l` 安装执行：
 
@@ -147,6 +233,7 @@ s2l 10  # 按提示修改 SSH 端口
 | 9 | 修改网页管理端口（1-65535） |
 | 10 | 修改 SSH 端口（1-65535） |
 | 11 | 升级 S2L，保留配置 |
+| 12 / `kernel-upgrade` | 准备 Ubuntu 24.04 内核，不自动重启 |
 | 0 | 退出菜单 |
 
 例如修改密码：执行 `s2l` → 输入 `7` → 输入两次新密码。操作后按回车返回菜单，输入 `0` 退出。
@@ -281,7 +368,7 @@ PPP 会话显示接口、对端隧道地址、实际 MTU、计数和首次观测
 
 ## 登录、语言与 TCP 优先
 
-管理页提供简体中文、繁体中文和英文；语言选择保存在服务器配置中，并缓存于浏览器；服务重启或清除浏览器缓存后仍可恢复。顶部保留语言与帮助，退出登录位于顶部最右侧。表单登录由后端校验现有管理账号，不在浏览器存储密码。会话 Cookie 为 HttpOnly、SameSite=Strict，HTTPS 下启用 Secure；会话最长 12 小时、空闲 30 分钟失效。退出、修改账号或服务重启会使会话失效。登录连续失败会暂时限流；脚本统一通过 JSON 登录接口获取会话；升级自检会在本机登录，完成后销毁会话。
+管理页提供英文、繁体中文和简体中文；语言选择保存在服务器配置中，并缓存于浏览器；服务重启或清除浏览器缓存后仍可恢复。顶部保留语言与帮助，退出登录位于顶部最右侧。表单登录由后端校验现有管理账号，不在浏览器存储密码。会话 Cookie 为 HttpOnly、SameSite=Strict，HTTPS 下启用 Secure；会话最长 12 小时、空闲 30 分钟失效。退出、修改账号或服务重启会使会话失效。登录连续失败会暂时限流；脚本统一通过 JSON 登录接口获取会话；升级自检会在本机登录，完成后销毁会话。
 
 管理例外地址可从本机 IPv4 列表选择。当前访问 IP 经服务器确认属于本机时优先带入；只有一个本机地址时自动带入；多个地址时由用户选择。公网 NAT 地址需单独核对，不会自动启用管理例外。
 
@@ -313,4 +400,4 @@ CI 另启动全新 Ubuntu 24.04 amd64 QEMU 虚拟机，验证不兼容依赖拒�
 
 全新系统测试还验证两个网关以独立账号、独立映射共用同一 SOCKS 节点：并发转发、重复账号拒绝、上游中断防泄漏，以及单映射修复和停止不影响另一映射；整机重启后重复执行。
 
-安装预检拒绝存在已知 PPPoL2TP 崩溃回归的 Ubuntu 6.8.0-146-generic 与 6.8.0-147-generic（Ubuntu 缺陷 2169477）。请先切换已修复内核或 HWE 内核并重启；安装器不会自动更换生产系统内核。完整虚拟机测试使用 Ubuntu 24.04 HWE 内核。
+安装预检拒绝存在已知 PPPoL2TP 崩溃回归的 Ubuntu 6.8.0-146-generic 与 6.8.0-147-generic（Ubuntu 缺陷 2169477）。首次安装的自动内核准备流程见上文；现有生产主机使用手动流程。完整虚拟机测试会检查内核准备、人工重启后继续安装的路径；无已知问题的镜像直接继续，拨号测试运行于实际启动的内核。

@@ -38,6 +38,44 @@ L2TP remains connected during upstream outages. Failed application connections n
 
 S2L requires a dedicated host: its persistent guard covers **all `ppp+` interfaces**. IPv4 forwarding from PPP is permitted only for a configured source subnet toward its assigned TUN; other forwarding and PPP access to the host are dropped, except explicitly configured local management access. PPP IPv6 is blocked. A terminal unreachable route prevents main-table fallback when the TUN disappears. Guards remain after stopping S2L or a mapping so existing PPP sessions cannot escape via the host uplink. `s2l-guard.service` installs them before xl2tpd starts; failure prevents xl2tpd/S2L startup. Do not flush these rules or run another firewall manager that replaces them. Client-side split routing and other network adapters remain outside this server's control.
 
+## Kernel preparation and manual upgrade
+
+Fresh installation checks both the running kernel and the highest installed generic kernel under `/boot`. Ubuntu `6.8.0-146-generic` and `6.8.0-147-generic` are rejected for the known PPPoL2TP regression (2169477). With the default `S2L_KERNEL_UPGRADE=auto`, a dedicated fresh Ubuntu 24.04 host with a standard GRUB default can prepare `linux-generic-hwe-24.04` from its configured APT repositories. Existing installations, active PPP/tunnel services, containers and custom boot selections are refused before kernel preparation. Other distributions/releases need manual handling when affected. Unlisted kernels are not necessarily tested kernels.
+
+Preparation checks free space, package configuration, image/initramfs, offline PPP/L2TP/TUN module availability and the GRUB entry. It preserves old kernels, suppresses needrestart-driven service restarts and never reboots. **Exit 20** means the kernel is prepared but S2L is not installed. Arrange a maintenance window and console recovery, reboot manually, verify `uname -r`, then repeat the original install command with the same parameters. Repeating before reboot reuses complete kernel artifacts. There is no automatic resume service or saved password/parameter file. Kernel packages remain outside S2L installation rollback. `S2L_KERNEL_UPGRADE=off` disables preparation but does not bypass the known-regression check.
+
+For an existing server with this feature installed, run one command (or select menu **12**):
+
+```bash
+sudo s2l kernel-upgrade
+```
+
+It checks Ubuntu 24.04 generic kernel support, disk space, package state and standard GRUB defaults, saves boot settings under `/var/backups/s2l-kernel-*`, installs HWE and verifies boot files and PPP/L2TP/TUN modules. Old kernels remain installed. The helper does not restart services or change S2L configuration. Repeating it reuses a complete pending kernel.
+
+After it reports the new kernel ready, verify provider-console access and run `sudo reboot` separately during a maintenance window. Reconnect, check `uname -r` and test actual L2TP connectivity. There is no automatic reboot; the server reboot disconnects SSH/L2TP even while local iWAN stays running. S2L does not need reinstallation. With an older CLI, run `sudo python3 script/manage_kernel.py --upgrade` from a reviewed checkout containing this feature. Unsupported systems or custom boot selections require manual handling; do not reboot after a failed preparation. Package verification is not an actual dial test.
+
+<details>
+<summary>Manual commands and recovery details</summary>
+
+For an existing Ubuntu 24.04 server, use this procedure rather than the fresh installer. First take a provider snapshot, save S2L/PPP/TLS/GRUB configuration and verify an out-of-band console. A kernel switch disconnects SSH/L2TP even if the local iWAN client keeps running. In a root shell, inspect `uname -r`, `/etc/os-release`, `df -h / /boot` and `dpkg --audit`. Proceed only with sufficient space and no incomplete package operations:
+
+```bash
+export DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l
+apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 update
+apt-cache policy linux-generic-hwe-24.04
+apt-get -s --no-remove --no-install-recommends install linux-generic-hwe-24.04 kmod
+# Review the simulation before installing. No reboot is requested here.
+apt-get -o DPkg::Lock::Timeout=120 -o Acquire::Retries=2 \
+  install -y --no-remove --no-install-recommends linux-generic-hwe-24.04 kmod
+dpkg-query -W -f='${Depends}\n' linux-image-generic-hwe-24.04
+```
+
+Use the actual image version from the last command to inspect `/boot/vmlinuz-VERSION`, `/boot/initrd.img-VERSION` and `modinfo -k VERSION` for `tun`, `ppp_generic`, `l2tp_ppp`; do not load the new modules into the running kernel. Run `update-grub` and confirm the intended default boot entry. A `saved` or custom entry can keep the old kernel selected. A hidden menu with zero timeout needs a usable console recovery path; after backing up GRUB settings, `GRUB_TIMEOUT_STYLE=menu` and `GRUB_TIMEOUT=8` in a new `/etc/default/grub.d/99-s2l-maintenance.cfg` can expose the menu. Do not overwrite an existing custom file. Regenerate GRUB after any change.
+
+The [official HWE track](https://ubuntu.com/kernel/lifecycle) supplies supported kernels, but package availability is not an L2TP compatibility test: validate dialing/redialing in isolation first. Do not run a full distribution upgrade or remove old kernels as part of this task. Reboot separately during the agreed outage window, then verify `uname -r`, `systemctl is-active s2l xl2tpd nginx`, actual client DNS/egress and `journalctl -k -b` for refcount/use-after-free/lockup errors. If boot/network fails, select a previously validated kernel from GRUB Advanced options via the provider console; do not use 146/147 as a stable fallback. Old kernels are temporary recovery options. One-shot boot selection does not guarantee an automatic reboot after a hang.
+
+</details>
+
 ## Upgrade
 
 For an existing default `/opt/s2l` installation, run:
@@ -98,6 +136,7 @@ Run `s2l` for the interactive menu, or `s2l NUMBER` for one action. Unprivileged
 | 7 / 8 | Change admin password / username |
 | 9 / 10 | Change management port / SSH port |
 | 11 | Upgrade S2L, preserving configuration |
+| 12 / `kernel-upgrade` | Prepare Ubuntu 24.04 HWE kernel without rebooting |
 | 0 | Exit menu |
 
 Admin passwords are 12–128 characters; the installer/CLI allow a restricted character set. CLI account changes restart S2L and may interrupt tunnels; web account changes take effect without a service restart. Log in again afterwards. The CLI uses `public_url` when configured; otherwise it derives the address from the listener and detected IP, with a NAT warning on fallback.
@@ -249,4 +288,4 @@ CI additionally boots a fresh Ubuntu 24.04 amd64 QEMU guest, exercises incompati
 
 The fresh-system fixture also tests two gateways with independent accounts and mappings sharing one SOCKS node: concurrent forwarding, duplicate-account rejection, fail-closed upstream outages, and repair or stop of one mapping without disrupting the other. These checks repeat after a full OS reboot.
 
-Installation preflight rejects Ubuntu 6.8.0-146-generic and 6.8.0-147-generic because of the known PPPoL2TP regression (Ubuntu bug 2169477). Boot a fixed or HWE kernel before retrying; the installer does not replace production kernels automatically. The full-system fixture uses Ubuntu 24.04 with an HWE kernel.
+Installation preflight rejects Ubuntu 6.8.0-146-generic and 6.8.0-147-generic because of the known PPPoL2TP regression (Ubuntu bug 2169477). See kernel preparation above for fresh hosts and the manual procedure for production. The full-system fixture exercises preparation, exit 20/reuse and deliberate reboot when the image needs it; unaffected images continue directly. Real dialing runs on the kernel actually booted.
