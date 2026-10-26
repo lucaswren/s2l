@@ -101,7 +101,9 @@ func TestLeakGuardsIntegration(t *testing.T) {
 			must(bin, "-I", chain, "1", "-j", "ACCEPT")
 		}
 	}
-	ping("10.0.101.1", true)
+	// Use a host address outside the client subnet: replies sourced from the
+	// PPP gateway itself match the mapping's source policy and enter tun101.
+	ping("198.18.0.1", true)
 	ping("fd00:2::2", true)
 	before, err := output("iptables", "-S")
 	if err != nil {
@@ -122,7 +124,7 @@ func TestLeakGuardsIntegration(t *testing.T) {
 			must(bin, "-C", chain, "-j", "ACCEPT")
 		}
 	}
-	ping("10.0.101.1", false)
+	ping("198.18.0.1", false)
 	ping("fd00:2::2", false)
 	ping("fd00:1::1", false)
 	// Existing mappings upgraded without the kernel rejection rule must be

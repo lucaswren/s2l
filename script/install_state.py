@@ -4,6 +4,7 @@ from installer_i18n import tr
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import stat
@@ -108,7 +109,14 @@ def recover():
             if run(binary, '-w', '5', '-C', chain, '-i', 'ppp+', '-j', target, check=False).returncode:
                 break
             run(binary, '-w', '5', '-D', chain, '-i', 'ppp+', '-j', target)
-    for chain in ('S2L_FORWARD', 'S2L_MANAGEMENT'):
+    # Guard-only creates the return chain even before any mapping exists.
+    # A partial installation can also have exact managed TUN entry hooks.
+    # Remove those hooks only after PPP is gone; never flush built-in chains.
+    for line in run('iptables', '-w', '5', '-S', 'FORWARD').stdout.splitlines():
+        match = re.fullmatch(r'-A FORWARD -i ([A-Za-z0-9_.-]{1,15}) -j S2L_RETURN', line.strip())
+        if match:
+            run('iptables', '-w', '5', '-D', 'FORWARD', '-i', match[1], '-j', 'S2L_RETURN')
+    for chain in ('S2L_FORWARD', 'S2L_RETURN', 'S2L_MANAGEMENT'):
         if run('iptables', '-w', '5', '-S', chain, check=False).returncode == 0:
             run('iptables', '-w', '5', '-F', chain)
             run('iptables', '-w', '5', '-X', chain)

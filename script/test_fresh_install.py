@@ -153,12 +153,14 @@ def main():
                 raise RuntimeError('injected install failure was ignored')
             result = guest('test "$(cat /tmp/install-injected)" = fail; rm /tmp/install-injected; test ! -e /opt/s2l/config.json; cmp /tmp/chap-before /etc/ppp/chap-secrets; test "$(sysctl -n net.ipv4.ip_forward)" = "$(cat /tmp/forward-before)"; test ! -e /var/lib/s2l-install/journal.json; rm /tmp/fail-s2l-install')
             print('PASS failed installation rollback', flush=True)
+            guest('! iptables -S S2L_FORWARD; ! iptables -S S2L_RETURN; ! iptables -S S2L_MANAGEMENT')
             guest('touch /tmp/fail-s2l-https')
             failed = guest(install, check=False)
             if failed.returncode == 0:
                 raise RuntimeError('injected HTTPS failure was ignored')
             guest('test "$(cat /tmp/install-injected)" = https; test ! -e /opt/s2l/config.json; test ! -e /etc/ppp/options.xl2tpd.s2l-up; cmp /tmp/chap-before /etc/ppp/chap-secrets; rm /tmp/fail-s2l-https /tmp/install-injected')
             print('PASS HTTPS failure rollback after service startup', flush=True)
+            guest('! iptables -S S2L_FORWARD; ! iptables -S S2L_RETURN; ! iptables -S S2L_MANAGEMENT')
             guest('touch /tmp/kill-s2l-install')
             failed = guest(install, check=False)
             if failed.returncode == 0:
