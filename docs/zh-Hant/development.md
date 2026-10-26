@@ -28,7 +28,7 @@ L2TP/PPP 用戶端連至 xl2tpd；S2L 將映射帳密與 IPv4 子網連結至 si
 git clone https://github.com/lucaswren/s2l.git
 cd s2l
 git checkout YOUR_REVIEWED_COMMIT
-sudo env HTTPS_PORT=8443 bash script/install.sh
+sudo env HTTPS_PORT=8443 bash script/install.sh --lang zh-Hant
 ```
 
 ## 建置與貢獻

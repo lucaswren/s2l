@@ -94,7 +94,7 @@ def capabilities():
         raise RuntimeError(tr('existing PPP interfaces detected; use a dedicated host'))
     for binary in ('iptables', 'ip6tables'):
         command(binary, '-w', '5', '-S')
-    for chain in ('S2L_FORWARD', 'S2L_MANAGEMENT'):
+    for chain in ('S2L_FORWARD', 'S2L_RETURN', 'S2L_MANAGEMENT'):
         if subprocess.run(['iptables', '-w', '5', '-S', chain], capture_output=True).returncode == 0:
             raise RuntimeError(tr('existing S2L firewall state detected; recover previous installation first'))
     check_listener_port(8080, socket.SOCK_STREAM)

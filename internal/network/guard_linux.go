@@ -3,9 +3,11 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/lucaswren/s2l/internal/model"
 )
@@ -67,7 +69,12 @@ func ensureGuard(options ...model.ManagementAccess) error {
 	if len(options) > 0 {
 		access = options[0]
 	}
-	return ensureManagementAccess(access)
+	if err := ensureManagementAccess(access); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return checkGuardOrder(ctx, true)
 }
 
 func ensureRule(bin, operation string, args ...string) error {

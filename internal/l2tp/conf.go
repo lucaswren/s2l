@@ -98,7 +98,6 @@ require-chap
 require-mschap-v2
 noccp
 auth
-proxyarp
 nodefaultroute
 mtu 1400
 mru 1400

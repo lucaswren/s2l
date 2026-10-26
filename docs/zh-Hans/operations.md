@@ -13,7 +13,7 @@
 安装：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash -s -- --lang zh-Hans
 ```
 
 安装语言统一使用 `--lang`：`en`、`zh-Hant`、`zh-Hans`（默认）。一键安装可在 `sudo bash` 后加 `-s -- --lang zh-Hans`；源码安装使用 `sudo bash script/install.sh --lang zh-Hans`。内核检查、失败恢复及 HTTPS 配置会沿用此语言；APT、Go 等外部工具保留原始诊断。内核重启后请使用相同参数重新安装。
@@ -24,6 +24,34 @@ Nginx 已合并至首次依赖安装，HTTPS 阶段不再重复下载 APT 软件
 
 主推环境维持 Ubuntu Server 24.04 LTS amd64。Debian 12 是兼容性测试目标，换系统无法消除首次编译与软件下载成本。截至 2026 年 10 月，[Debian 12 已进入 LTS，至 2028 年 6 月结束](https://www.debian.org/releases/bookworm/)；[Debian 13 支持期更长](https://www.debian.org/releases/trixie/)，但尚未通过本项目完整虚拟机验证。
 
+引导脚本检测到 curl、Git、Python 与 CA 证书库均可用时，跳过引导阶段的 APT 操作；安装器仍会检查及安装运行依赖。无效路径／分支及活动隧道服务在下载前拒绝。已有源码目录必须符合指定来源且没有本地修改（含未跟踪文件）；请先保存文件或指定新的绝对路径 `SRC_DIR`，不会自动重置。并发下载使用独立锁。
+
+### 服务器系统选择
+
+| 项目 | Ubuntu Server 24.04 LTS | Debian 12 |
+|---|---|---|
+| 项目定位 | 推荐基准 | 支持的兼容性目标 |
+| 安全维护（2026 年 10 月） | 标准维护至 2029 年 5 月 | LTS 至 2028 年 6 月，取决于软件包／架构 |
+| 内核维护 | GA 或 HWE；安装前阻止已知 L2TP 回归 | 6.1 系列；镜像须有 PPP/L2TP/TUN 模块 |
+| 验证范围 | 完整虚拟机安装、重启、HTTPS 恢复与真实 PPP | 相同完整测试；两者 ARM64 均仅验证构建 |
+
+参阅 [Ubuntu 支持周期](https://ubuntu.com/about/release-cycle)及 [Debian 发行状态](https://www.debian.org/releases/bookworm/)。换系统不能修复共用 VPN 身份、路由策略或 SOCKS5 故障。一次受控测试中，Ubuntu／Debian 冷编译为 22／18 秒，证书处理为 0–1 秒，不能当作普遍性能比较。安装缓慢应依据 `[TIME]`、APT 锁／下载与主机资源定位。现有服务器建议保留系统，另安排内核与安全维护。
+
+### 防火墙范围与端口
+
+S2L 管理 PPP/TUN 转发防护，不是完整的公网主机防火墙。INPUT 默认 ACCEPT 不会限制公网 SSH／HTTPS；管理入口应由主机商安全组或已审阅的主机规则限制。改变当前管理路径前，须有可用的恢复控制台。
+
+| 流量 | 放行范围 |
+|---|---|
+| 管理 | 现有 SSH TCP 端口与指定 HTTPS TCP 端口，限制可信管理来源 |
+| 普通 L2TP | 预期客户端的 UDP 1701 |
+| L2TP/IPsec | UDP 500/4500；未经 UDP 封装时的 ESP；UDP 1701 仅在设置的 IPsec 策略下放行 |
+| 后端 | 仅 127.0.0.1:8080，不向公网放行 |
+
+健康检查会发现被前方规则遮蔽的 S2L 入口，恢复顺序而不清空其他规则。同一地址族的 filter 变更一起提交，PPP 管理例外保持优先。这是周期修复，不能保证抵抗持续竞争的防火墙管理器或另一套原生 nftables 基础链。请保持一致的 iptables 后端，避免多个工具同时改写规则。PPP 子网通过 TUN 路由，不桥接到主机 LAN，因此生成的 PPP 选项移除 proxy ARP；现有连接须重连才会采用新选项。
+
+### 内核与首次安装
+
 首次安装在部署 PPP/S2L 前自动检查内核：Ubuntu `6.8.0-146-generic`、`6.8.0-147-generic` 存在已知 L2TP 回归，也会检查 `/boot` 中已安装的最高版本 generic 内核，避免下次重启进入已知问题版本。默认 `S2L_KERNEL_UPGRADE=auto`：仅在专用新主机、Ubuntu 24.04、标准 GRUB 默认启动项下，从系统 APT 源准备 `linux-generic-hwe-24.04`。会检查空间、内核镜像、initramfs、GRUB 启动项及 PPP/L2TP/TUN 模块，不加载新模块、不重启、不删除旧内核，也不部署 S2L。
 
 内核准备成功后以 **退出码 20** 结束，表示“等待人工重启”，不是安装成功。确认控制台回退入口及维护窗口后手动重启，检查 `uname -r`，再用**原参数**重跑安装命令；未重启重跑时，会检查并复用已准备好的内核。没有自动续装服务，不保存管理密码或安装参数。安装的软件包不属于 S2L 安装回滚范围。APT 失败、目标文件不完整或仍是问题内核时拒绝继续。设置 `S2L_KERNEL_UPGRADE=off` 可关闭自动准备，但不能绕过问题内核检查。Debian、其他 Ubuntu 版本、自定义引导和现有安装均不会通过此流程自动升级内核；参阅下方手动方案。未命中已知版本仅表示不在当前拒绝名单，不代表所有内核都经过验证。
@@ -33,7 +61,7 @@ Nginx 已合并至首次依赖安装，HTTPS 阶段不再重复下载 APT 软件
 公网 IPv4 默认自动识别；需指定时，将安装命令末尾的 `sudo bash` 替换为 `sudo env PUBLIC_IP=服务器公网IPv4 bash`。后端端口无需指定，也无需对外放行；HTTPS 端口不能使用 8080。使用 `HTTPS_PORT` 指定 HTTPS 管理端口，例如：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash -s -- --lang zh-Hans
 ```
 
 请提前放行 TCP 8443；不指定时，安装过程显示随机 HTTPS 端口，需放行后才能访问。
@@ -324,7 +352,7 @@ UDP 默认主动拒绝非 DNS 请求；可按需允许 UDP 或仅拒绝 UDP/443�
 
 Debug 日志仅保留在有界内存，S2L 重启清空，不再创建 sing-box 日志文件。进程重启后分类计数重置，退出次数在同一 S2L 进程内累计。运行监控显示接口丢包/错误以及日志中超时、连接拒绝、TLS 错误分类；这些是日志计数，不等同于失败请求数。接口统计读取失败会明确显示。
 
-## v1.3.1 检测与升级
+## 检测与升级
 
 首次启动备份并迁移已有映射为主动拒绝 UDP、DNS 自动 DoH/TCP；停止的映射保持停止。恢复旧备份不会回退安装迁移标记，后续策略不会被重启覆盖。升级验证等待原运行映射本地恢复，上游不可用不会单独触发程序回滚；首次恢复失败进入限次重试。每 30 秒核验并修复路由、阻断规则、NAT 和 MSS。
 
@@ -404,7 +432,7 @@ Google HTTPS（类型 65）DNS 记录经固定节点通过 DoH/TCP 原样转发�
 
 映射仅接受规范的 RFC1918 IPv4 网段，至少容纳两个对端地址，排除 172.19.0.0/16。启动前检查宿主机网段、接口、路由表与规则优先级冲突；清理仅删除本映射的精确路由，不清空整表。同账号仅允许一条 PPP 会话，旧 max_sessions 为 0 或大于 1 也不绕过保护；网关仍可让多设备共用一次拨号。
 
-CI 另启动全新 Ubuntu 24.04 amd64 QEMU 虚拟机，验证不兼容依赖拒绝、安装失败恢复、强制中断恢复、真实 systemd、PPP 和故障注入，再重启整个虚拟机并重测。ARM64 仅增加交叉构建，不代表所有 Debian 或 ARM64 环境均完成实机验证。
+CI 启动全新 Ubuntu 24.04 与 Debian 12 amd64 QEMU 虚拟机，验证不兼容依赖拒绝、安装失败恢复、强制中断恢复、真实 systemd、PPP 和故障注入，再重启整个虚拟机并重测。ARM64 仅增加交叉构建，不代表所有发行版／内核或 ARM64 环境均完成实机验证。
 
 全新系统测试还验证两个网关以独立账号、独立映射共用同一 SOCKS 节点：并发转发、重复账号拒绝、上游中断防泄漏，以及单映射修复和停止不影响另一映射；整机重启后重复执行。
 

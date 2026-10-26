@@ -11,7 +11,7 @@
 新安裝優先使用一鍵腳本。請使用專用 Ubuntu/Debian 主機，執行前審閱腳本：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash -s -- --lang zh-Hant
 ```
 
 安裝語言統一使用 `--lang`：`en`、`zh-Hant`、`zh-Hans`（預設）。一鍵安裝可在 `sudo bash` 後加 `-s -- --lang zh-Hant`；原始碼安裝使用 `sudo bash script/install.sh --lang zh-Hant`。核心檢查、失敗復原及 HTTPS 設定會沿用此語言；APT、Go 等外部工具保留原始診斷。核心重啟後請使用相同參數重新安裝。
@@ -23,6 +23,32 @@ Nginx 已合併至首次相依套件安裝，HTTPS 階段不再重複下載 APT 
 主推環境維持 Ubuntu Server 24.04 LTS amd64。Debian 12 是相容性測試目標，換系統無法消除首次編譯與套件下載成本。截至 2026 年 10 月，[Debian 12 已進入 LTS，至 2028 年 6 月結束](https://www.debian.org/releases/bookworm/)；[Debian 13 支援期更長](https://www.debian.org/releases/trixie/)，但尚未通過本專案完整虛擬機驗證。
 
 腳本以 root 執行，預設取得最新穩定 Release，明確指定 `BRANCH` 時使用該版本；未指定 `HTTPS_PORT` 時選用隨機空閒 TCP 埠。僅允許可信管理 IP 存取輸出的管理埠。固定埠設定見 README；從已審閱原始碼工作副本安裝的方式見開發指南。既有安裝請使用下方更新流程。
+
+引導腳本偵測到 curl、Git、Python 與 CA 憑證庫均可用時，略過引導階段的 APT 操作；安裝器仍會檢查及安裝執行相依套件。無效路徑／分支及活動隧道服務在下載前拒絕。既有原始碼目錄須符合指定來源且沒有本機變更（含未追蹤檔案）；請先保存檔案或指定新的絕對路徑 `SRC_DIR`，不會自動重設。並行下載使用獨立鎖。
+
+### 伺服器系統選擇
+
+| 項目 | Ubuntu Server 24.04 LTS | Debian 12 |
+|---|---|---|
+| 專案定位 | 建議基準 | 支援的相容性目標 |
+| 安全維護（2026 年 10 月） | 標準維護至 2029 年 5 月 | LTS 至 2028 年 6 月，依套件／架構而異 |
+| 核心維護 | GA 或 HWE；安裝前阻擋已知 L2TP 回歸 | 6.1 系列；映像須具備 PPP/L2TP/TUN 模組 |
+| 驗證範圍 | 完整虛擬機安裝、重啟、HTTPS 恢復與真實 PPP | 相同完整測試；兩者 ARM64 均僅驗證建置 |
+
+參閱 [Ubuntu 支援週期](https://ubuntu.com/about/release-cycle)及 [Debian 發行狀態](https://www.debian.org/releases/bookworm/)。換系統不能修復共用 VPN 身分、路由策略或 SOCKS5 故障。一次受控測試中，Ubuntu／Debian 冷編譯為 22／18 秒，憑證處理為 0–1 秒；不能當作普遍效能比較。安裝緩慢應依 `[TIME]`、APT 鎖／下載與主機資源定位。既有伺服器建議保留系統，另安排核心與安全維護。
+
+### 防火牆範圍與連接埠
+
+S2L 管理 PPP/TUN 轉發防護，不是完整的公網主機防火牆。INPUT 預設 ACCEPT 不會限制公網 SSH／HTTPS；管理入口應由主機商安全群組或已審閱的主機規則限制。變更目前管理路徑前，須具備可用的復原控制台。
+
+| 流量 | 放行範圍 |
+|---|---|
+| 管理 | 現有 SSH TCP 埠與指定 HTTPS TCP 埠，限制可信管理來源 |
+| 普通 L2TP | 預期用戶端的 UDP 1701 |
+| L2TP/IPsec | UDP 500/4500；未經 UDP 封裝時的 ESP；UDP 1701 僅在設定的 IPsec 策略下放行 |
+| 後端 | 僅 127.0.0.1:8080，不對公網放行 |
+
+健康檢查會偵測被前方規則遮蔽的 S2L 入口，恢復順序而不清空其他規則。同一位址族的 filter 變更一併提交，PPP 管理例外保持優先。這是週期修復，不能保證抵抗持續競爭的防火牆管理器或另一套原生 nftables 基礎鏈。請保持一致的 iptables 後端，避免多個工具同時改寫規則。PPP 子網透過 TUN 路由，不橋接到主機 LAN，因此產生的 PPP 選項移除 proxy ARP；既有連線須重連才會採用新選項。
 
 ## 上游健康與防洩漏
 
@@ -202,7 +228,7 @@ TG、微信或網頁圖片載入失敗時，先檢查失敗請求及 TCP/UDP/DNS
 
 僅 DoH 或僅 TCP DNS 模式的健康檢查也只探測所選方式。
 
-## v1.3.1 檢測與升級
+## 檢測與升級
 
 首次啟動備份並遷移既有映射為主動拒絕 UDP、DNS 自動 DoH/TCP；停止的映射維持停止。舊備份不回退安裝遷移標記。升級等待原執行映射本地恢復，首次失敗有界重試；每 30 秒核驗並修復路由、防火牆、NAT 與 MSS。
 
@@ -282,7 +308,7 @@ Google HTTPS（類型 65）DNS 記錄經固定節點透過 DoH/TCP 原樣轉送�
 
 映射僅接受規範的 RFC1918 IPv4 網段，至少容納兩個對端位址，排除 172.19.0.0/16。啟動前檢查主機網段、介面、路由表與規則優先序衝突；清理僅刪除本映射的精確路由，不清空整表。同帳號僅允許一條 PPP 工作階段，舊 max_sessions 為 0 或大於 1 亦不繞過保護；閘道仍可讓多裝置共用一次撥號。
 
-CI 另啟動全新 Ubuntu 24.04 amd64 QEMU 客體，驗證不相容依賴拒絕、安裝失敗恢復、強制中斷恢復、真實 systemd、PPP 與故障注入，再重啟整個客體並重測。ARM64 僅增加交叉建置，不代表所有 Debian 或 ARM64 環境均完成實機驗證。
+CI 啟動全新 Ubuntu 24.04 與 Debian 12 amd64 QEMU 客體，驗證不相容依賴拒絕、安裝失敗恢復、強制中斷恢復、真實 systemd、PPP 與故障注入，再重啟整個客體並重測。ARM64 僅增加交叉建置，不代表所有發行版／核心或 ARM64 環境均完成實機驗證。
 
 全新系統測試另驗證兩個閘道以獨立帳號、獨立映射共用同一 SOCKS 節點：並行轉送、重複帳號拒絕、上游中斷防洩漏，以及單映射修復和停止不影響另一映射；整機重啟後重複執行。
 

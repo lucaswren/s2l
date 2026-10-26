@@ -94,6 +94,37 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	if err := controller.Verify(m); err != nil {
 		t.Fatal("complete forwarding path rejected", err)
 	}
+	// A firewall reload can insert broad accepts above still-existing hooks.
+	// Presence-only checks used to report this leaking state as healthy.
+	for _, bin := range []string{"iptables", "ip6tables"} {
+		for _, chain := range []string{"INPUT", "FORWARD"} {
+			must(bin, "-I", chain, "1", "-j", "ACCEPT")
+		}
+	}
+	ping("10.0.101.1", true)
+	ping("fd00:2::2", true)
+	before, err := output("iptables", "-S")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.Verify(m); !IsMissingState(err) {
+		t.Fatal("shadowed hooks not detected", err)
+	}
+	after, err := output("iptables", "-S")
+	if err != nil || before != after {
+		t.Fatal("verification mutated rules", err)
+	}
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("guard order repair", err)
+	}
+	for _, bin := range []string{"iptables", "ip6tables"} {
+		for _, chain := range []string{"INPUT", "FORWARD"} {
+			must(bin, "-C", chain, "-j", "ACCEPT")
+		}
+	}
+	ping("10.0.101.1", false)
+	ping("fd00:2::2", false)
+	ping("fd00:1::1", false)
 	// Existing mappings upgraded without the kernel rejection rule must be
 	// detected as incomplete, so the normal repair installs it automatically.
 	udpArgs := mappingUDPRejectArgs(m)

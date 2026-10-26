@@ -70,6 +70,25 @@ If automatic DNS is ignored, enter 1.1.1.1 and 8.8.8.8 manually **and route both
 
 S2L blocks IPv6 arriving through PPP, but cannot block IPv6 through a client's other adapters. Enforce the required IPv6 and disconnect-fallback policy on the client/router. An inactive VPN must not silently restore WAN access if the intended policy is to fail closed.
 
+## Alternative VPN protocols
+
+S2L currently terminates L2TP, with optional L2TP/IPsec. This October 2026 comparison describes candidates, not implemented S2L modes. Confirm firmware and license; protocol recognition does not imply a VPN client.
+
+| Protocol | Panabit standard/free | iKuai free | RouterOS 7 |
+|---|---|---|---|
+| L2TP | Current deployment verified | Client available | Supported |
+| Native IPsec | Module documented; verify IKE version/selectors | Verify authentication and routing | Supported |
+| IKEv2/IPsec | Client support unconfirmed | Official 3.7 history labels it enterprise | Supported |
+| OpenVPN | Native client unconfirmed | Client documented | Supported; v7 adds UDP |
+| WireGuard | Native client unconfirmed | Official 3.7 history labels it enterprise | Supported |
+| iWAN | Vendor protocol | Native interoperability unconfirmed | Native interoperability unconfirmed |
+
+Sources: [Panabit standard release](https://panabit.com/Article?article_id=148), [iWAN](https://www.panabit.com/Article?article_id=134), [iKuai license history](https://www.ikuai8.com/index.php?id=331&option=com_content&view=article), [iKuai OpenVPN](https://www.ikuai8.com/support/ymgn/lyym/wlsz/vpn/openvpn.html), [RouterOS specifications](https://manual.mikrotik.com/docs/getting-started/software-specifications/), [RouterOS v7 changes](https://manual.mikrotik.com/docs/getting-started/upgrading-to-v7/). Newer free iKuai builds unlocking enterprise features have not been verified.
+
+For all three free router families, retain L2TP while evaluating native IPsec interoperability; IPsec requires matching identities, proposals and routes. For iKuai/RouterOS, OpenVPN is another candidate. WireGuard is simple where licensed/supported, but is not a verified common free option. Give each concurrent device its own key and tunnel address; multiple devices can share a SOCKS5 exit without sharing a VPN identity. See [WireGuard peer configuration](https://www.wireguard.com/quickstart/).
+
+Adding a protocol to S2L requires ingress identity, routing, DNS, firewall and recovery work: `ppp+` guards do not automatically protect WireGuard/OpenVPN interfaces. Changing VPN protocols does not fix upstream SOCKS5 failures, shared rate limits or router policy conflicts. Evaluate on an isolated pilot while retaining the current iWAN/L2TP path.
+
 ## Acceptance checks after connection
 
 1. Check assigned PPP IPv4, both DNS addresses and effective routes. Windows: `ipconfig /all`, `route print -4`; Linux: `ip -4 addr`, `ip -4 route get 1.1.1.1`, and `resolvectl status` when available; macOS: `scutil --dns`, `netstat -rn -f inet`. The VPN server itself must remain reachable via the original network.

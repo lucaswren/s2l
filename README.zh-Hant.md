@@ -4,7 +4,7 @@
 
 [用戶端接入、DNS 與驗收](docs/zh-Hant/clients.md)
 
-S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與 iptables 將流量導向指定 SOCKS5 上游。Go 服務內嵌 Vue 3 / Element Plus 管理介面，支援節點與映射管理、批次匯入、啟停、重啟恢復、上下行測速與系統設定。管理介面支援英文、繁體中文與簡體中文，使用表單登入與工作階段驗證；安裝語言統一使用參數 --lang en|zh-Hant|zh-Hans（預設簡體中文）。
+S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與 iptables 將流量導向指定 SOCKS5 上游。Go 服務內嵌 Vue 3 / Element Plus 管理介面，支援節點與映射管理、批次匯入、啟停、重啟恢復、上下行測速與系統設定。管理介面支援英文、繁體中文與簡體中文，使用表單登入與工作階段驗證；安裝語言統一使用參數 `--lang en|zh-Hant|zh-Hans`（預設簡體中文）。
 
 僅在取得授權的主機、網路與上游服務上使用。部署前閱讀[法律與合規說明](docs/zh-Hant/legal.md)，尤其涉及中國大陸或跨境連線時。軟體不提供監管許可，也不保證匿名性。
 
@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 如需固定 HTTPS 埠，例如 8443，可使用下列命令，並放行對應 TCP 埠：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash -s -- --lang zh-Hant
 ```
 
 登入顯示的 HTTPS 網址，新增授權節點，建立映射並啟動至 `running`。用戶端使用伺服器 IP 與映射帳密。普通 L2TP 使用 UDP 1701；IPsec 需要 UDP 500/4500，本專案統一使用 NAT-T 封裝，無需單獨放行 ESP。先閱讀操作指南再開放連接埠。更新既有安裝不要重跑安裝程式。從已審閱原始碼工作副本安裝的方式見[開發指南](docs/zh-Hant/development.md)。

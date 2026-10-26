@@ -22,6 +22,11 @@ def main():
                 errors.append(f"{name}: expected fixed navigation labels English, 繁體中文, 简体中文")
         if re.search(r"zh-(?:TW|CN)\b", text):
             errors.append(f"{name}: use script-based Chinese language tags")
+        language = next((lang for lang in ('en', 'zh-Hant', 'zh-Hans') if lang in path.parts or lang in path.name), 'en')
+        for line in text.splitlines():
+            if (line.startswith('curl ') and '/script/remote_install.sh ' in line) or (line.startswith('sudo ') and 'bash script/install.sh' in line):
+                if f'--lang {language}' not in line:
+                    errors.append(f"{name}: installation example must select --lang {language}")
         # Current documents use inline links, without titles or escaped parentheses.
         for target in re.findall(r"\]\(([^)]+)\)", text):
             target = target.strip().strip("<>")

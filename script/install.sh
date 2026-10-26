@@ -58,7 +58,7 @@ wait_for_apt() {
      || fuser /var/lib/dpkg/lock >/dev/null 2>&1 \
      || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
     if (( waited >= max_wait )); then
-      error "$(s2l_text "APT lock wait timed out (${max_wait}s). Check the package manager and retry later." "等待 APT 鎖定逾時（${max_wait}s）。請檢查套件管理器後重試。" "等待 apt 锁超时（${max_wait}s）。可执行: systemctl stop unattended-upgrades 后重试")"
+      error "$(s2l_text "APT lock wait timed out (${max_wait}s). Check the package manager and retry later." "等待 APT 鎖定逾時（${max_wait}s）。請檢查套件管理器後重試。" "等待 APT 锁超时（${max_wait}s）。请检查包管理器，稍后重试。")"
     fi
     if (( waited % 15 == 0 )); then
       info "$(s2l_text "Waiting for the package manager... (${waited}s)" "等待套件管理器空閒... (${waited}s)" "系统正在自动更新，等待 apt 空闲... (${waited}s)")"
@@ -252,7 +252,6 @@ require-chap
 require-mschap-v2
 noccp
 auth
-proxyarp
 nodefaultroute
 mtu 1400
 mru 1400

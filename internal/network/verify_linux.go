@@ -87,6 +87,9 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 			return missingFirewall(err, "ip6tables", []string{"-C", chain, "-i", "ppp+", "-j", "DROP"})
 		}
 	}
+	if err := checkGuardOrder(ctx, false); err != nil {
+		return err
+	}
 	enabled, err := os.ReadFile("/proc/sys/net/ipv4/ip_forward")
 	if err != nil {
 		return err
@@ -200,6 +203,10 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 			return err
 		}
 		switch missing.command {
+		case "guard-order":
+			if e := checkGuardOrder(ctx, true); e != nil {
+				return e
+			}
 		case "iptables", "ip6tables":
 			args := append([]string(nil), missing.args...)
 			check := 0

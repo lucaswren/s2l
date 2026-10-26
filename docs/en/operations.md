@@ -11,7 +11,7 @@ Read the [legal notes](legal.md) and README security limits first. Keep security
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash -s -- --lang en
 ```
 
 Use only `--lang` to select installation messages: `en`, `zh-Hant`, `zh-Hans` (default). For example, append `-s -- --lang en` to `sudo bash`; from a source checkout use `sudo bash script/install.sh --lang en`. The selection applies to kernel checks, recovery and HTTPS setup. APT, Go and other external tools retain their original diagnostics. Repeat the same parameter after a required kernel reboot.
@@ -23,6 +23,32 @@ Editing a SOCKS5 address, username or password now lists linked mappings that mu
 Ubuntu Server 24.04 LTS amd64 remains the recommended baseline. Debian 12 is a compatibility test target; switching distributions does not remove first-build or package-download costs. As of October 2026, [Debian 12 is in LTS through June 2028](https://www.debian.org/releases/bookworm/); [Debian 13 has a longer support runway](https://www.debian.org/releases/trixie/) but has not passed this project’s full VM tests.
 
 It runs as root and selects the latest stable Release by default; an explicit `BRANCH` overrides that selection. HTTPS uses a random available TCP port unless `HTTPS_PORT` is supplied. Restrict the printed management port to trusted administrator IPs. See the README for fixed-port configuration and the development guide for installation from a reviewed source checkout. Use the update procedure below for existing installations.
+
+The bootstrap skips its APT step when curl, Git, Python and the CA bundle are already available; the installer still checks and installs runtime dependencies. Invalid source paths/branches and active tunnel services are rejected before downloads. Existing source checkouts must have the requested origin and no local changes, including untracked files. Save those files or choose a new absolute `SRC_DIR`; the bootstrap does not reset them. Concurrent downloads use a separate lock.
+
+### Choosing the server system
+
+| Criterion | Ubuntu Server 24.04 LTS | Debian 12 |
+|---|---|---|
+| Project role | Recommended baseline | Supported compatibility target |
+| Security support, October 2026 | Standard maintenance through May 2029 | In LTS through June 2028; coverage depends on package/architecture |
+| Kernel maintenance | GA or HWE; block known L2TP regressions before installation | 6.1 family; use an image with PPP/L2TP/TUN modules |
+| Test evidence | Full VM install, reboot, HTTPS recovery and real PPP tests | The same full VM tests; ARM64 is build-only for both systems |
+
+See [Ubuntu's lifecycle](https://ubuntu.com/about/release-cycle) and [Debian's release status](https://www.debian.org/releases/bookworm/). A distribution switch is not a fix for shared VPN identities, router policies or SOCKS5 outages. One controlled test measured cold compilation at 22s/18s and certificate work at 0–1s on Ubuntu/Debian respectively; this is not a general performance benchmark. Slow installation should be diagnosed from `[TIME]`, APT locks/downloads and machine resources. On an existing server, keep the current OS and schedule kernel/security maintenance separately.
+
+### Firewall ownership and required ports
+
+S2L owns its PPP/TUN forwarding guards, not the host's complete public firewall. An INPUT policy of ACCEPT does not restrict public SSH or HTTPS. Use provider security groups or reviewed host rules for management access. Do not change the live management path without a verified recovery console.
+
+| Traffic | Required allowance |
+|---|---|
+| Administration | Existing SSH TCP port and selected HTTPS TCP port, restricted to administrator sources |
+| Plain L2TP | UDP 1701 from intended clients |
+| L2TP/IPsec | UDP 500/4500; ESP when not UDP-encapsulated; UDP 1701 only under the configured IPsec policy |
+| Backend | 127.0.0.1:8080 only; no public allowance |
+
+Health checks detect S2L entry hooks shadowed by earlier rules and restore their priority without flushing foreign rules. Each address family's filter change is committed together and PPP management exceptions remain first. This is periodic repair, not protection against a continuously competing firewall manager or separate native nftables base chains. Keep one consistent iptables backend and avoid concurrent rule replacement. Generated PPP options omit proxy ARP because client subnets are routed through TUNs, not bridged onto the host LAN; existing sessions adopt option changes only after reconnecting.
 
 ## Upstream health and leak protection
 
@@ -212,7 +238,7 @@ Start/stop operations also serialize the shared xl2tpd configuration through the
 
 Credential/comment updates no longer restart xl2tpd. A real global config change while it is active is refused before overwriting the config; stop xl2tpd in a maintenance window and retry. New PPP sessions read credentials afresh; stopped mappings keep leak guards. Debug logs stay in bounded memory only and are cleared on S2L restart; sing-box log files are no longer created. Error categories refer to the current process's log lines rather than failed request totals. Exit counts persist for the lifetime of S2L; interface drops/errors and read failures are displayed.
 
-## v1.3.1 diagnostics and upgrades
+## Diagnostics and upgrades
 
 First startup backs up and migrates existing mappings to actively reject non-DNS UDP and use automatic DoH/TCP DNS. Stopped mappings stay stopped. Restoring business backups preserves the installed migration version. Upgrades wait for previously running mappings to recover locally; upstream outages alone do not fail verification. Initial restore failures use the bounded local recovery budget: three attempts per ten minutes followed by a five-minute cooldown. Forwarding rules, NAT, policy routes and MSS are checked every 30 seconds and repaired without restarting a healthy process.
 
@@ -292,7 +318,7 @@ First-install configuration changes use a private journal in `/var/lib/s2l-insta
 
 Mapping subnets must be canonical RFC1918 IPv4 networks with at least two peer addresses, excluding 172.19.0.0/16. Host network overlaps, occupied interfaces, routing tables and rule priorities are checked before startup; cleanup removes exact mapping routes instead of flushing tables. One account assigns one peer address and permits one PPP session even if an old max_sessions value was zero or greater than one. A gateway can still share that one session among many LAN devices.
 
-CI additionally boots a fresh Ubuntu 24.04 amd64 QEMU guest, exercises incompatible dependency rejection, failed-install rollback, hard-interruption recovery, real systemd services, real PPP and fault injection, then reboots the guest and repeats dialing. ARM64 receives a cross-build check; this does not establish full ARM64 or every Debian runtime compatibility.
+CI boots fresh Ubuntu 24.04 and Debian 12 amd64 QEMU guests, exercises incompatible dependency rejection, failed-install rollback, hard-interruption recovery, real systemd services, real PPP and fault injection, then reboots the guest and repeats dialing. ARM64 receives a cross-build check; this does not establish full ARM64 or every distribution/kernel runtime compatibility.
 
 The fresh-system fixture also tests two gateways with independent accounts and mappings sharing one SOCKS node: concurrent forwarding, duplicate-account rejection, fail-closed upstream outages, and repair or stop of one mapping without disrupting the other. These checks repeat after a full OS reboot.
 

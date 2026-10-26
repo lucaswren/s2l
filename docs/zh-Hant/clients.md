@@ -70,6 +70,25 @@ pppd 透過 IP-up hook 的 `DNS1`／`DNS2` 提供協商結果，也可寫入 `/e
 
 S2L 阻擋進入 PPP 的 IPv6，但無法阻擋用戶端其他介面的 IPv6。需在用戶端／路由器落實 IPv6 和斷線時的阻斷策略；要求失敗即阻斷時，不應在 VPN 斷開後自動恢復 WAN 直連。
 
+## 替代 VPN 協定
+
+S2L 目前接入 L2TP，可選 L2TP/IPsec。以下為 2026 年 10 月的候選方案比較，不代表專案已實作。請核對韌體與授權；協定識別不等於具有 VPN 用戶端。
+
+| 協定 | Panabit 標準／免費版 | 愛快免費版 | RouterOS 7 |
+|---|---|---|---|
+| L2TP | 現有部署已驗證 | 有用戶端 | 支援 |
+| 原生 IPsec | 有模組；須核對 IKE 版本與選擇器 | 須核對認證及路由 | 支援 |
+| IKEv2/IPsec | 用戶端支援未確認 | 官方 3.7 歷史標示企業版 | 支援 |
+| OpenVPN | 原生用戶端未確認 | 有用戶端文件 | 支援；v7 增加 UDP |
+| WireGuard | 原生用戶端未確認 | 官方 3.7 歷史標示企業版 | 支援 |
+| iWAN | 廠商私有協定 | 原生互通未確認 | 原生互通未確認 |
+
+依據：[Panabit 標準版](https://panabit.com/Article?article_id=148)、[iWAN](https://www.panabit.com/Article?article_id=134)、[愛快授權歷史](https://www.ikuai8.com/index.php?id=331&option=com_content&view=article)、[愛快 OpenVPN](https://www.ikuai8.com/support/ymgn/lyym/wlsz/vpn/openvpn.html)、[RouterOS 規格](https://manual.mikrotik.com/docs/getting-started/software-specifications/)、[RouterOS v7 變更](https://manual.mikrotik.com/docs/getting-started/upgrading-to-v7/)。尚未驗證新版愛快免費版已開放上述企業版功能。
+
+三類免費軟路由共同使用時，保留 L2TP，另驗證原生 IPsec 的互通；IPsec 需對齊身分、演算法與路由。僅愛快／RouterOS 可另評估 OpenVPN。WireGuard 在具備功能及授權時簡單易用，但不是已驗證的共同免費選項。每個同時連線的裝置應有獨立金鑰與隧道 IP；多裝置可共用同一 SOCKS5 出口，不必共用 VPN 身分。參閱 [WireGuard 對等端設定](https://www.wireguard.com/quickstart/)。
+
+S2L 新增協定需要接入身分、路由、DNS、防火牆與恢復測試；現有 `ppp+` 規則不會自動保護 WireGuard／OpenVPN 介面。更換協定不能修復上游 SOCKS5、共用限速或路由策略問題。先在隔離環境試行，保留現有 iWAN/L2TP 路徑。
+
 ## 接入驗收
 
 1. 核對 PPP IPv4、兩個 DNS 及實際路由。Windows：`ipconfig /all`、`route print -4`；Linux：`ip -4 addr`、`ip -4 route get 1.1.1.1`，可用時執行 `resolvectl status`；macOS：`scutil --dns`、`netstat -rn -f inet`。VPN 伺服器應仍經原網路可達。

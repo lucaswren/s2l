@@ -3,6 +3,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"github.com/lucaswren/s2l/internal/model"
 	"net"
@@ -101,6 +102,17 @@ func TestPPPManagementIntegration(t *testing.T) {
 	dial("198.18.10.1", other, "", false)
 	dial("198.18.10.2", port, "", false)
 	dial("198.18.10.1", port, "10.20.31.2", false)
+	// Reordering must retain the configured management exception, even when a
+	// foreign DROP shadows it. Do not rebuild the exception chain during repair.
+	must("iptables", "-I", "INPUT", "1", "-j", "DROP")
+	dial("198.18.10.1", port, "", false)
+	if e := checkGuardOrder(context.Background(), true); e != nil {
+		t.Fatal(e)
+	}
+	dial("198.18.10.1", port, "", true)
+	dial("198.18.10.1", other, "", false)
+	must("iptables", "-C", "INPUT", "-j", "DROP")
+	must("iptables", "-D", "INPUT", "-j", "DROP")
 	if e := c.EnsureGuard(); e != nil {
 		t.Fatal(e)
 	}

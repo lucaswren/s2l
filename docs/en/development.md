@@ -51,7 +51,7 @@ The one-command installer is the default documented method. To install a specifi
 git clone https://github.com/lucaswren/s2l.git
 cd s2l
 git checkout YOUR_REVIEWED_COMMIT
-sudo env HTTPS_PORT=8443 bash script/install.sh
+sudo env HTTPS_PORT=8443 bash script/install.sh --lang en
 ```
 
 ## Build, tests and contributions

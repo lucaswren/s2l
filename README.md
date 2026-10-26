@@ -34,7 +34,7 @@ Allow the printed HTTPS TCP port only from trusted administrator IPs. The instal
 To choose a fixed HTTPS port instead of the random default, use `HTTPS_PORT`, for example 8443. Allow that port before accessing the management interface:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo env HTTPS_PORT=8443 bash -s -- --lang en
 ```
 
 Open the printed HTTPS URL, add an authorized SOCKS5 node, create a mapping and start it to `running`. Configure the client with the server IP and mapping's L2TP credentials. Plain L2TP needs UDP 1701; optional IPsec needs UDP 500/4500 with enforced NAT-T. Read the operations guide before exposing tunnel ports. Do not rerun the installer to upgrade. For installation from a reviewed source checkout, see the [development guide](docs/en/development.md).
