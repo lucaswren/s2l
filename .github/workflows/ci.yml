@@ -82,6 +82,10 @@ jobs:
       - run: go build -o bin/s2l ./cmd/s2l
 
   fresh-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu-24.04, debian-12]
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -97,7 +101,7 @@ jobs:
           fi
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-client
-      - name: Fresh Ubuntu install, interrupted-install recovery, reboot and real PPP faults
-        run: sudo env PATH="$PATH" python3 script/test_fresh_install.py
+      - name: Fresh install, interrupted-install recovery, reboot and real PPP faults
+        run: sudo env PATH="$PATH" python3 script/test_fresh_install.py --distro '${{ matrix.distro }}'
       - name: Compile Linux ARM64 gateway
         run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/s2l-arm64 ./cmd/s2l

@@ -61,16 +61,30 @@ func (s *Server) previewChange(w http.ResponseWriter, r *http.Request, old, next
 	}
 	sort.Strings(fields)
 	ids := []string{}
+	blocked := []map[string]string{}
+	connectionChanged := false
+	if node, ok := next.(model.SocksNode); ok {
+		if previous, ok := old.(model.SocksNode); ok {
+			connectionChanged = previous.Addr != node.Addr || previous.Username != node.Username || previous.Password != node.Password
+		}
+	}
 	if mapping, ok := next.(model.TunnelMapping); ok {
 		ids = append(ids, mapping.ID)
 	} else {
 		for _, m := range s.store.ListMappings() {
 			if m.NodeID == nodeID {
 				ids = append(ids, m.ID)
+				if connectionChanged && m.Status != model.StatusStopped {
+					blocked = append(blocked, map[string]string{"id": m.ID, "name": m.L2TPUser, "status": m.Status})
+				}
 			}
 		}
 	}
-	writeJSON(w, 200, map[string]any{"fields": fields, "affected": ids, "message": "保存前已校验；运行中的映射需先停止。失败写入保留原配置，历史版本可在备份中恢复。"})
+	message := "保存前已校验；运行中的映射需先停止。失败写入保留原配置，历史版本可在备份中恢复。"
+	if _, ok := next.(model.SocksNode); ok {
+		message = "保存不会重启映射。名称和分组可在线修改；连接参数需在关联映射停止后修改。"
+	}
+	writeJSON(w, 200, map[string]any{"fields": fields, "affected": ids, "blocked": blocked, "message": message})
 	return true
 }
 

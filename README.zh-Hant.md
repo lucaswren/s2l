@@ -4,7 +4,7 @@
 
 [用戶端接入、DNS 與驗收](docs/zh-Hant/clients.md)
 
-S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與 iptables 將流量導向指定 SOCKS5 上游。Go 服務內嵌 Vue 3 / Element Plus 管理介面，支援節點與映射管理、批次匯入、啟停、重啟恢復、上下行測速與系統設定。管理介面支援英文、繁體中文與簡體中文，使用表單登入與工作階段驗證；安裝訊息為簡體中文。
+S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與 iptables 將流量導向指定 SOCKS5 上游。Go 服務內嵌 Vue 3 / Element Plus 管理介面，支援節點與映射管理、批次匯入、啟停、重啟恢復、上下行測速與系統設定。管理介面支援英文、繁體中文與簡體中文，使用表單登入與工作階段驗證；安裝語言統一使用參數 --lang en|zh-Hant|zh-Hans（預設簡體中文）。
 
 僅在取得授權的主機、網路與上游服務上使用。部署前閱讀[法律與合規說明](docs/zh-Hant/legal.md)，尤其涉及中國大陸或跨境連線時。軟體不提供監管許可，也不保證匿名性。
 
@@ -17,7 +17,7 @@ S2L 在 Linux 上管理 L2TP 用戶端連線，透過 sing-box、策略路由與
 使用專用主機並保留安全更新。安裝會修改套件、轉送、PPP/L2TP、防火牆及系統服務。新安裝優先使用下方一鍵腳本；執行前審閱腳本，其預設取得最新穩定版；開發分支需明確指定 `BRANCH`。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash -s -- --lang zh-Hant
 ```
 
 僅允許可信管理 IP 存取安裝輸出的 HTTPS TCP 埠。安裝產生 365 天自簽憑證與 16 字元隨機管理密碼，後端監聽 `127.0.0.1:8080`。信任憑證前透過可信管道核對 SHA-256 指紋。省略 `HTTPS_PORT` 時選用 10000–60000 空閒埠，不得使用 8080；必要時以 `PUBLIC_IP` 指定公網 IPv4。

@@ -338,11 +338,12 @@ class KernelCommandTests(unittest.TestCase):
                 fcntl.flock(freed, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def test_maintenance_can_run_from_installed_helper_without_installer_modules(self):
-        # Copy only the file deployed by install/update. A real interpreter must
+        # Copy only the runtime files deployed by install/update. A real interpreter must
         # reach maintenance mode without importing the fresh-host preflight.
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'manage_kernel.py'
             path.write_bytes(Path(kernel.__file__).read_bytes())
+            path.with_name('installer_i18n.py').write_bytes(Path(kernel.__file__).with_name('installer_i18n.py').read_bytes())
             command = ('import manage_kernel as k; k.maintenance_system=lambda: None; '
                        "k.release_info=lambda: {'ID':'debian','VERSION_ID':'12'}; "
                        'k.prepare(upgrade=True)')

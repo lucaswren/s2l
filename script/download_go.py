@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Install a current stable Go toolchain only when no toolchain exists."""
+from installer_i18n import tr
 import hashlib
 import json
 from pathlib import Path
@@ -14,15 +15,15 @@ from install_preflight import go_version
 
 def validate_member(member):
     if (member.name not in ('go', 'go/') and not member.name.startswith('go/')) or '..' in Path(member.name).parts or not (member.isdir() or member.isfile()):
-        raise RuntimeError('unexpected Go archive entry')
+        raise RuntimeError(tr('unexpected Go archive entry'))
     if member.name in ('go', 'go/') and not member.isdir():
-        raise RuntimeError('Go archive root must be a directory')
+        raise RuntimeError(tr('Go archive root must be a directory'))
 
 
 def install(arch):
     destination = Path('/usr/local/go')
     if destination.exists() or destination.is_symlink():
-        raise RuntimeError('/usr/local/go already exists; refusing to overwrite')
+        raise RuntimeError(tr('/usr/local/go already exists; refusing to overwrite'))
     with urlopen('https://go.dev/dl/?mode=json', timeout=20) as response:
         releases = json.load(response)
     for release in releases:
@@ -34,9 +35,9 @@ def install(arch):
             asset = files[0]
             break
     else:
-        raise RuntimeError('no supported stable Go archive available')
+        raise RuntimeError(tr('no supported stable Go archive available'))
     if not re.fullmatch(r'go1\.\d+\.\d+\.linux-(amd64|arm64)\.tar\.gz', asset['filename']) or not re.fullmatch('[a-f0-9]{64}', asset['sha256']):
-        raise RuntimeError('invalid Go release metadata')
+        raise RuntimeError(tr('invalid Go release metadata'))
     with tempfile.TemporaryDirectory(prefix='.s2l-go-', dir='/usr/local') as temporary:
         archive = Path(temporary) / 'go.tgz'
         # Avoid stalled HTTP/2 downloads through cloud NAT/proxies. A transfer
@@ -49,7 +50,7 @@ def install(arch):
             for chunk in iter(lambda: content.read(1048576), b''):
                 digest.update(chunk)
         if digest.hexdigest() != asset['sha256']:
-            raise RuntimeError('Go archive checksum mismatch')
+            raise RuntimeError(tr('Go archive checksum mismatch'))
         with tarfile.open(archive) as bundle:
             for member in bundle.getmembers():
                 validate_member(member)

@@ -1,4 +1,5 @@
 """Validate the managed layout and check the local authenticated API after upgrade."""
+from installer_i18n import tr
 from http.cookiejar import CookieJar
 from http.client import HTTPSConnection, HTTPException
 import json
@@ -20,10 +21,10 @@ class NoRedirect(HTTPRedirectHandler):
 def preflight(path):
     path = Path(path)
     if path.is_symlink() or path.parent.is_symlink():
-        raise ValueError("不支持符号链接安装目录或配置；请使用手动升级流程")
+        raise ValueError(tr("不支持符号链接安装目录或配置；请使用手动升级流程"))
     config = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(config, dict):
-        raise ValueError("配置须为 JSON 对象")
+        raise ValueError(tr("配置须为 JSON 对象"))
     expected = {
         "data_dir": "/opt/s2l/data",
         "chap_secrets": "/etc/ppp/chap-secrets",
@@ -36,15 +37,15 @@ def preflight(path):
         if not actual.is_absolute():
             actual = Path("/opt/s2l") / actual
         if str(actual.resolve()) != target:
-            raise ValueError("自定义文件路径不支持自动升级；请使用手动升级流程")
+            raise ValueError(tr("自定义文件路径不支持自动升级；请使用手动升级流程"))
     host, port = config.get("listen", "127.0.0.1:8080").rsplit(":", 1)
     host = host.strip("[]")
     if not 1 <= int(port) <= 65535:
-        raise ValueError("管理端口无效")
+        raise ValueError(tr("管理端口无效"))
     if host not in ("", "localhost"):
         address = ipaddress.ip_address(host)
         if not (address.is_loopback or address.is_unspecified):
-            raise ValueError("非本机监听部署须使用手动升级流程")
+            raise ValueError(tr("非本机监听部署须使用手动升级流程"))
     return config
 
 
@@ -68,7 +69,7 @@ def locally_ready(status, expected_ids=None, auto_restore=True):
 def check_https(config, certificate, attempts=30, delay=1):
     address = urlsplit(config.get('public_url', ''))
     if address.scheme != 'https' or not address.hostname:
-        raise ValueError('HTTPS 管理地址无效')
+        raise ValueError(tr('HTTPS 管理地址无效'))
     expected = ssl.PEM_cert_to_DER_cert(Path(certificate).read_text(encoding='ascii'))
     # The certificate is self-signed for the public IP, while the probe must stay
     # on loopback. Pin its exact bytes rather than disabling identity checks.
@@ -81,15 +82,15 @@ def check_https(config, certificate, attempts=30, delay=1):
         try:
             connection.connect()
             if connection.sock.getpeercert(binary_form=True) != expected:
-                raise ValueError('HTTPS 监听证书尚未更新')
+                raise ValueError(tr('HTTPS 监听证书尚未更新'))
             connection.request('GET', '/api/auth/status', headers={'Host': address.netloc})
             response = connection.getresponse()
             body = response.read(4096)
             if response.status != 200:
-                raise ValueError(f'HTTPS 后端返回 HTTP {response.status}')
+                raise ValueError(tr('HTTPS 后端返回 HTTP {status}').format(status=response.status))
             status = json.loads(body)
             if not isinstance(status, dict) or not isinstance(status.get('authenticated'), bool) or not isinstance(status.get('enabled'), bool):
-                raise ValueError('HTTPS 后端响应无效')
+                raise ValueError(tr('HTTPS 后端响应无效'))
             return
         except (OSError, ValueError, HTTPException) as error:
             last = str(error)
@@ -97,7 +98,7 @@ def check_https(config, certificate, attempts=30, delay=1):
             connection.close()
         if attempt + 1 < attempts:
             time.sleep(delay)
-    raise ValueError('本机 HTTPS 验证失败: ' + last)
+    raise ValueError(tr('本机 HTTPS 验证失败: ') + last)
 
 
 def check_health(config, attempts=120, delay=1, expected_ids=None):
@@ -127,7 +128,7 @@ def check_health(config, attempts=120, delay=1, expected_ids=None):
                         result = json.loads(response.read(4096))
                     if not isinstance(result, dict) or result.get("authenticated") is not True or not any(
                             cookie.name == "s2l_session" for cookie in cookies):
-                        raise ValueError("登录验证失败")
+                        raise ValueError(tr("登录验证失败"))
                     logged_in = True
                 with opener.open(request, timeout=2) as response:
                     status = json.loads(response.read(1024 * 1024))
@@ -154,7 +155,7 @@ def check_health(config, attempts=120, delay=1, expected_ids=None):
             except OSError:
                 pass
 
-    raise ValueError("新服务的本机 API 验证失败；请检查服务日志")
+    raise ValueError(tr("新服务的本机 API 验证失败；请检查服务日志"))
 
 
 if __name__ == "__main__":
@@ -171,8 +172,8 @@ if __name__ == "__main__":
         elif sys.argv[1] == "https":
             check_https(config, sys.argv[3])
         elif sys.argv[1] != "preflight":
-            raise ValueError("未知验证模式")
+            raise ValueError(tr("未知验证模式"))
     except (OSError, ValueError, TypeError, IndexError):
         # Never expose the config, URL credentials or authentication headers.
-        print("[ERROR] 安装路径/配置验证或本机 API 检查失败；自定义部署请使用手动升级流程。", file=sys.stderr)
+        print(tr("[ERROR] 安装路径/配置验证或本机 API 检查失败；自定义部署请使用手动升级流程。"), file=sys.stderr)
         sys.exit(1)

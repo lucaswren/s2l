@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Find and validate a public IPv4 address for HTTPS certificate issuance."""
+from installer_i18n import tr
 import ipaddress
 import json
 import os
@@ -11,7 +12,7 @@ import urllib.request
 def public_ipv4(value):
     address = ipaddress.IPv4Address(value.strip())
     if not address.is_global:
-        raise ValueError('PUBLIC_IP 必须为公网 IPv4 地址')
+        raise ValueError(tr('PUBLIC_IP 必须为公网 IPv4 地址'))
     return str(address)
 
 
@@ -36,7 +37,7 @@ def detect():
                     continue
     except (OSError, ValueError, subprocess.SubprocessError):
         pass
-    raise ValueError('无法识别公网 IPv4；请设置 PUBLIC_IP=服务器公网IPv4 后重新安装')
+    raise ValueError(tr('无法识别公网 IPv4；请设置 PUBLIC_IP=服务器公网IPv4 后重新安装'))
 
 
 if __name__ == '__main__':

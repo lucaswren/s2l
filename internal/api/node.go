@@ -1,10 +1,12 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/store"
 )
 
 func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +96,10 @@ func (s *Server) createOrUpdateNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.UpsertNode(n); err != nil {
+		if errors.Is(err, store.ErrNodeInUse) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

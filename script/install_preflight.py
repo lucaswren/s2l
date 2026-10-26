@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Read-only host checks plus a disposable TUN capability probe."""
+from installer_i18n import tr
 import ipaddress
 import json
 import os
@@ -20,45 +21,45 @@ def command(*args):
 def go_version(text):
     match = re.search(r'go(\d+)\.(\d+)(?:\.(\d+))?', text)
     if not match or tuple(map(int, match.groups(default='0'))) < (1, 22, 0):
-        raise ValueError('Go 需要 1.22 或更新版本；请安装兼容工具链后重试')
+        raise ValueError(tr('Go 需要 1.22 或更新版本；请安装兼容工具链后重试'))
 
 
 def singbox_version(text):
     if not re.search(r'^sing-box version 1\.11\.15\s*$', text, re.M):
-        raise ValueError('仅支持已验证的 sing-box 1.11.15；已有程序不会被自动覆盖')
+        raise ValueError(tr('仅支持已验证的 sing-box 1.11.15；已有程序不会被自动覆盖'))
 
 
 def kernel_version(distro, release):
     if affected_kernel(distro, release):
-        raise RuntimeError('当前 Ubuntu 内核存在已知 L2TP 崩溃问题（2169477）；请切换已修复内核或 HWE 内核并重启后重试')
+        raise RuntimeError(tr('当前 Ubuntu 内核存在已知 L2TP 崩溃问题（2169477）；请切换已修复内核或 HWE 内核并重启后重试'))
 
 
 def system(check_kernel=True):
     if sys.platform != 'linux' or os.geteuid() != 0:
-        raise RuntimeError('requires Linux root')
+        raise RuntimeError(tr('requires Linux root'))
     release = dict(line.split('=', 1) for line in Path('/etc/os-release').read_text().splitlines() if '=' in line)
     distro = release.get('ID', '').strip('"')
     if distro not in ('ubuntu', 'debian'):
-        raise RuntimeError('installer supports Ubuntu and Debian only')
+        raise RuntimeError(tr('installer supports Ubuntu and Debian only'))
     if not Path('/run/systemd/system').is_dir() or command('systemctl', 'show', '--property=Version').strip() == '':
-        raise RuntimeError('systemd must be running as the system service manager')
+        raise RuntimeError(tr('systemd must be running as the system service manager'))
     for name in ('/opt/s2l', '/etc/ppp', '/etc/xl2tpd', '/usr/local/bin'):
         if Path(name).is_symlink():
-            raise RuntimeError('installation target must not be a symlink: ' + name)
+            raise RuntimeError(tr('installation target must not be a symlink: ') + name)
     if Path('/opt/s2l/config.json').exists():
-        raise RuntimeError('S2L is already installed; use the upgrade command')
+        raise RuntimeError(tr('S2L is already installed; use the upgrade command'))
     if Path('/opt/s2l').exists() and any(Path('/opt/s2l').iterdir()):
-        raise RuntimeError('/opt/s2l contains existing files; refusing to overwrite')
+        raise RuntimeError(tr('/opt/s2l contains existing files; refusing to overwrite'))
     if Path('/usr/local/bin/s2l').exists() or Path('/usr/local/bin/s2l').is_symlink():
-        raise RuntimeError('/usr/local/bin/s2l is already in use')
+        raise RuntimeError(tr('/usr/local/bin/s2l is already in use'))
     chap = Path('/etc/ppp/chap-secrets')
     if chap.exists() and any(line.strip() and not line.lstrip().startswith('#') for line in chap.read_text().splitlines()):
-        raise RuntimeError('existing PPP accounts detected; use a dedicated host')
+        raise RuntimeError(tr('existing PPP accounts detected; use a dedicated host'))
     if subprocess.run(['pgrep', '-x', 'pppd'], capture_output=True).returncode == 0:
-        raise RuntimeError('existing PPP sessions detected; use a dedicated host')
+        raise RuntimeError(tr('existing PPP sessions detected; use a dedicated host'))
     for unit in ('xl2tpd', 's2l'):
         if subprocess.run(['systemctl', 'is-active', '--quiet', unit], capture_output=True).returncode == 0:
-            raise RuntimeError('existing tunnel service is active: ' + unit)
+            raise RuntimeError(tr('existing tunnel service is active: ') + unit)
     # Kernel preparation may only run after every dedicated/fresh-host check.
     if check_kernel:
         kernel_version(distro, os.uname().release)
@@ -74,7 +75,7 @@ def check_listener_port(port, kind):
             probe.bind(('0.0.0.0', port))
         except OSError as error:
             protocol = 'TCP' if kind == socket.SOCK_STREAM else 'UDP'
-            raise OSError(error.errno, f'{protocol} port {port} is unavailable: {error.strerror}') from error
+            raise OSError(error.errno, tr('{protocol} port {port} is unavailable: {detail}').format(protocol=protocol, port=port, detail=error.strerror)) from error
 
 
 def capabilities():
@@ -90,12 +91,12 @@ def capabilities():
     os.close(fd)
     interfaces = json.loads(command('ip', '-j', 'address', 'show'))
     if any(row.get('ifname', '').startswith('ppp') for row in interfaces):
-        raise RuntimeError('existing PPP interfaces detected; use a dedicated host')
+        raise RuntimeError(tr('existing PPP interfaces detected; use a dedicated host'))
     for binary in ('iptables', 'ip6tables'):
         command(binary, '-w', '5', '-S')
     for chain in ('S2L_FORWARD', 'S2L_MANAGEMENT'):
         if subprocess.run(['iptables', '-w', '5', '-S', chain], capture_output=True).returncode == 0:
-            raise RuntimeError('existing S2L firewall state detected; recover previous installation first')
+            raise RuntimeError(tr('existing S2L firewall state detected; recover previous installation first'))
     check_listener_port(8080, socket.SOCK_STREAM)
     check_listener_port(1701, socket.SOCK_DGRAM)
 
@@ -112,6 +113,6 @@ if __name__ == '__main__':
         elif action == 'singbox':
             singbox_version(command(sys.argv[2], 'version'))
         else:
-            raise ValueError('unknown preflight check')
+            raise ValueError(tr('unknown preflight check'))
     except Exception as error:
         raise SystemExit(str(error))

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Boot a disposable Ubuntu VM, install S2L, inject failures, then reboot and dial.
+"""Boot a disposable Ubuntu/Debian VM, install, inject failures, reboot and dial.
 Only the QEMU guest is modified. The host needs QEMU, cloud-localds and SSH.
 """
+import argparse
 import hashlib
 import json
 import os
@@ -49,24 +50,30 @@ def wait_for_guest(vm, guest, console, previous=None, timeout=240):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--distro', choices=('ubuntu-24.04', 'debian-12'), default='ubuntu-24.04')
+    args = parser.parse_args()
+    debian = args.distro == 'debian-12'
     repository = Path(__file__).resolve().parents[1]
     for name in ('qemu-system-x86_64', 'qemu-img', 'cloud-localds', 'ssh', 'scp', 'ssh-keygen', 'curl'):
         if not shutil.which(name):
             raise SystemExit('missing VM fixture dependency: ' + name)
-    image_url = 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img'
+    image_url = ('https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-generic-amd64.qcow2' if debian else
+                 'https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img')
+    checksum = 'sha512' if debian else 'sha256'
     with tempfile.TemporaryDirectory(prefix='s2l-fresh-vm-') as temporary:
         root = Path(temporary)
         image = root / 'base.img'
         run(['curl', '-fSL', '--retry', '2', '--connect-timeout', '15', '--max-time', '600', image_url, '-o', str(image)])
         sums = subprocess.check_output(['curl', '-fsSL', '--retry', '2', '--connect-timeout', '15', '--max-time', '60',
-                                        image_url.rsplit('/', 1)[0] + '/SHA256SUMS'], text=True)
+                                        image_url.rsplit('/', 1)[0] + '/' + checksum.upper() + 'SUMS'], text=True)
         expected = [line.split()[0] for line in sums.splitlines() if line.split()[-1].lstrip('*') == image_url.rsplit('/', 1)[-1]]
-        digest = hashlib.sha256()
+        digest = hashlib.new(checksum)
         with image.open('rb') as source:
             for block in iter(lambda: source.read(1048576), b''):
                 digest.update(block)
         if len(expected) != 1 or digest.hexdigest() != expected[0]:
-            raise RuntimeError('Ubuntu image checksum mismatch')
+            raise RuntimeError(args.distro + ' image checksum mismatch')
         disk = root / 'system.qcow2'
         run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(image), str(disk), '18G'])
         key = root / 'identity'
@@ -103,7 +110,9 @@ def main():
                     bundle.add(repository / name, arcname=name, filter=lambda entry: None if any(part in entry.name.split('/') for part in ('__pycache__', 'node_modules', '.git')) else entry)
             copy(source_archive, '/tmp/source.tgz')
             guest("mkdir -p /opt/src/s2l; tar -xzf /tmp/source.tgz -C /opt/src/s2l; test ! -e /usr/local/go; ! command -v go; printf '%s\\n' disposable-qemu-s2l-fixture > /etc/s2l-fresh-vm")
-            install = 'cd /opt/src/s2l && env ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash script/install.sh 2>&1 | tee /tmp/install-last.log'
+            # Exercise different languages end-to-end, including HTTPS children.
+            language = 'en' if debian else 'zh-Hant'
+            install = 'cd /opt/src/s2l && env ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash script/install.sh --lang ' + language + ' 2>&1 | tee /tmp/install-last.log'
             # Exercise production kernel preparation before PPP can run on a
             # regressed Noble image. Only this disposable fixture reboots itself.
             prepared = guest('python3 /opt/src/s2l/script/manage_kernel.py', check=False, timeout=3800)
@@ -111,7 +120,7 @@ def main():
                 print(prepared.stdout[-5000:], flush=True)
                 guest('test ! -e /opt/s2l/config.json; test ! -e /var/lib/s2l-install/journal.json; test "$(cat /proc/sys/kernel/random/boot_id)" = ' + shlex.quote(boot))
                 repeated = guest(install, check=False, timeout=120)
-                if repeated.returncode != 20 or '[INFO] 从系统 APT 源准备' in repeated.stdout:
+                if repeated.returncode != 20 or '[INFO] 從系統 APT 來源準備' in repeated.stdout:
                     raise RuntimeError('prepared kernel was not reused before reboot: ' + repeated.stdout + repeated.stderr)
                 guest('test ! -e /opt/s2l/config.json; test ! -e /var/lib/s2l-install/journal.json')
                 guest('systemctl reboot', check=False, timeout=20)
@@ -126,6 +135,7 @@ def main():
             # Existing incompatible sing-box must be rejected without application writes.
             guest("printf '#!/bin/sh\\necho sing-box version 1.12.0\\n' > /usr/local/bin/sing-box; chmod 755 /usr/local/bin/sing-box")
             failed = guest(install, check=False)
+            print('Cold dependency/toolchain timings:\n' + '\n'.join(line for line in failed.stdout.splitlines() if '[TIME]' in line), flush=True)
             if failed.returncode == 0:
                 raise RuntimeError('incompatible sing-box was accepted: ' + failed.stdout + failed.stderr)
             if '1.11.15' not in failed.stdout + failed.stderr:
@@ -138,6 +148,7 @@ def main():
             copy(wrapper, '/tmp/systemctl-wrapper')
             guest('install -m 755 /tmp/systemctl-wrapper /usr/local/bin/systemctl; touch /tmp/fail-s2l-install; cp -p /etc/ppp/chap-secrets /tmp/chap-before; sysctl -n net.ipv4.ip_forward > /tmp/forward-before')
             failed = guest(install, check=False)
+            print('Cold build timings:\n' + '\n'.join(line for line in failed.stdout.splitlines() if '[TIME]' in line), flush=True)
             if failed.returncode == 0:
                 raise RuntimeError('injected install failure was ignored')
             result = guest('test "$(cat /tmp/install-injected)" = fail; rm /tmp/install-injected; test ! -e /opt/s2l/config.json; cmp /tmp/chap-before /etc/ppp/chap-secrets; test "$(sysctl -n net.ipv4.ip_forward)" = "$(cat /tmp/forward-before)"; test ! -e /var/lib/s2l-install/journal.json; rm /tmp/fail-s2l-install')
@@ -155,6 +166,9 @@ def main():
             guest('test "$(cat /tmp/install-injected)" = kill; test -f /var/lib/s2l-install/journal.json; rm /tmp/kill-s2l-install /tmp/install-injected')
             result = guest(install)
             print(result.stdout[-5000:], flush=True)
+            expected = ('S2L installation complete', 'Nginx / HTTPS verification') if debian else ('S2L 安裝完成', 'Nginx／HTTPS 驗證')
+            if not all(message in result.stdout for message in expected):
+                raise RuntimeError('installer language was not propagated through HTTPS setup')
             print('PASS crash recovery and full fresh installation', flush=True)
             guest('rm /usr/local/bin/systemctl; systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; test ! -e /var/lib/s2l-install/journal.json')
             guest('cmp /opt/src/s2l/script/manage_kernel.py /opt/s2l/manage_kernel.py; s2l --help | grep -q kernel-upgrade')
@@ -162,9 +176,9 @@ def main():
             # profile. A loaded connection alone does not prove PSK readability.
             guest("printf '%s\\n' '{\"enabled\":true,\"psk\":\"fixture-ipsec-secret\"}' | python3 /opt/s2l/manage_ipsec.py apply")
             guest('ipsec rereadsecrets')
-            guest("python3 - <<'PY'\nfrom pathlib import Path\nimport subprocess,time\npid=Path('/run/charon.pid').read_text().strip()\nprofile=Path('/proc')/pid/'attr/current'\nassert '/usr/lib/ipsec/charon (enforce)' in profile.read_text(), 'charon is not confined'\nfor _ in range(20):\n log=subprocess.check_output(['journalctl','-u','s2l-ipsec','--no-pager','-o','cat'],text=True)\n if \"loading secrets from '/opt/s2l/ipsec.secrets'\" in log and 'loaded IKE secret for %any' in log: break\n time.sleep(.25)\nelse: raise AssertionError('managed PSK was not loaded by confined charon')\nPY")
+            guest("python3 - " + ("debian" if debian else "ubuntu") + " <<'PY'\nfrom pathlib import Path\nimport subprocess,time,sys\npid=Path('/run/charon.pid').read_text().strip()\nprofile=Path('/proc')/pid/'attr/current'\nif sys.argv[1] == 'ubuntu': assert '/usr/lib/ipsec/charon (enforce)' in profile.read_text(), 'charon is not confined'\nfor _ in range(20):\n log=subprocess.check_output(['journalctl','-u','s2l-ipsec','--no-pager','-o','cat'],text=True)\n if \"loading secrets from '/opt/s2l/ipsec.secrets'\" in log and 'loaded IKE secret for %any' in log: break\n time.sleep(.25)\nelse: raise AssertionError('managed PSK was not loaded by confined charon')\nPY")
             guest("printf '%s\\n' '{\"enabled\":false}' | python3 /opt/s2l/manage_ipsec.py apply")
-            print('PASS managed IPsec PSK loading with AppArmor enforcement preserved', flush=True)
+            print('PASS managed IPsec PSK loading' + ('' if debian else ' with AppArmor enforcement preserved'), flush=True)
             guest('cd /opt/src/s2l; /usr/local/go/bin/go test -c -o /opt/src/s2l/bin/s2l-fresh.test ./internal/service', timeout=300)
             dial = 'S2L_FRESH_VM_TEST=1 /opt/src/s2l/bin/s2l-fresh.test -test.run ^TestFreshInstalledServiceDial$ -test.v -test.timeout 240s'
             result = guest(dial, timeout=270)
@@ -174,7 +188,9 @@ def main():
             # Only this fixture's later reboot may change the boot ID or daemons.
             live_identity = 'cat /proc/sys/kernel/random/boot_id; systemctl show -p MainPID --value s2l xl2tpd nginx'
             before_kernel = guest(live_identity).stdout
-            prepared = guest('s2l kernel-upgrade', timeout=3800)
+            prepared = guest('s2l kernel-upgrade', check=not debian, timeout=3800)
+            if debian and (prepared.returncode == 0 or '没有受支持' not in prepared.stderr):
+                raise RuntimeError('Debian kernel upgrade did not refuse before mutation: ' + prepared.stdout + prepared.stderr)
             print(prepared.stdout[-3000:], flush=True)
             if guest(live_identity).stdout != before_kernel or guest('sha256sum /opt/s2l/config.json').stdout != original:
                 raise RuntimeError('kernel maintenance restarted a service, rebooted or changed S2L configuration')

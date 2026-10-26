@@ -15,7 +15,7 @@ Use only on authorized systems, networks and upstream services. Read the [legal 
 - Measure upstream download/upload throughput and connection latency from the server.
 - Manage web credentials, HTTPS/SSH ports, root login password and optional L2TP/IPsec.
 
-Tunnel operation requires Linux, systemd, root privileges, TUN support, xl2tpd, PPP, sing-box and iptables. The installer supports Ubuntu/Debian on amd64 and arm64; Ubuntu Server 24.04 LTS amd64 is the recommended baseline, not a guarantee for every host. Non-Linux builds use platform stubs and cannot provide the tunnel service. The management UI supports English, Traditional Chinese and Simplified Chinese with session-based sign-in. Installer messages use Simplified Chinese.
+Tunnel operation requires Linux, systemd, root privileges, TUN support, xl2tpd, PPP, sing-box and iptables. The installer supports Ubuntu/Debian on amd64 and arm64; Ubuntu Server 24.04 LTS amd64 is the recommended baseline, not a guarantee for every host. Non-Linux builds use platform stubs and cannot provide the tunnel service. The management UI supports English, Traditional Chinese and Simplified Chinese with session-based sign-in. Installer messages support the same languages through `--lang en|zh-Hant|zh-Hans` (default: `zh-Hans`).
 
 **Plain L2TP is unencrypted and is the default.** Management HTTPS does not encrypt tunnel traffic. Optional IPsec uses IKEv1 with a shared PSK; validate client compatibility and your security policy. SOCKS5 alone provides no transport encryption. UDP capability depends on the upstream. PPP IPv4 forwarding is restricted to assigned TUNs and PPP IPv6 is blocked; validate client routing and firewall compatibility. No anonymity guarantee is provided.
 
@@ -26,7 +26,7 @@ Persistent PPP leak guards, separate upstream TCP/UDP/DNS health monitoring, and
 Use a dedicated host: installation changes packages, forwarding, PPP/L2TP configuration, firewall rules and system services. Keep security updates enabled. Review the scripts before running them as root. The one-command installer selects the latest stable release by default; set `BRANCH` explicitly for a reviewed development branch. It is intended for a new installation.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash -s -- --lang en
 ```
 
 Allow the printed HTTPS TCP port only from trusted administrator IPs. The installer generates a 365-day self-signed certificate and random 16-character admin password, and binds the backend to `127.0.0.1:8080`. Verify the printed SHA-256 certificate fingerprint through a trusted channel before trusting the certificate. Without `HTTPS_PORT`, it selects an unused port in 10000–60000; 8080 is reserved. Public IPv4 is detected automatically; set `PUBLIC_IP` when necessary.

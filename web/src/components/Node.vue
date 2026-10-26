@@ -23,6 +23,7 @@ const speedResults = reactive({});
 const form = reactive({ name: "", addr: "", username: "", password: "",group:"" });
 const importText = ref("");
 const importErrors = ref([]);
+const blockedMappings = ref([]);
 
 const formats = [
   "host:port:user:pass",
@@ -42,6 +43,7 @@ function formatSpeed(result) {
 }
 
 function resetForm() {
+  blockedMappings.value = [];
   editingId.value = "";editRevision.value="";
   Object.assign(form, { name: "", addr: "", username: "", password: "",group:"" });
 }
@@ -59,6 +61,7 @@ async function openEdit(n) {
     return;
   }
   editingId.value = n.id;editRevision.value=n._revision||"";
+  blockedMappings.value = [];
   Object.assign(form, {
     name: n.name || "",group:n.group||"",
     addr: n.addr || "",
@@ -86,8 +89,10 @@ async function save() {
     const body = { ...form };
     if (editingId.value) body.id = editingId.value;
     const preview=await api.previewNode(body,editRevision.value);
+    blockedMappings.value = preview.blocked || [];
+    if (blockedMappings.value.length) return;
     const labels={get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); },get max_connections() { return tr("连接上限"); }};
-    await ElMessageBox.confirm(tr("变更：{0}。影响 {1} 条映射。{2}", preview.fields.map(f=>labels[f]||f).join('、')||tr("无"), preview.affected.length, preview.message),tr("保存配置"),{get confirmButtonText() { return tr("保存"); },get cancelButtonText() { return tr("返回编辑"); }});
+    await ElMessageBox.confirm(tr("变更：{0}。影响 {1} 条映射。{2}", preview.fields.map(f=>labels[f]||f).join('、')||tr("无"), preview.affected.length, tr(preview.message)),tr("保存配置"),{get confirmButtonText() { return tr("保存"); },get cancelButtonText() { return tr("返回编辑"); }});
     await api.saveNode(body,editRevision.value);
     emit("toast", {
       type: "ok",
@@ -232,7 +237,11 @@ async function speedTest(n) {
       :close-on-press-escape="!busy"
       :show-close="!busy"
       @close="close"
-      ><el-form
+      ><el-alert v-if="blockedMappings.length" type="warning" :closable="false"
+        :title='tr("请先停止以下映射，再保存连接参数")'>
+        <p>{{ tr("修改代理地址、账号或密码会影响现有连接。请在映射页面停止以下映射后回来保存，再按需启动；名称和分组可直接修改。") }}</p>
+        <ul><li v-for="mapping in blockedMappings" :key="mapping.id">{{ mapping.name || mapping.id }} ({{ mapping.id }})</li></ul>
+      </el-alert><el-form
         ref="formRef"
         :model="form"
         label-position="top"

@@ -14,6 +14,14 @@ Use the one-command installer on a new, dedicated Ubuntu/Debian host after revie
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 ```
 
+Use only `--lang` to select installation messages: `en`, `zh-Hant`, `zh-Hans` (default). For example, append `-s -- --lang en` to `sudo bash`; from a source checkout use `sudo bash script/install.sh --lang en`. The selection applies to kernel checks, recovery and HTTPS setup. APT, Go and other external tools retain their original diagnostics. Repeat the same parameter after a required kernel reboot.
+
+Nginx is installed with the initial dependencies so HTTPS setup does not repeat APT downloads. `[TIME]` records dependency installation, Go preparation, compilation, certificate work and readiness checks separately. The first Go build also compiles the standard library; package names show progress and later builds reuse Go’s cache. Compilation still depends on CPU, memory and disk speed.
+
+Editing a SOCKS5 address, username or password now lists linked mappings that must be stopped before saving, including mappings in an error state awaiting cleanup. The form remains open; no mapping is stopped or restarted automatically. Name and group changes can be saved while mappings run. After stopping the listed mappings, save and start them as needed.
+
+Ubuntu Server 24.04 LTS amd64 remains the recommended baseline. Debian 12 is a compatibility test target; switching distributions does not remove first-build or package-download costs. As of October 2026, [Debian 12 is in LTS through June 2028](https://www.debian.org/releases/bookworm/); [Debian 13 has a longer support runway](https://www.debian.org/releases/trixie/) but has not passed this project’s full VM tests.
+
 It runs as root and selects the latest stable Release by default; an explicit `BRANCH` overrides that selection. HTTPS uses a random available TCP port unless `HTTPS_PORT` is supplied. Restrict the printed management port to trusted administrator IPs. See the README for fixed-port configuration and the development guide for installation from a reviewed source checkout. Use the update procedure below for existing installations.
 
 ## Upstream health and leak protection

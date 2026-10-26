@@ -177,6 +177,8 @@ func (s *Store) Snapshot() model.AppState {
 
 // --- Nodes ---
 
+var ErrNodeInUse = errors.New("节点连接参数正在被映射使用；请先停止关联映射，再修改地址、账号或密码。名称和分组可直接修改。")
+
 func (s *Store) ListNodes() []model.SocksNode {
 	return s.Snapshot().Nodes
 }
@@ -201,7 +203,7 @@ func (s *Store) UpsertNode(n model.SocksNode) error {
 			if existing.Addr != n.Addr || existing.Username != n.Username || existing.Password != n.Password {
 				for _, m := range s.state.Mappings {
 					if m.NodeID == n.ID && m.Status != model.StatusStopped {
-						return fmt.Errorf("node is used by a mapping that is not stopped; cleanly stop it before changing connection settings")
+						return ErrNodeInUse
 					}
 				}
 			}

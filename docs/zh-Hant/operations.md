@@ -14,6 +14,14 @@
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 ```
 
+安裝語言統一使用 `--lang`：`en`、`zh-Hant`、`zh-Hans`（預設）。一鍵安裝可在 `sudo bash` 後加 `-s -- --lang zh-Hant`；原始碼安裝使用 `sudo bash script/install.sh --lang zh-Hant`。核心檢查、失敗復原及 HTTPS 設定會沿用此語言；APT、Go 等外部工具保留原始診斷。核心重啟後請使用相同參數重新安裝。
+
+Nginx 已合併至首次相依套件安裝，HTTPS 階段不再重複下載 APT 套件。`[TIME]` 分別顯示相依套件、Go 準備、編譯、憑證及服務驗證耗時。Go 首次編譯也會建置標準函式庫，並顯示套件名稱供查看進度；後續編譯沿用快取。編譯速度仍取決於 CPU、記憶體及磁碟。
+
+修改 SOCKS5 位址、帳號或密碼時，會先列出必須停止的關聯映射，包含等待清理的錯誤狀態映射。表單保留，不會自動停止或重啟映射；名稱與分組可在線上直接儲存。停止列出的映射後返回儲存，再按需啟動。
+
+主推環境維持 Ubuntu Server 24.04 LTS amd64。Debian 12 是相容性測試目標，換系統無法消除首次編譯與套件下載成本。截至 2026 年 10 月，[Debian 12 已進入 LTS，至 2028 年 6 月結束](https://www.debian.org/releases/bookworm/)；[Debian 13 支援期更長](https://www.debian.org/releases/trixie/)，但尚未通過本專案完整虛擬機驗證。
+
 腳本以 root 執行，預設取得最新穩定 Release，明確指定 `BRANCH` 時使用該版本；未指定 `HTTPS_PORT` 時選用隨機空閒 TCP 埠。僅允許可信管理 IP 存取輸出的管理埠。固定埠設定見 README；從已審閱原始碼工作副本安裝的方式見開發指南。既有安裝請使用下方更新流程。
 
 ## 上游健康與防洩漏

@@ -16,6 +16,14 @@
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
 ```
 
+安装语言统一使用 `--lang`：`en`、`zh-Hant`、`zh-Hans`（默认）。一键安装可在 `sudo bash` 后加 `-s -- --lang zh-Hans`；源码安装使用 `sudo bash script/install.sh --lang zh-Hans`。内核检查、失败恢复及 HTTPS 配置会沿用此语言；APT、Go 等外部工具保留原始诊断。内核重启后请使用相同参数重新安装。
+
+Nginx 已合并至首次依赖安装，HTTPS 阶段不再重复下载 APT 软件包。`[TIME]` 分别显示依赖、Go 准备、编译、证书及服务验证耗时。Go 首次编译也会构建标准库，并显示包名供查看进度；后续编译沿用缓存。编译速度仍取决于 CPU、内存及磁盘。
+
+修改 SOCKS5 地址、账号或密码时，会先列出必须停止的关联映射，包含等待清理的错误状态映射。表单保留，不会自动停止或重启映射；名称与分组可在线直接保存。停止列出的映射后返回保存，再按需启动。
+
+主推环境维持 Ubuntu Server 24.04 LTS amd64。Debian 12 是兼容性测试目标，换系统无法消除首次编译与软件下载成本。截至 2026 年 10 月，[Debian 12 已进入 LTS，至 2028 年 6 月结束](https://www.debian.org/releases/bookworm/)；[Debian 13 支持期更长](https://www.debian.org/releases/trixie/)，但尚未通过本项目完整虚拟机验证。
+
 首次安装在部署 PPP/S2L 前自动检查内核：Ubuntu `6.8.0-146-generic`、`6.8.0-147-generic` 存在已知 L2TP 回归，也会检查 `/boot` 中已安装的最高版本 generic 内核，避免下次重启进入已知问题版本。默认 `S2L_KERNEL_UPGRADE=auto`：仅在专用新主机、Ubuntu 24.04、标准 GRUB 默认启动项下，从系统 APT 源准备 `linux-generic-hwe-24.04`。会检查空间、内核镜像、initramfs、GRUB 启动项及 PPP/L2TP/TUN 模块，不加载新模块、不重启、不删除旧内核，也不部署 S2L。
 
 内核准备成功后以 **退出码 20** 结束，表示“等待人工重启”，不是安装成功。确认控制台回退入口及维护窗口后手动重启，检查 `uname -r`，再用**原参数**重跑安装命令；未重启重跑时，会检查并复用已准备好的内核。没有自动续装服务，不保存管理密码或安装参数。安装的软件包不属于 S2L 安装回滚范围。APT 失败、目标文件不完整或仍是问题内核时拒绝继续。设置 `S2L_KERNEL_UPGRADE=off` 可关闭自动准备，但不能绕过问题内核检查。Debian、其他 Ubuntu 版本、自定义引导和现有安装均不会通过此流程自动升级内核；参阅下方手动方案。未命中已知版本仅表示不在当前拒绝名单，不代表所有内核都经过验证。

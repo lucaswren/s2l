@@ -4,7 +4,7 @@
 
 [客户端接入、DNS 与验收](docs/zh-Hans/clients.md)
 
-S2L 在 Linux 上管理 L2TP 客户端连接，通过 sing-box、策略路由与 iptables 将流量导向指定 SOCKS5 上游。Go 服务内嵌 Vue 3 / Element Plus 管理界面，支持节点与映射管理、批量导入、启停、重启恢复、上下行测速与系统设置。管理界面支持英文、繁体中文与简体中文，使用表单登录和会话鉴权；安装消息为简体中文。
+S2L 在 Linux 上管理 L2TP 客户端连接，通过 sing-box、策略路由与 iptables 将流量导向指定 SOCKS5 上游。Go 服务内嵌 Vue 3 / Element Plus 管理界面，支持节点与映射管理、批量导入、启停、重启恢复、上下行测速与系统设置。管理界面支持英文、繁体中文与简体中文，使用表单登录和会话鉴权；安装语言统一使用参数 --lang en|zh-Hant|zh-Hans（默认简体中文）。
 
 仅在获得授权的主机、网络与上游服务上使用。部署前阅读[法律与合规说明](docs/zh-Hans/legal.md)，尤其涉及中国大陆或跨境连接时。软件不提供监管许可，也不保证匿名性。
 
@@ -17,7 +17,7 @@ S2L 在 Linux 上管理 L2TP 客户端连接，通过 sing-box、策略路由与
 使用专用主机并保留安全更新。安装会修改软件包、转发、PPP/L2TP、防火墙及系统服务。新安装优先使用下方一键脚本；执行前审阅脚本，其默认获取最新稳定版；开发分支需明确指定 `BRANCH`。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_install.sh | sudo bash -s -- --lang zh-Hans
 ```
 
 仅允许可信管理 IP 访问安装输出的 HTTPS TCP 端口。安装生成 365 天自签证书与 16 字符随机管理密码，后端监听 `127.0.0.1:8080`。信任证书前通过可信渠道核对 SHA-256 指纹。省略 `HTTPS_PORT` 时选用 10000–60000 空闲端口，不得使用 8080；必要时以 `PUBLIC_IP` 指定公网 IPv4。

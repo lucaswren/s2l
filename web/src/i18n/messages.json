@@ -3329,5 +3329,21 @@
   "在维护窗口验证上游中断时业务失败而不改走服务器公网出口；再验证恢复和重新拨号。普通 L2TP 需要 UDP 1701，IPsec 使用 NAT-T，需要 UDP 500/4500。仅能访问 HTTPS 的网络不能据此判断可拨号。": {
     "en": "In a maintenance window, verify that upstream failure stops traffic without using the server public egress, then test recovery and redial. Plain L2TP needs UDP 1701; IPsec uses NAT-T and needs UDP 500/4500. HTTPS reachability alone does not prove VPN connectivity.",
     "tw": "在維護時段驗證上游中斷時業務失敗而不改走伺服器公網出口；再驗證恢復和重新撥號。普通 L2TP 需要 UDP 1701，IPsec 使用 NAT-T，需要 UDP 500/4500。僅能存取 HTTPS 的網路不能據此判斷可撥號。"
+  },
+  "节点连接参数正在被映射使用；请先停止关联映射，再修改地址、账号或密码。名称和分组可直接修改。": {
+    "en": "Node connection settings are in use. Stop linked mappings before changing the address or credentials. Name and group can be edited while running.",
+    "tw": "節點連線參數正在被映射使用；請先停止關聯映射，再修改位址、帳號或密碼。名稱和分組可直接修改。"
+  },
+  "保存不会重启映射。名称和分组可在线修改；连接参数需在关联映射停止后修改。": {
+    "en": "Saving does not restart mappings. Name and group can be edited while running; stop linked mappings before changing connection settings.",
+    "tw": "儲存不會重新啟動映射。名稱和分組可線上修改；連線參數需在關聯映射停止後修改。"
+  },
+  "请先停止以下映射，再保存连接参数": {
+    "en": "Stop these mappings before saving connection settings",
+    "tw": "請先停止以下映射，再儲存連線參數"
+  },
+  "修改代理地址、账号或密码会影响现有连接。请在映射页面停止以下映射后回来保存，再按需启动；名称和分组可直接修改。": {
+    "en": "Changing the proxy address or credentials affects existing connections. Stop these mappings on the Mappings page, return here to save, then start them as needed. Name and group can be edited while running.",
+    "tw": "修改代理位址、帳號或密碼會影響現有連線。請在映射頁面停止以下映射後回來儲存，再按需啟動；名稱和分組可直接修改。"
   }
 }

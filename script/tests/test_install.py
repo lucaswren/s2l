@@ -105,7 +105,8 @@ class InstallChecks(unittest.TestCase):
             for filename in ('install.sh','remote_install.sh'):
                 source=Path(__file__).resolve().parents[1].joinpath(filename).read_text()
                 start=source.index('wait_for_apt()');end=source.index('\n}',start)+2
-                result=subprocess.run(['bash','-c',source[start:end]+'\nwait_for_apt'],env={**os.environ,'PATH':str(tools)+':'+os.environ['PATH']},capture_output=True,text=True,timeout=2)
+                common = Path(__file__).resolve().parents[1] / 'remote_install.sh'
+                result=subprocess.run(['bash','-c','source "$1"\n'+source[start:end]+'\nwait_for_apt','bash',str(common)],env={**os.environ,'PATH':str(tools)+':'+os.environ['PATH']},capture_output=True,text=True,timeout=2)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
     @unittest.skipUnless(sys.platform == 'linux', 'Linux HTTPS apt lock probe')
@@ -123,7 +124,8 @@ class InstallChecks(unittest.TestCase):
                 path = root/name; path.write_text('#!/bin/sh\n'+body+'\n'); path.chmod(0o755)
             counter = root/'count'
             env = dict(os.environ, PATH=str(root)+':'+os.environ['PATH'], S2L_APT_TEST_COUNT=str(counter), APT_WAIT_SEC='15')
-            command = ['bash', '-c', 'set -euo pipefail\n'+source[start:end]+'\nwait_for_apt']
+            common = Path(__file__).resolve().parents[1] / 'remote_install.sh'
+            command = ['bash', '-c', 'source "$1"\n'+source[start:end]+'\nwait_for_apt','bash',str(common)]
             result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=3)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(counter.read_text().strip(), '3')

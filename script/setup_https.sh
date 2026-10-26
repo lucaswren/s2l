@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
 # Configure a self-signed public-IP certificate and nginx reverse proxy.
 set -euo pipefail
-[[ "$(id -u)" -eq 0 ]] || { echo "请使用 sudo 执行" >&2; exit 1; }
-[[ $# -ge 1 && $# -le 2 ]] || { echo "用法：sudo bash script/setup_https.sh 公网IPv4 [HTTPS端口]" >&2; exit 2; }
-IP="$(python3 - "$1" <<'PY'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/remote_install.sh"
+[[ "$(id -u)" -eq 0 ]] || { echo "$(s2l_text "Run with sudo" "請使用 sudo 執行" "请使用 sudo 执行")" >&2; exit 1; }
+[[ $# -ge 1 && $# -le 2 ]] || { echo "$(s2l_text "Usage: sudo bash script/setup_https.sh PUBLIC_IPV4 [HTTPS_PORT]" "用法：sudo bash script/setup_https.sh 公網IPv4 [HTTPS連接埠]" "用法：sudo bash script/setup_https.sh 公网IPv4 [HTTPS端口]")" >&2; exit 2; }
+IP="$(python3 - "$1" "$SCRIPT_DIR" <<'PY'
 import ipaddress, sys
+sys.path.insert(0, sys.argv[2])
+from installer_i18n import tr
 address = ipaddress.IPv4Address(sys.argv[1])
 if not address.is_global:
-    raise SystemExit('请输入公网 IPv4 地址')
+    raise SystemExit(tr('请输入公网 IPv4 地址'))
 print(address)
 PY
 )"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG=/opt/s2l/config.json
 SITE=/etc/nginx/conf.d/s2l.conf
-[[ -f "$CONFIG" ]] || { echo "请先安装 S2L" >&2; exit 1; }
+[[ -f "$CONFIG" ]] || { echo "$(s2l_text "Install S2L first" "請先安裝 S2L" "请先安装 S2L")" >&2; exit 1; }
 HTTPS_PORT="$(python3 - "$CONFIG" "${2:-${HTTPS_PORT:-}}" "${SCRIPT_DIR}" <<'PY'
 import json, sys
 from urllib.parse import urlsplit
 sys.path.insert(0, sys.argv[3])
+from installer_i18n import tr
 from manage_config import validate_port, random_port, check_available_port
 config=json.load(open(sys.argv[1]))
 address=urlsplit(config.get('public_url',''))
@@ -31,16 +35,17 @@ if port is None:
     while port == backend:
         port=random_port()
 if port == backend:
-    raise SystemExit('HTTPS 端口不能与本机后端端口相同')
+    raise SystemExit(tr('HTTPS 端口不能与本机后端端口相同'))
 if port != existing:
     check_available_port(port)
 print(port)
 PY
 )"
 if [[ -e "$SITE" ]] && ! grep -q '^# Managed by s2l HTTPS' "$SITE"; then
-  echo "检测到非 S2L 管理的同名 Nginx 配置，已停止" >&2; exit 1
+  echo "$(s2l_text "An unmanaged Nginx configuration already occupies this path; stopped" "偵測到非 S2L 管理的同名 Nginx 設定，已停止" "检测到非 S2L 管理的同名 Nginx 配置，已停止")" >&2; exit 1
 fi
 if ! command -v nginx >/dev/null || ! command -v openssl >/dev/null; then
+  s2l_stage 'Installing HTTPS dependencies' '安裝 HTTPS 相依套件' '安装 HTTPS 依赖'
   export DEBIAN_FRONTEND=noninteractive
   # Cloud images may still be running unattended upgrades. Keep package hooks
   # from restarting S2L while its HTTPS transaction is being prepared.
@@ -51,7 +56,7 @@ if ! command -v nginx >/dev/null || ! command -v openssl >/dev/null; then
     command -v fuser >/dev/null 2>&1 || return 0
     while fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; do
       if (( waited >= ${APT_WAIT_SEC:-600} )); then
-        echo "HTTPS 依赖安装等待 apt 锁超时，请稍后重试" >&2
+        echo "$(s2l_text "APT lock wait timed out while installing HTTPS dependencies; retry later" "HTTPS 相依套件等待 APT 鎖定逾時，請稍後重試" "HTTPS 依赖安装等待 apt 锁超时，请稍后重试")" >&2
         return 1
       fi
       sleep 5
@@ -62,6 +67,7 @@ if ! command -v nginx >/dev/null || ! command -v openssl >/dev/null; then
   apt_get update -qq
   wait_for_apt
   apt_get install -y --no-install-recommends nginx openssl ca-certificates
+  s2l_elapsed 'HTTPS dependencies' 'HTTPS 相依套件' 'HTTPS 依赖'
 fi
 CERT=/opt/s2l/tls/self-signed.crt
 KEY=/opt/s2l/tls/self-signed.key
@@ -96,7 +102,7 @@ rollback() {
     cp -P "$BACKUP/default-site" /etc/nginx/sites-enabled/default
   fi
   nginx -t && systemctl reload nginx || true
-  echo "HTTPS 配置失败，已恢复原应用与 nginx 配置。备份：$BACKUP" >&2
+  echo "$(s2l_text "HTTPS setup failed; original app and Nginx configuration restored. Backup: $BACKUP" "HTTPS 設定失敗，已復原應用程式與 nginx 設定。備份：$BACKUP" "HTTPS 配置失败，已恢复原应用与 nginx 配置。备份：$BACKUP")" >&2
   exit "$result"
 }
 trap rollback ERR
@@ -124,6 +130,7 @@ then
 fi
 mkdir -p /opt/s2l/tls
 chmod 700 /opt/s2l/tls
+s2l_stage 'Checking / generating certificate' '檢查／產生憑證' '检查 / 生成证书'
 if [[ ! -f "$CERT" || ! -f "$KEY" ]] \
   || ! openssl x509 -in "$CERT" -noout -checkend 86400 >/dev/null 2>&1 \
   || ! openssl x509 -in "$CERT" -noout -checkip "$IP" >/dev/null 2>&1 \
@@ -140,12 +147,15 @@ if [[ ! -f "$CERT" || ! -f "$KEY" ]] \
   mv "$temporary/cert.pem" "$CERT"
   rmdir "$temporary"
 fi
-PORT="$(python3 - "$CONFIG" "$HTTPS_PORT" <<'PY'
+s2l_elapsed 'Certificate' '憑證' '证书'
+PORT="$(python3 - "$CONFIG" "$HTTPS_PORT" "$SCRIPT_DIR" <<'PY'
 import json, sys
+sys.path.insert(0, sys.argv[3])
+from installer_i18n import tr
 config=json.load(open(sys.argv[1]))
 port=int(config['listen'].rsplit(':',1)[1])
 if port == int(sys.argv[2]) or not 1 <= port <= 65535:
-    raise SystemExit('后端端口不能与 HTTPS 端口相同')
+    raise SystemExit(tr('后端端口不能与 HTTPS 端口相同'))
 print(port)
 PY
 )"
@@ -207,12 +217,16 @@ PY
 if [[ "$RESTART_REQUIRED" == 1 ]]; then
   systemctl restart s2l
 fi
+s2l_stage 'Checking backend readiness' '檢查後端就緒狀態' '检查后端就绪状态'
 python3 "${SCRIPT_DIR}/verify_update.py" ready "$CONFIG"
+s2l_elapsed 'Backend readiness' '後端就緒檢查' '后端就绪检查'
+s2l_stage 'Starting Nginx and verifying HTTPS' '啟動 Nginx 並驗證 HTTPS' '启动 Nginx 并验证 HTTPS'
 systemctl enable --now nginx
 systemctl reload nginx
 # reload returns before the new workers necessarily listen. Verify the actual
 # certificate and proxied API, allowing bounded time for worker startup.
 python3 "${SCRIPT_DIR}/verify_update.py" https "$CONFIG" "$CERT"
+s2l_elapsed 'Nginx / HTTPS verification' 'Nginx／HTTPS 驗證' 'Nginx / HTTPS 验证'
 if systemctl cat s2l-cert-renew.timer >/dev/null 2>&1; then
   systemctl disable --now s2l-cert-renew.timer
 fi
@@ -220,9 +234,9 @@ if systemctl cat s2l-cert-renew.service >/dev/null 2>&1; then
   systemctl stop s2l-cert-renew.service
 fi
 trap - ERR
-echo "HTTPS 已启用：https://${IP}:${HTTPS_PORT}"
-echo "使用自签证书，有效期 365 天；浏览器需手动信任或导入证书。"
-echo "SHA-256 指纹："
+echo "$(s2l_text "HTTPS enabled: https://${IP}:${HTTPS_PORT}" "HTTPS 已啟用：https://${IP}:${HTTPS_PORT}" "HTTPS 已启用：https://${IP}:${HTTPS_PORT}")"
+echo "$(s2l_text "Self-signed certificate, valid for 365 days; manually trust or import it in your browser." "自簽憑證有效期 365 天；請在瀏覽器中手動信任或匯入。" "使用自签证书，有效期 365 天；浏览器需手动信任或导入证书。")"
+echo "$(s2l_text "SHA-256 fingerprint:" "SHA-256 指紋：" "SHA-256 指纹：")"
 openssl x509 -in "$CERT" -noout -fingerprint -sha256
-echo "仅需放行 TCP ${HTTPS_PORT}；无需 TCP 80 或公网证书申请服务。"
-echo "证书：${CERT}；到期前重新执行本脚本更新证书。配置备份：${BACKUP}"
+echo "$(s2l_text "Only TCP ${HTTPS_PORT} is required; TCP 80 and public certificate issuance are unnecessary." "僅需開放 TCP ${HTTPS_PORT}；無需 TCP 80 或公網憑證申請服務。" "仅需放行 TCP ${HTTPS_PORT}；无需 TCP 80 或公网证书申请服务。")"
+echo "$(s2l_text "Certificate: ${CERT}; rerun this script before expiry. Configuration backup: ${BACKUP}" "憑證：${CERT}；到期前重新執行此腳本。設定備份：${BACKUP}" "证书：${CERT}；到期前重新执行本脚本更新证书。配置备份：${BACKUP}")"

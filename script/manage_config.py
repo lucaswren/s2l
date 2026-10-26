@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Update a management setting, restarting S2L with rollback on failure."""
 
+from installer_i18n import tr
 import json
 import errno
 import os
@@ -22,7 +23,7 @@ NGINX_SITE = Path("/etc/nginx/conf.d/s2l.conf")
 
 def validate_port(value):
     if not re.fullmatch(r"[0-9]{1,5}", value) or not 1 <= int(value) <= 65535:
-        raise ValueError("端口需为 1-65535 的整数")
+        raise ValueError(tr("端口需为 1-65535 的整数"))
     return int(value)
 
 
@@ -54,7 +55,7 @@ def random_port():
         lower, upper = 32768, 65535
     candidates = [port for port in range(10000, 60001) if not lower <= port <= upper]
     if not candidates:
-        raise RuntimeError("临时端口范围覆盖全部随机管理端口，请显式指定端口")
+        raise RuntimeError(tr("临时端口范围覆盖全部随机管理端口，请显式指定端口"))
     for _ in range(128):
         port = candidates[secrets.randbelow(len(candidates))]
         try:
@@ -62,7 +63,7 @@ def random_port():
             return port
         except OSError:
             continue
-    raise RuntimeError("无法找到空闲端口")
+    raise RuntimeError(tr("无法找到空闲端口"))
 
 
 def update_config(config, field, value):
@@ -204,5 +205,5 @@ if __name__ == "__main__":
     try:
         main()
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
-        print(f"修改失败：{error}", file=sys.stderr)
+        print(tr("修改失败：{error}").format(error=error), file=sys.stderr)
         sys.exit(1)

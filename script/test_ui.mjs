@@ -47,6 +47,27 @@ chrome.on('error',error=>{chromeError=error});
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
   await send('Page.navigate',{url:`http://127.0.0.1:${apiPort}/`});
   await wait(`!!document.querySelector('.monitor-disclosure > summary') && document.body.innerText.includes('固定出口 A')`);
+  await evaluate(`window.__nodeFetch=window.fetch;window.__nodeSaves=0;window.__nodeActions=0;window.__nodeBlocked=true;window.fetch=(path,options)=>{
+   if(String(path)==='/api/nodes/n')return Promise.resolve(Response.json({id:'n',name:'固定出口 A',addr:'192.0.2.5:1080',username:'fixture-user',password:'fixture-secret'}));
+   if(String(path)==='/api/nodes?preview=1')return Promise.resolve(Response.json({fields:['password'],affected:['m'],blocked:window.__nodeBlocked?[{id:'m',name:'account-a',status:'running'}]:[],message:'保存不会重启映射。名称和分组可在线修改；连接参数需在关联映射停止后修改。'}));
+   if(String(path)==='/api/nodes'&&options?.method==='POST'){window.__nodeSaves++;return Promise.resolve(Response.json(JSON.parse(options.body)))}
+   if(String(path).endsWith('/action'))window.__nodeActions++;
+   return window.__nodeFetch(path,options)};
+   [...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.innerText==='SOCKS5 节点').querySelectorAll('button').forEach((b)=>{if(!window.__nodeOpened&&b.offsetParent&&b.innerText==='编辑'){window.__nodeOpened=true;b.click()}})`);
+  await wait(`document.querySelector('.edit-dialog input[type=password]')`);
+  await evaluate(`(()=>{const e=document.querySelector('.edit-dialog input[type=password]');e.value='changed-secret';e.dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('.edit-dialog button')].find(b=>b.innerText==='保存').click()})()`);
+  await wait(`document.querySelector('.edit-dialog .el-alert')?.innerText.includes('account-a')`);
+  if(await evaluate(`window.__nodeSaves!==0||window.__nodeActions!==0||document.querySelector('.el-message-box')||document.querySelector('.edit-dialog input[type=password]').value!=='changed-secret'`))throw Error('active node edit saved, stopped a mapping, or lost the form '+width);
+  for(const locale of ['en','zh-TW','zh-CN']) {
+   await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);await pause(100);
+   await checkLayout(width+' '+locale+' blocked node edit');
+  }
+  await evaluate(`window.__nodeBlocked=false;[...document.querySelectorAll('.edit-dialog button')].find(b=>b.innerText==='保存').click()`);
+  await wait(`document.querySelector('.el-message-box')?.innerText.includes('保存不会重启映射')`);
+  await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(b=>b.innerText==='保存').click()`);
+  await wait(`window.__nodeSaves===1&&!document.querySelector('.edit-dialog')?.offsetParent`);
+  if(await evaluate(`window.__nodeActions!==0`))throw Error('node save changed mapping lifecycle '+width);
+  await evaluate(`window.fetch=window.__nodeFetch;window.__nodeOpened=false`);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='新建映射').click()`);
   await wait(`!!document.querySelector('.el-dialog input[type=password]')`);
   await evaluate(`(()=>{const p=document.querySelector('.el-dialog input[type=password]');p.value='fixture-password';p.dispatchEvent(new Event('input',{bubbles:true}));})()`);
