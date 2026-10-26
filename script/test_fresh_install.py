@@ -166,12 +166,18 @@ def main():
             if failed.returncode == 0:
                 raise RuntimeError('hard interruption was ignored')
             guest('test "$(cat /tmp/install-injected)" = kill; test -f /var/lib/s2l-install/journal.json; rm /tmp/kill-s2l-install /tmp/install-injected')
-            result = guest(install)
+            # Resume through the public one-command entrypoint with an active
+            # xl2tpd and an incomplete journal, using a disposable local origin.
+            guest("apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends git; cd /opt/src/s2l; git init -b fixture; printf '%s\\n' bin/ __pycache__/ '*.pyc' > .git/info/exclude; git add .; git -c user.name=Fixture -c user.email=fixture@example.invalid commit -m fixture; git clone --bare . /tmp/bootstrap-upstream.git; git remote add origin /tmp/bootstrap-upstream.git; systemctl is-active --quiet xl2tpd", timeout=180)
+            remote_install = 'cd /opt/src/s2l && env REPO_URL=/tmp/bootstrap-upstream.git BRANCH=fixture SRC_DIR=/opt/src/s2l ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash script/remote_install.sh --lang ' + language + ' 2>&1 | tee /tmp/install-last.log'
+            result = guest(remote_install)
             print(result.stdout[-5000:], flush=True)
             expected = ('S2L installation complete', 'Nginx / HTTPS verification') if debian else ('S2L 安裝完成', 'Nginx／HTTPS 驗證')
             if not all(message in result.stdout for message in expected):
                 raise RuntimeError('installer language was not propagated through HTTPS setup')
-            print('PASS crash recovery and full fresh installation', flush=True)
+            if 'will validate recovery' not in result.stdout and '會先驗證復原條件' not in result.stdout:
+                raise RuntimeError('bootstrap did not reach interrupted-install recovery')
+            print('PASS one-command crash recovery and full fresh installation', flush=True)
             guest('rm /usr/local/bin/systemctl; systemctl is-active --quiet s2l xl2tpd nginx s2l-guard; test ! -e /var/lib/s2l-install/journal.json')
             guest('cmp /opt/src/s2l/script/manage_kernel.py /opt/s2l/manage_kernel.py; s2l --help | grep -q kernel-upgrade')
             # Exercise the installed helper under Ubuntu's enforcing AppArmor

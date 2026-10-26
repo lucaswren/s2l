@@ -77,6 +77,13 @@ if [[ -e "$SRC_DIR" && ! -d "$SRC_DIR/.git" ]]; then
 fi
 for unit in s2l xl2tpd; do
   if systemctl is-active --quiet "$unit"; then
+    # An interrupted first install may have started xl2tpd already. Downloading
+    # its installer is safe; install_state.py validates the private journal and
+    # ownership before any recovery. A mere journal here never authorizes cleanup.
+    if [[ -f /var/lib/s2l-install/journal.json && ! -L /var/lib/s2l-install && ! -L /var/lib/s2l-install/journal.json ]]; then
+      s2l_text '[INFO] An installation journal exists; the installer will validate recovery before continuing' '[INFO] 偵測到安裝事務日誌；安裝程式會先驗證復原條件' '[INFO] 检测到安装事务日志；安装程序会先验证恢复条件'
+      break
+    fi
     s2l_text "Tunnel service ${unit} is active. Use the update procedure on an installed host." "隧道服務 ${unit} 正在執行；已安裝的主機請使用更新流程。" "隧道服务 ${unit} 正在运行；已安装的主机请使用更新流程。" >&2
     exit 1
   fi

@@ -25,7 +25,7 @@ class BootstrapTests(unittest.TestCase):
             path.write_text('#!/bin/sh\n' + body + '\n')
             path.chmod(0o755)
         # Move host checks/lock to this fixture; all git operations stay local.
-        source = SCRIPT.read_text().replace('/run/systemd/system', str(self.root)).replace('/run/s2l-bootstrap.lock', str(self.root / 'lock'))
+        source = SCRIPT.read_text().replace('/run/systemd/system', str(self.root)).replace('/run/s2l-bootstrap.lock', str(self.root / 'lock')).replace('/var/lib/s2l-install', str(self.root / 'journal'))
         self.script = self.root / 'bootstrap.sh'
         self.script.write_text(source)
         self.repo = self.root / 'upstream'
@@ -75,3 +75,15 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('is active', result.stderr)
         self.assertFalse(Path(self.env['SRC_DIR']).exists())
+
+    def test_interrupted_install_delegates_journal_validation(self):
+        (self.tools / 'systemctl').write_text('#!/bin/sh\nexit 0\n')
+        journal = self.root / 'journal'
+        journal.mkdir()
+        (journal / 'journal.json').write_text('{}')
+        result = self.run_bootstrap()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('will validate recovery', result.stdout)
+        self.assertIn('installed:--lang:en', result.stdout)
+        # The bootstrap must not itself interpret or remove journal content.
+        self.assertEqual((journal / 'journal.json').read_text(), '{}')
