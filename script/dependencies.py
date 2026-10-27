@@ -14,7 +14,14 @@ SINGBOX = Path('/usr/local/bin/sing-box')
 APP = Path('/opt/s2l')
 PACKAGES = ('xl2tpd', 'ppp', 'strongswan', 'strongswan-starter', 'strongswan-charon', 'strongswan-libcharon', 'libstrongswan', 'libstrongswan-standard-plugins')
 MANAGED = {'/etc/xl2tpd/xl2tpd.conf', '/etc/ppp/options.xl2tpd'}
-CONFIG_ROOTS = ('/etc/ppp', '/etc/ipsec.d', '/etc/strongswan.d', '/etc/xl2tpd')
+CONFIG_ROOTS = ('/etc/ppp', '/etc/chatscripts', '/etc/ipsec.d', '/etc/strongswan.d', '/etc/xl2tpd')
+PPP_TEMPLATES = Path('/usr/share/ppp')
+PPP_GENERATED = {
+    '/etc/ppp/chap-secrets': 'chap-secrets',
+    '/etc/ppp/pap-secrets': 'pap-secrets',
+    '/etc/ppp/peers/provider': 'provider.peer',
+    '/etc/chatscripts/provider': 'provider.chatscript',
+}
 SERVICE_ROOTS = ('/etc/systemd/system', '/usr/lib/systemd/system', '/lib/systemd/system', '/etc/cron.d', '/etc/init.d')
 
 
@@ -27,7 +34,7 @@ def group(name):
 
 
 def config_group(path):
-    return 'ppp' if path.startswith('/etc/ppp/') else 'l2tp' if path.startswith('/etc/xl2tpd/') else 'ipsec'
+    return 'ppp' if path.startswith(('/etc/ppp/', '/etc/chatscripts/')) else 'l2tp' if path.startswith('/etc/xl2tpd/') else 'ipsec'
 
 
 def run(*args, check=True):
@@ -50,6 +57,37 @@ def fingerprint(path):
 def installed(name):
     result = run('dpkg-query', '-W', '-f=${Status}', name, check=False)
     return result.returncode == 0 and result.stdout == 'install ok installed'
+
+
+def template_digest(path, data):
+    if path in ('/etc/ppp/chap-secrets', '/etc/ppp/pap-secrets'):
+        # postinst substitutes the hostname in a template comment. Account
+        # entries must still match exactly after S2L's entries are removed.
+        data = b'\n'.join(line.rstrip() for line in data.splitlines() if line.strip() and not line.lstrip().startswith(b'#'))
+    return hashlib.sha256(data).hexdigest()
+
+
+def ppp_generated_files():
+    # These files are created by ppp.postinst, so neither --listfiles nor
+    # ${Conffiles} includes them. Trust only templates matching dpkg's original
+    # package checksum; never adopt the current /etc contents as a baseline.
+    result = run('dpkg-query', '--control-show', 'ppp', 'md5sums', check=False)
+    if result.returncode:
+        return {}
+    checksums = {}
+    for line in result.stdout.splitlines():
+        fields = line.split()
+        if len(fields) == 2 and re.fullmatch(r'[0-9a-f]{32}', fields[0]):
+            checksums[fields[1]] = fields[0]
+    files = {}
+    for target, name in PPP_GENERATED.items():
+        template = PPP_TEMPLATES / name
+        if template.is_symlink() or not template.is_file():
+            continue
+        data = template.read_bytes()
+        if hashlib.md5(data, usedforsecurity=False).hexdigest() == checksums.get('usr/share/ppp/' + name):
+            files[target] = 'ppp-template:' + template_digest(target, data)
+    return files
 
 
 def read():
@@ -99,6 +137,8 @@ def record():
                 fields = line.split()
                 if fields and fields[0].startswith('/etc/'):
                     files[fields[0]] = fingerprint(fields[0])
+            if name == 'ppp':
+                files.update(ppp_generated_files())
             value['packages'][name] = files
     if 'config_paths' not in value:
         value['config_paths'] = config_paths()
@@ -137,6 +177,9 @@ def legacy_inventory():
             if len(fields) >= 2 and fields[0].startswith('/etc/') and re.fullmatch(r'[0-9a-f]{32}', fields[1]):
                 files[fields[0]] = 'dpkg-md5:' + fields[1]
         paths.update(path for path in run('dpkg-query', '-L', name).stdout.splitlines() if path.startswith('/etc/'))
+        if name == 'ppp':
+            files.update(ppp_generated_files())
+            paths.update(files)
         value['packages'][name] = files
         value['legacy_packages'].append(name)
     value['config_paths'] = sorted(paths)
@@ -159,6 +202,9 @@ def migrate():
 def matches_config(path, digest):
     if path in MANAGED:
         return True  # The uninstall coordinator validates and removes these.
+    if digest.startswith('ppp-template:'):
+        file = Path(path)
+        return not file.is_symlink() and (not file.exists() or template_digest(path, file.read_bytes()) == digest.removeprefix('ppp-template:'))
     if not digest.startswith('dpkg-md5:'):
         return fingerprint(path) == digest
     file = Path(path)
@@ -236,17 +282,27 @@ def safe_removals(candidates, report):
 def package_plan(value, report=lambda text: None):
     candidates, retained = [], []
     busy = set()
+    generated = {}
     for name, files in value['packages'].items():
         if not installed(name):
             continue
         if not isinstance(files, dict) or any(not path.startswith('/etc/') or '..' in Path(path).parts for path in files):
             raise RuntimeError('invalid package file inventory')
+        if name == 'ppp':
+            generated = ppp_generated_files()
+            # Also audit generated files for receipts from v1.3.13. Preserve
+            # previously recorded digests if the system package later changes.
+            files = {**generated, **files}
+            unknown = [path for path in PPP_GENERATED if path not in files and (Path(path).exists() or Path(path).is_symlink())]
+            if unknown:
+                report('unverified generated configuration: ' + ', '.join(unknown))
+                busy.add('ppp')
         changed = [path for path, digest in files.items() if not matches_config(path, digest)]
         if changed:
             report('modified configuration: ' + ', '.join(changed))
             busy.add(group(name))
         candidates.append(name)
-    extra = set(config_paths()) - set(value.get('config_paths', [])) - MANAGED
+    extra = set(config_paths()) - set(value.get('config_paths', [])) - MANAGED - set(generated)
     if extra:
         report('additional configuration: ' + ', '.join(sorted(extra)))
         busy.update(config_group(path) for path in extra)

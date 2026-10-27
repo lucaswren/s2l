@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 import dependencies
+read_ppp_templates = dependencies.ppp_generated_files
 
 
 class DependencyTests(unittest.TestCase):
@@ -14,6 +15,12 @@ class DependencyTests(unittest.TestCase):
         sharing = patch.object(dependencies, 'sharing_groups', return_value=set())
         sharing.start()
         self.addCleanup(sharing.stop)
+        templates = patch.object(dependencies, 'ppp_generated_files', return_value={})
+        templates.start()
+        self.addCleanup(templates.stop)
+        generated_paths = patch.object(dependencies, 'PPP_GENERATED', {})
+        generated_paths.start()
+        self.addCleanup(generated_paths.stop)
 
     def test_shared_reverse_dependency_prevents_package_removal(self):
         value = {'packages': {'ppp': {}}, 'config_paths': []}
@@ -98,3 +105,27 @@ class DependencyTests(unittest.TestCase):
             unit.write_bytes(b'[Service]\nExecStart=/usr/lib/ipsec/charon --conf /opt/other.conf\n')
             with patch.object(dependencies, 'SERVICE_ROOTS', (directory,)):
                 self.assertTrue(dependencies.references((b'charon',), ('strongswan-starter.service',)))
+
+    def test_generated_ppp_defaults_require_original_package_template(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            template = root / 'provider.peer'
+            template.write_bytes(b'user "example"\n')
+            checksum = dependencies.hashlib.md5(template.read_bytes(), usedforsecurity=False).hexdigest()
+            manifest = subprocess.CompletedProcess([], 0, checksum + '  usr/share/ppp/provider.peer\n')
+            with patch.object(dependencies, 'PPP_GENERATED', {'/etc/ppp/peers/provider': 'provider.peer'}), patch.object(dependencies, 'PPP_TEMPLATES', root), patch.object(dependencies, 'run', return_value=manifest):
+                files = read_ppp_templates()
+                self.assertIn('/etc/ppp/peers/provider', files)
+                target = root / 'provider'
+                target.write_bytes(template.read_bytes())
+                self.assertTrue(dependencies.matches_config(str(target), files['/etc/ppp/peers/provider']))
+                target.write_bytes(b'user "foreign-vpn"\n')
+                self.assertFalse(dependencies.matches_config(str(target), files['/etc/ppp/peers/provider']))
+                template.write_bytes(target.read_bytes())
+                self.assertEqual(read_ppp_templates(), {})
+
+    def test_generated_credentials_ignore_hostname_comment_but_detect_accounts(self):
+        path = '/etc/ppp/pap-secrets'
+        original = b'#-HOSTNAME-\n* hostname "" *\n'
+        self.assertEqual(dependencies.template_digest(path, original), dependencies.template_digest(path, b'#server\n* hostname "" *\n'))
+        self.assertNotEqual(dependencies.template_digest(path, original), dependencies.template_digest(path, original + b'other * password *\n'))
