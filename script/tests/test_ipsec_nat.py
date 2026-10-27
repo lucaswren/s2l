@@ -389,13 +389,16 @@ n.main()
             state = json.loads((Path(temp) / 'state.json').read_text())
             self.assertFalse(state['active'])
             self.assertEqual(len(state['retired']), 16)
-            clock = [max(a['retired_at'] for a in state['retired'].values()) + 30]
+            # Move strictly beyond the quarantine boundary. Subtracting two
+            # monotonic floats at exactly +30 can round just below 30, leaving
+            # the last endpoint needing its first quiet observation next time.
+            clock = [max(a['retired_at'] for a in state['retired'].values()) + ipsec_nat.QUARANTINE + 1]
             with patch.object(ipsec_nat, 'ROOT', Path(temp)), \
                     patch.object(ipsec_nat, 'l2tp_peers', return_value=set()), \
                     patch.object(ipsec_nat, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')), \
                     patch.object(ipsec_nat.time, 'monotonic', lambda: clock[0]):
                 ipsec_nat.reclaim(state)
-                clock[0] += 2
+                clock[0] += ipsec_nat.QUIET + 1
                 ipsec_nat.reclaim(state)
             self.assertEqual(len(state['free']), 16)
             batch('up-host')
