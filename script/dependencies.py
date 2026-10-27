@@ -31,7 +31,10 @@ def fingerprint(path):
         return 'link:' + os.readlink(path)
     if not path.exists():
         return 'missing'
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    content = path.read_bytes()
+    if str(path) in ('/etc/ppp/chap-secrets', '/etc/ipsec.secrets', '/etc/apparmor.d/local/usr.lib.ipsec.charon'):
+        content = content.rstrip() + b'\n'
+    return hashlib.sha256(content).hexdigest()
 
 
 def installed(name):
@@ -120,7 +123,7 @@ def package_plan(value):
     if candidates:
         simulation = run('apt-get', '-s', '--no-auto-remove', 'purge', *candidates)
         removed = {line.split()[1].split(':')[0] for line in simulation.stdout.splitlines() if line.startswith(('Remv ', 'Purg '))}
-        if not removed or not removed <= set(candidates):
+        if not removed or not removed <= set(candidates) or any(line.startswith('Inst ') for line in simulation.stdout.splitlines()):
             return [], sorted(candidates)
     return candidates, []
 
@@ -148,7 +151,9 @@ def cleanup(message=lambda en, hant, hans: en):
         return
     candidates, retained = package_plan(value)
     if candidates:
-        run('apt-get', '-o', 'DPkg::Lock::Timeout=60', '--assume-yes', '--no-auto-remove', 'purge', *candidates)
+        # Use dpkg for the final exact package list: it cannot expand removal
+        # after the APT simulation and refuses newly introduced reverse deps.
+        run('dpkg', '--purge', *candidates)
         if any(installed(name) for name in candidates):
             raise RuntimeError('dedicated VPN packages remain')
         print(message('Removed dedicated packages: ', '已清除專用套件：', '已清除专用软件包：') + ', '.join(candidates))

@@ -27,6 +27,7 @@ printf '%s\\n' 'server { listen 38444; location / { return 200 "foreign-site"; }
 nginx -t
 systemctl reload nginx
 cp /etc/ssh/sshd_config /tmp/ssh-uninstall-before''')
+    guest('cp /var/lib/s2l-dependencies/receipt.json /tmp/dependencies-before-uninstall.json')
     guest('curl --fail --retry 3 --retry-connrefused http://127.0.0.1:38444/')
     guest("printf '#!/bin/sh\\nexit 0\\n' > /usr/local/bin/pgrep; chmod 755 /usr/local/bin/pgrep")
     failed = guest("printf 'UNINSTALL\\n' | s2l uninstall", check=False)
@@ -53,7 +54,7 @@ ip netns add s2l-proof-2147483647-1234567890''')
     guest('test ! -e /opt/s2l; test ! -e /usr/local/bin/s2l; test ! -e /etc/nginx/conf.d/s2l.conf; test ! -e /etc/systemd/system/s2l.service; test ! -e /etc/systemd/system/xl2tpd.service.d/s2l.conf; test ! -e /etc/sysctl.d/99-s2l.conf; ! pgrep -x pppd; ! systemctl is-active --quiet xl2tpd; ! systemctl is-active --quiet s2l; cmp /tmp/ssh-uninstall-before /etc/ssh/sshd_config; iptables -C INPUT -s 192.0.2.239/32 -j S2L_FIXTURE_FOREIGN; curl --fail http://127.0.0.1:38444/')
     guest('''python3 - <<'PY'
 from pathlib import Path
-import subprocess
+import subprocess,json
 for binary in ('iptables-save','ip6tables-save'):
  text=subprocess.check_output([binary],text=True)
  assert all(name not in text for name in ('S2L_FORWARD','S2L_RETURN','S2L_MANAGEMENT','S2L-IPSEC'))
@@ -68,6 +69,9 @@ for name in ('bootstrap','install','update','kernel'):
 for path, marker in (('/etc/ppp/chap-secrets','# s2l:'),('/etc/ipsec.secrets','include /opt/s2l/ipsec.secrets')):
  assert not Path(path).exists() or marker not in Path(path).read_text()
 assert 's2l-proof-' not in subprocess.check_output(['ip','netns','list'],text=True)
+for name in json.loads(Path('/tmp/dependencies-before-uninstall.json').read_text())['packages']:
+ result=subprocess.run(['dpkg-query','-W','-f=${Status}',name],capture_output=True,text=True)
+ assert 'installed' not in result.stdout and 'config-files' not in result.stdout, name+': '+result.stdout
 PY''')
     print('PASS uninstall removes source, backups, runtime data and dedicated sing-box; preserves SSH and foreign firewall/Nginx', flush=True)
     guest(install, timeout=900)
