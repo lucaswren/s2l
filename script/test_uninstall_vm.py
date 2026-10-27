@@ -9,12 +9,17 @@ def verify(guest, install, dial):
     guest('test -f /opt/src/s2l/keep-my-notes.txt; rm /opt/src/s2l/keep-my-notes.txt')
     if rejected.returncode == 0:
         raise RuntimeError('uninstall accepted modified source')
+    guest('''cp /etc/ppp/chap-secrets /etc/ppp/chap-secrets.s2l.tmp
+cp /etc/xl2tpd/xl2tpd.conf /etc/xl2tpd/xl2tpd.conf.s2l.tmp
+cp /etc/ppp/options.xl2tpd /etc/ppp/options.xl2tpd.s2l.tmp
+cp /etc/ppp/options.xl2tpd.s2l-up /etc/ppp/.ppp-hook-fixture''')
     identity = 'sha256sum /opt/s2l/config.json /etc/ssh/sshd_config; systemctl show -p MainPID --value s2l xl2tpd nginx; cat /proc/sys/kernel/random/boot_id'
     before = guest(identity).stdout
     guest('s2l uninstall --dry-run')
     guest("printf 'cancel\\n' | s2l 13")
     if guest(identity).stdout != before:
         raise RuntimeError('uninstall preview/cancel changed live installation')
+    guest('test -f /etc/ppp/chap-secrets.s2l.tmp; test -f /etc/ppp/.ppp-hook-fixture')
     print('PASS uninstall preview and cancellation preserve live installation', flush=True)
     guest('ip link add pppfixture type dummy; ip link set pppfixture up; ip route add 192.0.2.238/32 dev pppfixture')
     rejected = guest('env SSH_CONNECTION="192.0.2.238 40000 198.51.100.1 22" s2l uninstall --dry-run', check=False)
@@ -63,6 +68,8 @@ assert not list(Path('/var/backups').glob('s2l-uninstall-*'))
 assert not list(Path('/var/backups').glob('s2l-kernel-*'))
 assert not list(Path('/root').glob('s2l-backup.*'))
 for name in ('/opt/src/s2l','/run/s2l','/run/s2l-ipsec-nat','/var/lib/s2l','/var/lib/s2l-install','/var/lib/s2l-dependencies','/usr/local/bin/sing-box'):
+ assert not Path(name).exists(), name
+for name in ('/etc/ppp/chap-secrets.s2l.tmp','/etc/xl2tpd/xl2tpd.conf.s2l.tmp','/etc/ppp/options.xl2tpd.s2l.tmp','/etc/ppp/.ppp-hook-fixture'):
  assert not Path(name).exists(), name
 for name in ('bootstrap','install','update','kernel'):
  assert not Path('/run/s2l-'+name+'.lock').exists()
