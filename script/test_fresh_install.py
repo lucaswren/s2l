@@ -168,8 +168,8 @@ def main():
             guest('test "$(cat /tmp/install-injected)" = kill; test -f /var/lib/s2l-install/journal.json; rm /tmp/kill-s2l-install /tmp/install-injected')
             # Resume through the public one-command entrypoint with an active
             # xl2tpd and an incomplete journal, using a disposable local origin.
-            guest("apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends git; cd /opt/src/s2l; git init -b fixture; printf '%s\\n' bin/ __pycache__/ '*.pyc' > .git/info/exclude; git add .; git -c user.name=Fixture -c user.email=fixture@example.invalid commit -m fixture; git clone --bare . /tmp/bootstrap-upstream.git; git remote add origin /tmp/bootstrap-upstream.git; systemctl is-active --quiet xl2tpd", timeout=180)
-            remote_install = 'cd /opt/src/s2l && env REPO_URL=/tmp/bootstrap-upstream.git BRANCH=fixture SRC_DIR=/opt/src/s2l ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash script/remote_install.sh --lang ' + language + ' 2>&1 | tee /tmp/install-last.log'
+            guest("apt-get -o DPkg::Lock::Timeout=120 install -y --no-install-recommends git; cd /opt/src/s2l; git init -b fixture; printf '%s\\n' bin/ __pycache__/ '*.pyc' > .git/info/exclude; git add .; git -c user.name=Fixture -c user.email=fixture@example.invalid commit -m fixture; git clone --bare . /root/bootstrap-upstream.git; git remote add origin /root/bootstrap-upstream.git; cp script/remote_install.sh /root/fixture-remote-install.sh; systemctl is-active --quiet xl2tpd", timeout=180)
+            remote_install = 'cd / && env REPO_URL=/root/bootstrap-upstream.git BRANCH=fixture SRC_DIR=/opt/src/s2l ADMIN_USER=fixture ADMIN_PASS=fixture-test-password HTTPS_PORT=38443 bash /root/fixture-remote-install.sh --lang ' + language + ' 2>&1 | tee /tmp/install-last.log'
             result = guest(remote_install)
             print(result.stdout[-5000:], flush=True)
             expected = ('S2L installation complete', 'Nginx / HTTPS verification') if debian else ('S2L 安裝完成', 'Nginx／HTTPS 驗證')
@@ -187,8 +187,8 @@ def main():
             guest("python3 - " + ("debian" if debian else "ubuntu") + " <<'PY'\nfrom pathlib import Path\nimport subprocess,time,sys\npid=Path('/run/charon.pid').read_text().strip()\nprofile=Path('/proc')/pid/'attr/current'\nif sys.argv[1] == 'ubuntu': assert '/usr/lib/ipsec/charon (enforce)' in profile.read_text(), 'charon is not confined'\nfor _ in range(20):\n log=subprocess.check_output(['journalctl','-u','s2l-ipsec','--no-pager','-o','cat'],text=True)\n if \"loading secrets from '/opt/s2l/ipsec.secrets'\" in log and 'loaded IKE secret for %any' in log: break\n time.sleep(.25)\nelse: raise AssertionError('managed PSK was not loaded by confined charon')\nPY")
             guest("printf '%s\\n' '{\"enabled\":false}' | python3 /opt/s2l/manage_ipsec.py apply")
             print('PASS managed IPsec PSK loading' + ('' if debian else ' with AppArmor enforcement preserved'), flush=True)
-            guest('cd /opt/src/s2l; /usr/local/go/bin/go test -c -o /opt/src/s2l/bin/s2l-fresh.test ./internal/service', timeout=300)
-            dial = 'S2L_FRESH_VM_TEST=1 /opt/src/s2l/bin/s2l-fresh.test -test.run ^TestFreshInstalledServiceDial$ -test.v -test.timeout 240s'
+            guest('cd /opt/src/s2l; /usr/local/go/bin/go test -c -o /root/s2l-fresh.test ./internal/service', timeout=300)
+            dial = 'S2L_FRESH_VM_TEST=1 /root/s2l-fresh.test -test.run ^TestFreshInstalledServiceDial$ -test.v -test.timeout 240s'
             result = guest(dial, timeout=270)
             print(result.stdout, flush=True)
             original = guest('sha256sum /opt/s2l/config.json').stdout

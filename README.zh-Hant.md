@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_up
 
 ## 文件
 
-解除安裝：`sudo s2l uninstall` 或選單 **13**；`sudo s2l uninstall --dry-run` 只讀預覽。須明確確認，刪除前建立私有備份，受管 VPN 連線會中斷。詳見[解除安裝流程](docs/zh-Hant/operations.md#解除安裝)。
+解除安裝：`sudo s2l uninstall` 或選單 **13**；`sudo s2l uninstall --dry-run` 只讀預覽。須明確確認，清除 S2L 資料、乾淨的預設原始碼、備份與已確認的專用相依套件，受管 VPN 連線會中斷。詳見[解除安裝流程](docs/zh-Hant/operations.md#解除安裝)。
 
 - [操作、備份、更新與疑難排解](docs/zh-Hant/operations.md)
 - [架構、設定與開發](docs/zh-Hant/development.md)

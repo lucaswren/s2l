@@ -30,9 +30,9 @@ func Current() Info {
 		}
 	}
 	result.ReleaseNotes = map[string]string{
-		"en":    "Add s2l uninstall (menu 13) and s2l uninstall --dry-run. Show scope and require UNINSTALL confirmation, create a private backup, then stop VPN services and remove only managed application, PPP, HTTPS and network resources. Refuse SSH paths through the VPN, custom layouts, conflicting routes and unfinished operations. Retain SSH settings, other firewall rules and Nginx sites, dependencies, kernels and source checkouts. Uninstall disconnects VPN clients; failed cleanup retains the backup and may leave services stopped. Prompts follow the saved panel language.",
-		"zh-TW": "新增 s2l uninstall（選單 13）及 s2l uninstall --dry-run 只讀預覽。顯示範圍並要求輸入 UNINSTALL，建立私有備份後停止 VPN 服務，僅清理受管應用程式、PPP、HTTPS 與網路資源。拒絕經 VPN 的 SSH 路徑、自訂部署、衝突路由及未完成操作。保留 SSH 設定、其他防火牆規則與 Nginx 站台、相依套件、核心及原始碼。解除安裝會中斷 VPN；清理失敗保留備份，服務可能維持停止。提示沿用面板語言。",
-		"zh-CN": "新增 s2l uninstall（菜单 13）及 s2l uninstall --dry-run 只读预览。显示范围并要求输入 UNINSTALL，建立私有备份后停止 VPN 服务，仅清理受管应用、PPP、HTTPS 与网络资源。拒绝经 VPN 的 SSH 路径、自定义部署、冲突路由及未完成操作。保留 SSH 设置、其他防火墙规则与 Nginx 站点、依赖、内核及源码。卸载会中断 VPN；清理失败保留备份，服务可能保持停止。提示沿用面板语言。",
+		"en":    "Add s2l uninstall (menu 13) with read-only preview and UNINSTALL confirmation. Remove managed data, credentials, certificates, services, network rules, runtime caches, clean default source and recognized S2L backups, then verify no managed resources remain. Fresh installs record dedicated VPN dependency ownership; remove only unchanged, unshared recorded dependencies. Preserve SSH, shared tools/services, kernels and system journal. Failed cleanup retains recovery data and may leave services stopped. Uninstall disconnects VPN clients; prompts follow the panel language.",
+		"zh-TW": "新增 s2l uninstall（選單 13），支援只讀預覽及 UNINSTALL 確認。清除受管資料、帳密、憑證、服務、網路規則、執行快取、乾淨的預設原始碼與已辨識的 S2L 備份，並核對殘留。新安裝記錄專用 VPN 相依套件歸屬，僅移除未修改且未共用的已記錄項目。保留 SSH、共用工具／服務、核心與系統日誌。失敗保留復原資料，服務可能維持停止。解除安裝會中斷 VPN；提示沿用面板語言。",
+		"zh-CN": "新增 s2l uninstall（菜单 13），支持只读预览及 UNINSTALL 确认。清除受管数据、账号密码、证书、服务、网络规则、运行缓存、干净的默认源码和已识别的 S2L 备份，并核对残留。新安装记录专用 VPN 依赖归属，仅移除未修改且未共享的已记录项目。保留 SSH、共享工具／服务、内核和系统日志。失败保留恢复数据，服务可能保持停止。卸载会中断 VPN；提示沿用面板语言。",
 	}
 	if regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(result.Version) {
 		result.ReleaseURL = "https://github.com/lucaswren/s2l/releases/tag/" + result.Version

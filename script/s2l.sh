@@ -10,7 +10,7 @@ if (( $# > 2 )) || { (( $# == 2 )) && { [[ "$1" != uninstall && "$1" != 13 ]] ||
 fi
 if (( $# >= 1 )); then
   case "$1" in
-    -h|--help) echo "用法：s2l 打开菜单；s2l 1 查看地址；s2l 2 查看状态；s2l 4 查看日志；s2l kernel-upgrade 准备内核（不自动重启）；s2l uninstall 或 s2l 13 备份后卸载（需确认）；s2l uninstall --dry-run 只读预览；其余编号与菜单一致。"; exit 0 ;;
+    -h|--help) echo "用法：s2l 打开菜单；s2l 1 查看地址；s2l 2 查看状态；s2l 4 查看日志；s2l kernel-upgrade 准备内核（不自动重启）；s2l uninstall 或 s2l 13 彻底卸载（含专用依赖、源码和备份，需确认）；s2l uninstall --dry-run 只读预览；其余编号与菜单一致。"; exit 0 ;;
     0|1|2|3|4|5|6|7|8|9|10|11|12|13|kernel-upgrade|uninstall) DIRECT=1 ;;
     *) echo "无效编号：$1；使用 s2l --help 查看用法。" >&2; exit 2 ;;
   esac
@@ -207,7 +207,7 @@ while true; do
   echo "10) 修改 SSH 端口"
   echo "11) 升级 S2L（保留配置）"
   echo "12) 准备 Ubuntu 24.04 内核（不自动重启）"
-  echo "13) 卸载 S2L（先备份，断开拨号，需确认）"
+  echo "13) 卸载 S2L（清理专用依赖、源码和备份，需确认）"
   echo "0) 退出"
   echo
   read -r -p "请选择操作 [0-13]: " choice

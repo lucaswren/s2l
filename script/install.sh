@@ -78,6 +78,7 @@ info "$(s2l_text "0/7 Checking kernel and installation requirements..." "0/7 檢
 # creation. A prepared kernel only takes effect after an operator's reboot.
 python3 "${SCRIPT_DIR}/manage_kernel.py"
 python3 "${SCRIPT_DIR}/install_preflight.py" system
+python3 "${SCRIPT_DIR}/dependencies.py" begin
 S2L_STAGE_START=$SECONDS
 info "$(s2l_text "1/7 Installing system dependencies..." "1/7 安裝系統相依套件..." "1/7 安装系统依赖...")"
 wait_for_apt
@@ -88,6 +89,7 @@ dpkg-query -W -f='${Status}' strongswan-starter 2>/dev/null | grep -q "install o
 apt_get install -y --no-install-recommends \
   ca-certificates curl wget tar iptables iproute2 psmisc iputils-ping mtr-tiny \
   xl2tpd ppp nginx openssl python3 build-essential strongswan strongswan-starter kmod conntrack
+python3 "${SCRIPT_DIR}/dependencies.py" record
 
 # Package post-install scripts can start an unconfigured daemon. It was verified
 # inactive before package installation; keep it stopped until guards are ready.
@@ -143,6 +145,7 @@ if [[ ! -x /usr/local/bin/sing-box ]]; then
   (cd "$tmp"; grep "  ${SB_FILE}$" "$SCRIPT_DIR/singbox.sha256" | sha256sum -c -)
   tar -C "$tmp" -xzf "${tmp}/${SB_FILE}"
   install -m 755 "${tmp}/sing-box-${SINGBOX_VERSION}-linux-${SB_ARCH}/sing-box" /usr/local/bin/sing-box
+  python3 "${SCRIPT_DIR}/dependencies.py" singbox
   rm -rf "$tmp"
 fi
 python3 "${SCRIPT_DIR}/install_preflight.py" singbox /usr/local/bin/sing-box
@@ -231,6 +234,7 @@ install -m 600 "${SCRIPT_DIR}/installer_i18n.py" "${INSTALL_DIR}/installer_i18n.
 install -m 600 "${SCRIPT_DIR}/manage_update.py" "${INSTALL_DIR}/manage_update.py"
 install -m 600 "${SCRIPT_DIR}/verify_update.py" "${INSTALL_DIR}/verify_update.py"
 install -m 600 "${SCRIPT_DIR}/uninstall.py" "${INSTALL_DIR}/uninstall.py"
+install -m 600 "${SCRIPT_DIR}/dependencies.py" "${INSTALL_DIR}/dependencies.py"
 install -m 644 "${ROOT_DIR}/deploy/systemd/s2l-ipsec.service" /etc/systemd/system/s2l-ipsec.service
 
 # Install fail-closed guards before allowing any PPP client to connect.

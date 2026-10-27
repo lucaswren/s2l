@@ -11,6 +11,30 @@ import uninstall
 
 
 class UninstallTests(unittest.TestCase):
+    def test_unrecognized_backup_is_never_silently_deleted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            unknown = root / 's2l-uninstall-user-notes'
+            unknown.mkdir()
+            (unknown / 'notes.txt').write_text('keep me')
+            with patch.object(uninstall, 'ROOT_HOME', root), patch.object(uninstall, 'BACKUPS', root):
+                with self.assertRaisesRegex(RuntimeError, 'unrecognized backup'):
+                    uninstall.backup_trees()
+            self.assertEqual((unknown / 'notes.txt').read_text(), 'keep me')
+
+    def test_source_dirty_or_ignored_user_files_are_retained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory).resolve()
+            (source / '.git').mkdir()
+            (source / 'go.mod').write_text('module github.com/lucaswren/s2l\n')
+            with patch.object(uninstall, 'SOURCE', source), patch.object(uninstall, 'run', return_value=subprocess.CompletedProcess([], 0, ' M go.mod\n')):
+                with self.assertRaisesRegex(RuntimeError, 'local changes'):
+                    uninstall.source_tree()
+            with patch.object(uninstall, 'SOURCE', source), patch.object(uninstall, 'run', side_effect=[subprocess.CompletedProcess([], 0, ''), subprocess.CompletedProcess([], 0, 'user-secret.txt\0')]):
+                with self.assertRaisesRegex(RuntimeError, 'custom ignored'):
+                    uninstall.source_tree()
+            self.assertTrue(source.exists())
+
     def test_chap_removes_only_owned_pairs_and_preserves_foreign_credentials(self):
         foreign = '# retained\n"other" * "secret" 10.9.0.2\n'
         self.assertEqual(uninstall.strip_chap(foreign + '# s2l:map_1\n"owned" * "own pass" 10.0.101.2\n'), foreign)
