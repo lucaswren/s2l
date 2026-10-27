@@ -11,7 +11,7 @@ import sys
 ROOT = Path('/var/lib/s2l-dependencies')
 RECEIPT = ROOT / 'receipt.json'
 SINGBOX = Path('/usr/local/bin/sing-box')
-PACKAGES = ('xl2tpd', 'ppp', 'strongswan', 'strongswan-starter', 'strongswan-charon', 'libstrongswan', 'libstrongswan-standard-plugins')
+PACKAGES = ('xl2tpd', 'ppp', 'strongswan', 'strongswan-starter', 'strongswan-charon', 'strongswan-libcharon', 'libstrongswan', 'libstrongswan-standard-plugins')
 MANAGED = {'/etc/xl2tpd/xl2tpd.conf', '/etc/ppp/options.xl2tpd'}
 CONFIG_ROOTS = ('/etc/ppp', '/etc/ipsec.d', '/etc/strongswan.d', '/etc/xl2tpd')
 
@@ -45,10 +45,13 @@ def installed(name):
 def read():
     if ROOT.is_symlink() or ROOT.resolve() != ROOT or RECEIPT.is_symlink():
         raise RuntimeError('unsafe dependency receipt path')
+    for path in (ROOT, RECEIPT):
+        if path.exists() and (path.stat().st_uid != os.geteuid() or path.stat().st_mode & 0o077):
+            raise RuntimeError('dependency receipt must be private and owned by its installer')
     if not RECEIPT.exists():
         return None
     value = json.loads(RECEIPT.read_text())
-    if value.get('version') != 1 or not isinstance(value.get('packages'), dict) or not isinstance(value.get('missing'), list):
+    if not isinstance(value, dict) or value.get('version') != 1 or not isinstance(value.get('packages'), dict) or not isinstance(value.get('missing'), list):
         raise RuntimeError('invalid dependency receipt')
     if any(name not in PACKAGES for name in [*value['packages'], *value['missing']]):
         raise RuntimeError('unknown dependency in receipt')
