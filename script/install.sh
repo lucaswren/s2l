@@ -230,6 +230,7 @@ install -m 600 "${SCRIPT_DIR}/manage_kernel.py" "${INSTALL_DIR}/manage_kernel.py
 install -m 600 "${SCRIPT_DIR}/installer_i18n.py" "${INSTALL_DIR}/installer_i18n.py"
 install -m 600 "${SCRIPT_DIR}/manage_update.py" "${INSTALL_DIR}/manage_update.py"
 install -m 600 "${SCRIPT_DIR}/verify_update.py" "${INSTALL_DIR}/verify_update.py"
+install -m 600 "${SCRIPT_DIR}/uninstall.py" "${INSTALL_DIR}/uninstall.py"
 install -m 644 "${ROOT_DIR}/deploy/systemd/s2l-ipsec.service" /etc/systemd/system/s2l-ipsec.service
 
 # Install fail-closed guards before allowing any PPP client to connect.

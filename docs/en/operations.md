@@ -179,7 +179,16 @@ Run `s2l` for the interactive menu, or `s2l NUMBER` for one action. Unprivileged
 | 9 / 10 | Change management port / SSH port |
 | 11 | Upgrade S2L, preserving configuration |
 | 12 / `kernel-upgrade` | Prepare Ubuntu 24.04 HWE kernel without rebooting |
+| 13 / `uninstall` | Preview, confirm, back up and uninstall S2L |
 | 0 | Exit menu |
+
+### Uninstall
+
+Run `sudo s2l uninstall --dry-run` to inspect the default managed installation without changes. Run `sudo s2l uninstall` (or menu **13**) and type `UNINSTALL` to confirm. This disconnects managed VPN sessions. Use public SSH or the provider console: a detected SSH route through a PPP or mapping TUN is refused. Cancelling or reaching end-of-input changes nothing.
+
+A private `/var/backups/s2l-uninstall-*` archive retains configuration, accounts, node credentials, certificates and affected system files. Keep it secure. The uninstaller stops admission and services, verifies PPP/TUN shutdown, removes only owned mapping routes/firewall rules, units, the HTTPS site, generated PPP files, marked CHAP accounts and `/opt/s2l`. Foreign firewall rules, other Nginx sites, SSH settings, dependencies (including Go/sing-box), kernels and source checkouts remain. It removes S2L's sysctl file but leaves current kernel values unchanged; review host forwarding settings separately. Custom paths, symlinks at managed targets, foreign service overrides or conflicting routes require manual handling.
+
+Failures stop further removal and retain the backup; services may remain stopped and partial cleanup may require manual recovery. Do not blindly restart PPP after a failure. This command does not uninstall the local router or iWAN client. Prompts follow the panel's saved language. Fresh installation can be run again after successful uninstall.
 
 Admin passwords are 12–128 characters; the installer/CLI allow a restricted character set. CLI account changes restart S2L and may interrupt tunnels; web account changes take effect without a service restart. Log in again afterwards. The CLI uses `public_url` when configured; otherwise it derives the address from the listener and detected IP, with a NAT warning on fallback.
 

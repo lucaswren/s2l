@@ -211,6 +211,8 @@ def main():
             result = guest(dial, timeout=270)
             print(result.stdout, flush=True)
             print('PASS full OS reboot, restored fixed mapping and repeat real PPP/fault tests', flush=True)
+            from test_uninstall_vm import verify as verify_uninstall
+            verify_uninstall(guest, remote_install, dial)
         except Exception as error:
             for name in ('stdout', 'stderr'):
                 output = getattr(error, name, None)

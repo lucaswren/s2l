@@ -27,6 +27,8 @@ func main() {
 	cfgPath := flag.String("config", "", "path to config JSON (optional)")
 	checkRuntime := flag.Bool("check-runtime", false, "validate sing-box runtime configuration without changing networking")
 	guardOnly := flag.Bool("guard-only", false, "install PPP traffic guards and exit (Linux root only)")
+	checkUninstall := flag.Bool("check-uninstall", false, "validate managed state and route ownership for uninstallation")
+	cleanupNetwork := flag.Bool("cleanup-network", false, "remove mapping network state after all PPP/TUN interfaces have stopped")
 	flag.Parse()
 	if *guardOnly {
 		if err := network.NewController().EnsureGuard(); err != nil {
@@ -41,6 +43,19 @@ func main() {
 	}
 	if err := cfg.Validate(); err != nil {
 		log.Fatalf("invalid config: %v", err)
+	}
+	if *checkUninstall || *cleanupNetwork {
+		mappings, err := uninstallMappings(cfg.StatePath())
+		if err == nil {
+			err = network.CheckUninstallMappings(mappings)
+		}
+		if err == nil && *cleanupNetwork {
+			err = network.CleanupStoppedMappings(mappings)
+		}
+		if err != nil {
+			log.Fatalf("uninstall network validation/cleanup: %v", err)
+		}
+		return
 	}
 
 	if *checkRuntime {
