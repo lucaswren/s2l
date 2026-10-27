@@ -69,6 +69,12 @@ COMMIT
         with patch.dict(os.environ, SSH_CONNECTION='192.0.2.8 40000 198.51.100.8 22'), patch.object(uninstall, 'run', return_value=subprocess.CompletedProcess([], 0, '[{"dev":"eth0"}]')):
             uninstall.check_connection([{'tun_name': 'tun101'}])
 
+    def test_orphan_tun_or_ppp_keeps_guards(self):
+        for device in ('ppp0', 'tun201'):
+            with self.assertRaisesRegex(RuntimeError, 'guards retained'):
+                uninstall.check_stopped_links([], [{'ifname': device}], '-A FORWARD -i tun201 -j S2L_RETURN')
+        uninstall.check_stopped_links([], [{'ifname': 'eth0'}], '-A FORWARD -i tun201 -j S2L_RETURN')
+
     @unittest.skipUnless(sys.platform == 'linux', 'Linux symlinks and file modes')
     def test_symlink_targets_are_refused_and_atomic_write_keeps_mode(self):
         with tempfile.TemporaryDirectory() as root:

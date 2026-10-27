@@ -4,9 +4,11 @@ package network
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,12 +21,33 @@ func CheckUninstallMappings(mappings []model.TunnelMapping) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	tables := map[string]bool{}
 	for _, m := range mappings {
 		if err := validateMapping(m); err != nil {
 			return err
 		}
 		if err := checkRouteOwnership(ctx, m); err != nil {
 			return err
+		}
+		tables[strconv.Itoa(m.TableID)] = true
+	}
+	// Missing/corrupt state must not leave unaccounted S2L policy routes behind.
+	for _, args := range [][]string{{"-N", "-j", "rule", "show"}, {"-N", "-j", "route", "show", "table", "all", "protocol", routeProtocol}} {
+		text, err := outputContext(ctx, "ip", args...)
+		if err != nil {
+			return err
+		}
+		var entries []struct {
+			Protocol any `json:"protocol"`
+			Table    any `json:"table"`
+		}
+		if err := json.Unmarshal([]byte(text), &entries); err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if fmt.Sprint(entry.Protocol) == routeProtocol && !tables[fmt.Sprint(entry.Table)] {
+				return fmt.Errorf("untracked S2L route/rule; restore mapping state before uninstalling")
+			}
 		}
 	}
 	return nil

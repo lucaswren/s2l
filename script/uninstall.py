@@ -157,6 +157,16 @@ def check_connection(mappings):
         raise RuntimeError(message('SSH uses this VPN path; use public SSH or the provider console.', 'SSH 使用此 VPN 路徑；請改用公網 SSH 或主機商控制台。', 'SSH 使用此 VPN 路径；请改用公网 SSH 或主机商控制台。'))
 
 
+def check_stopped_links(mappings, links, firewall):
+    tunnels = {mapping['tun_name'] for mapping in mappings}
+    for line in firewall.splitlines():
+        row = shlex.split(line)
+        if len(row) == 6 and row[:3] == ['-A', 'FORWARD', '-i'] and row[4:] == ['-j', 'S2L_RETURN']:
+            tunnels.add(row[3])
+    if any(link.get('ifname', '').startswith('ppp') or link.get('ifname') in tunnels for link in links):
+        raise RuntimeError('PPP or managed TUN remains; guards retained')
+
+
 def plan():
     from verify_update import preflight
     config = preflight(CONFIG)
@@ -301,6 +311,7 @@ def uninstall(current):
         # Revalidate file ownership after stopping API writes, before cleanup.
         _, mappings, remove, edits, originals = plan()
         backup_to(backup, originals)
+        check_stopped_links(mappings, json.loads(run('ip', '-j', 'link', 'show').stdout), run('iptables-save').stdout)
         run(sys.executable, str(APP / 'ipsec_nat.py'), 'cleanup')
         run(str(APP / 's2l'), '-config', str(CONFIG), '-cleanup-network', timeout=90)
         # Test every table transaction before removing any global guard.
