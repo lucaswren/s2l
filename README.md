@@ -49,7 +49,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_up
 
 ## Documentation
 
-Uninstall: `sudo s2l uninstall` or menu **13**. Preview with `sudo s2l uninstall --dry-run`. Confirmation is required; S2L data, clean default source, backups and verified dedicated dependencies are removed; managed VPN sessions disconnect. See the [uninstall procedure](docs/en/operations.md#uninstall).
+Uninstall (including upgraded legacy installations): `sudo s2l uninstall` or menu **13**. Preview with `sudo s2l uninstall --dry-run`. Confirmation is required; S2L data, clean default source, backups and verified dedicated dependencies are removed; managed VPN sessions disconnect. See the [uninstall procedure](docs/en/operations.md#uninstall).
 
 | Topic | English | 繁體中文 | 简体中文 |
 |---|---|---|---|

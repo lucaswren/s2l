@@ -10,6 +10,11 @@ import dependencies
 
 
 class DependencyTests(unittest.TestCase):
+    def setUp(self):
+        sharing = patch.object(dependencies, 'sharing_groups', return_value=set())
+        sharing.start()
+        self.addCleanup(sharing.stop)
+
     def test_shared_reverse_dependency_prevents_package_removal(self):
         value = {'packages': {'ppp': {}}, 'config_paths': []}
         def command(*args, **kwargs):
@@ -46,11 +51,11 @@ class DependencyTests(unittest.TestCase):
             binary.write_bytes(b'original')
             digest = dependencies.fingerprint(binary)
             value = {'singbox_sha256': digest, 'packages': {name: {} for name in dependencies.PACKAGES}}
-            with patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=True):
+            with patch.object(dependencies, 'run', return_value=subprocess.CompletedProcess([], 1, '')), patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=True):
                 dependencies.cleanup()
                 self.assertTrue(binary.exists())
             binary.write_bytes(b'changed')
-            with patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=False):
+            with patch.object(dependencies, 'run', return_value=subprocess.CompletedProcess([], 1, '')), patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=False):
                 dependencies.cleanup()
                 self.assertTrue(binary.exists())
 
@@ -59,6 +64,37 @@ class DependencyTests(unittest.TestCase):
             binary = Path(directory) / 'sing-box'
             binary.write_bytes(b'owned')
             value = {'singbox_sha256': dependencies.fingerprint(binary), 'packages': {name: {} for name in dependencies.PACKAGES}}
-            with patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=False):
+            with patch.object(dependencies, 'run', return_value=subprocess.CompletedProcess([], 1, '')), patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=False):
                 dependencies.cleanup()
                 self.assertFalse(binary.exists())
+
+    def test_legacy_compares_original_package_digest_not_current_custom_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'vpn.conf'
+            path.write_bytes(b'stock\n')
+            digest = 'dpkg-md5:' + dependencies.hashlib.md5(b'stock\n', usedforsecurity=False).hexdigest()
+            self.assertTrue(dependencies.matches_config(str(path), digest))
+            path.write_bytes(b'foreign server configuration\n')
+            self.assertFalse(dependencies.matches_config(str(path), digest))
+
+    def test_shared_ppp_kept_without_retaining_dedicated_l2tp_and_ipsec(self):
+        value = {'packages': {'ppp': {}, 'xl2tpd': {}, 'strongswan': {}}, 'config_paths': []}
+        with patch.object(dependencies, 'installed', return_value=True), patch.object(dependencies, 'config_paths', return_value=['/etc/ppp/peers/other-vpn']), patch.object(dependencies, 'safe_removals', side_effect=lambda names, report: (names, [])):
+            self.assertEqual(dependencies.package_plan(value), (['xl2tpd', 'strongswan'], ['ppp']))
+
+    def test_shared_library_retained_without_retaining_its_dedicated_consumers(self):
+        def simulate(*args, **kwargs):
+            selected = args[4:]
+            names = set(selected)
+            if 'libstrongswan' in names:
+                names.add('foreign-vpn')
+            return subprocess.CompletedProcess(args, 0, ''.join('Purg ' + name + ' [1]\n' for name in names))
+        with patch.object(dependencies, 'run', side_effect=simulate):
+            self.assertEqual(dependencies.safe_removals(['strongswan', 'libstrongswan', 'xl2tpd'], lambda text: None), (['strongswan', 'xl2tpd'], ['libstrongswan']))
+
+    def test_custom_unit_with_standard_name_is_shared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            unit = Path(directory) / 'strongswan-starter.service'
+            unit.write_bytes(b'[Service]\nExecStart=/usr/lib/ipsec/charon --conf /opt/other.conf\n')
+            with patch.object(dependencies, 'SERVICE_ROOTS', (directory,)):
+                self.assertTrue(dependencies.references((b'charon',), ('strongswan-starter.service',)))

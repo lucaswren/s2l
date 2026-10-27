@@ -445,6 +445,10 @@ def write_file(path, content):
 
 def uninstall(current):
     config, mappings, remove, edits, originals, targets = current
+    import dependencies
+    # Also support an upgrade interrupted before its dependency migration, or
+    # a v1.3.13 installation whose older updater never created a receipt.
+    legacy = dependencies.legacy_inventory() if dependencies.read() is None else None
     backup_root = Path('/var/backups')
     if backup_root.is_symlink():
         raise RuntimeError('backup directory must not be a symlink')
@@ -515,8 +519,7 @@ def uninstall(current):
                 raise RuntimeError('installation file changed during uninstall: ' + str(path))
         for path in remove:
             path.unlink()
-        import dependencies
-        dependencies.cleanup(message)
+        dependencies.cleanup(message, legacy=legacy)
         run('systemctl', 'daemon-reload')
         run('systemctl', 'reset-failed', 's2l', 's2l-guard', 's2l-ipsec', check=False)
         # Revalidate before deleting stored data, source or old recovery copies.
@@ -570,7 +573,7 @@ def main():
     current = plan()
     print(message('Remove S2L: VPN sessions, program, accounts, certificates, services, HTTPS site, owned rules, runtime data, default source and recognized S2L backups. Recovery backup is deleted after verification; retained only on failure.', '移除 S2L：VPN 連線、程式、帳號、憑證、服務、HTTPS 站台、受管規則、執行資料、預設原始碼及已辨識的 S2L 備份。復原備份在檢查通過後刪除，僅失敗時保留。', '清除 S2L：VPN 连接、程序、账号、证书、服务、HTTPS 站点、受管规则、运行数据、默认源码和已识别的 S2L 备份。恢复备份在检查通过后删除，仅失败时保留。'))
     print(message('Keep SSH settings, kernels, shared dependencies, system journal and other firewall rules. Current sysctl values remain until separately reviewed or rebooted.', '保留 SSH 設定、核心、共用相依套件、系統日誌及其他防火牆規則。目前 sysctl 值保留，另行審閱或重啟後生效。', '保留 SSH 设置、内核、共享依赖、系统日志及其他防火墙规则。当前 sysctl 值保留，另行审阅或重启后生效。'))
-    print(message('Recorded dedicated VPN packages and sing-box are removed after shared-use checks. Unrecorded or shared dependencies are retained and reported.', '已記錄的專用 VPN 套件及 sing-box 通過共用檢查後清除；無記錄或共用的相依套件保留並提示。', '已记录的专用 VPN 软件包及 sing-box 通过共享检查后清除；无记录或共享的依赖保留并提示。'))
+    print(message('Dedicated VPN packages and sing-box are removed after shared-use checks. Legacy installations are audited against package defaults; shared or unrecognized components are retained with a reason.', '專用 VPN 套件與 sing-box 通過共用檢查後清除；舊安裝會核對系統套件原始設定，共用或無法辨識的元件保留並說明原因。', '专用 VPN 软件包与 sing-box 通过共享检查后清除；旧安装会核对系统包原始配置，共享或无法识别的组件保留并说明原因。'))
     for path in current[5]:
         print('  ' + str(path))
     if args.dry_run:

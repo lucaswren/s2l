@@ -211,8 +211,14 @@ def main():
             result = guest(dial, timeout=270)
             print(result.stdout, flush=True)
             print('PASS full OS reboot, restored fixed mapping and repeat real PPP/fault tests', flush=True)
-            from test_uninstall_vm import verify as verify_uninstall
-            verify_uninstall(guest, remote_install, dial)
+            from test_uninstall_vm import verify as verify_uninstall, verify_legacy
+            verify_uninstall(guest, remote_install, dial, reinstall=False)
+            legacy_archive = root / 'legacy-v1.3.12.tgz'
+            run(['curl', '-fL', '--retry', '2', '--connect-timeout', '15', '--max-time', '180',
+                 'https://codeload.github.com/lucaswren/s2l/tar.gz/2c7f6dab447f975562a21ab3235cb12ce2c60967', '-o', str(legacy_archive)])
+            copy(legacy_archive, '/tmp/legacy-v1.3.12.tgz')
+            guest('mv /tmp/legacy-v1.3.12.tgz /root/legacy-v1.3.12.tgz')
+            verify_legacy(guest, remote_install, dial, language)
         except Exception as error:
             for name in ('stdout', 'stderr'):
                 output = getattr(error, name, None)

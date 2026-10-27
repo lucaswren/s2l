@@ -30,6 +30,7 @@ jobs:
           if [[ -f /etc/apt/apt-mirrors.txt ]]; then
             printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
           fi
+      - run: python3 -m unittest discover -s script/tests
       - run: go test -race ./...
       - name: Validate runtime configurations with pinned sing-box
         shell: bash
@@ -64,7 +65,6 @@ jobs:
           for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
             sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox "$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" --transport "$transport"
           done
-      - run: python3 -m unittest discover -s script/tests
       - name: Verify upgrade preservation and failure recovery
         run: sudo env S2L_TEST_GOROOT="$(go env GOROOT)" unshare --mount --net --propagation private /usr/bin/python3 script/test_update_integration.py
       - run: python3 script/check_docs.py

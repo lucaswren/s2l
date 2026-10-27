@@ -130,6 +130,9 @@ for file in manage_config.py manage_ssh.py manage_ipsec.py ipsec_nat.py manage_t
 for unit in s2l s2l-guard s2l-ipsec; do install -m 644 "$ROOT_DIR/deploy/systemd/$unit.service" "/etc/systemd/system/$unit.service"; done
 mkdir -p /etc/systemd/system/xl2tpd.service.d
 install -m 644 "$ROOT_DIR/deploy/systemd/xl2tpd-s2l.conf" /etc/systemd/system/xl2tpd.service.d/s2l.conf
+# Reconstruct candidates for old installations without claiming their current
+# custom files as a clean baseline. No dependency is removed during upgrade.
+python3 /opt/s2l/dependencies.py migrate
 report_web_update restarting
 systemctl daemon-reload
 systemctl enable s2l-guard.service

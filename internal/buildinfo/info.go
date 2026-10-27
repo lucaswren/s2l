@@ -30,9 +30,9 @@ func Current() Info {
 		}
 	}
 	result.ReleaseNotes = map[string]string{
-		"en":    "Add s2l uninstall (menu 13) with read-only preview and UNINSTALL confirmation. Remove managed data, credentials, certificates, services, network rules, runtime caches, clean default source and recognized S2L backups, then verify no managed resources remain. Fresh installs record dedicated VPN dependency ownership; remove only unchanged, unshared recorded dependencies. Preserve SSH, shared tools/services, kernels and system journal. Failed cleanup retains recovery data and may leave services stopped. Uninstall disconnects VPN clients; prompts follow the panel language.",
-		"zh-TW": "新增 s2l uninstall（選單 13），支援只讀預覽及 UNINSTALL 確認。清除受管資料、帳密、憑證、服務、網路規則、執行快取、乾淨的預設原始碼與已辨識的 S2L 備份，並核對殘留。新安裝記錄專用 VPN 相依套件歸屬，僅移除未修改且未共用的已記錄項目。保留 SSH、共用工具／服務、核心與系統日誌。失敗保留復原資料，服務可能維持停止。解除安裝會中斷 VPN；提示沿用面板語言。",
-		"zh-CN": "新增 s2l uninstall（菜单 13），支持只读预览及 UNINSTALL 确认。清除受管数据、账号密码、证书、服务、网络规则、运行缓存、干净的默认源码和已识别的 S2L 备份，并核对残留。新安装记录专用 VPN 依赖归属，仅移除未修改且未共享的已记录项目。保留 SSH、共享工具／服务、内核和系统日志。失败保留恢复数据，服务可能保持停止。卸载会中断 VPN；提示沿用面板语言。",
+		"en":    "Support complete uninstall after upgrading older S2L installations without dependency receipts. Reconstruct candidates from managed configuration and original package metadata, then recheck shared usage at removal. Remove exclusive VPN tools and recognized sing-box while preserving shared configurations, services and reverse dependencies; a shared component no longer keeps unrelated dedicated packages. Existing ownership records are preserved. Validate real v1.3.12 upgrades, shared dependency retention, full removal and subsequent dialing on Ubuntu 24.04 and Debian 12.",
+		"zh-TW": "支援舊版 S2L 升級後完整解除安裝：缺少相依套件記錄時，依受管設定及系統套件原始資料補建待核驗清單，解除安裝時重新檢查共用情況。清除獨占 VPN 工具與已辨識的 sing-box，保留共用設定、服務及反向相依元件；共用元件不再導致其他獨占套件一併保留。已有歸屬記錄不覆寫。以真實 v1.3.12 在 Ubuntu 24.04、Debian 12 驗證升級、共用元件保留、完整移除及後續撥號。",
+		"zh-CN": "支持旧版 S2L 升级后完整卸载：缺少依赖记录时，依据受管配置和系统包原始数据补建待核验清单，卸载时重新检查共享情况。清除独占 VPN 工具和已识别的 sing-box，保留共享配置、服务及反向依赖组件；共享组件不再导致其他独占软件包一起保留。已有归属记录不覆盖。以真实 v1.3.12 在 Ubuntu 24.04、Debian 12 验证升级、共享组件保留、完整移除和后续拨号。",
 	}
 	if regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(result.Version) {
 		result.ReleaseURL = "https://github.com/lucaswren/s2l/releases/tag/" + result.Version

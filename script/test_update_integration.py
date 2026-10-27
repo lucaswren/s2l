@@ -40,7 +40,7 @@ def main():
             mounted.append(str(toolchain))
             go_source = root / 'probe.go'
             go_source.write_text('package main\nfunc main() {}\n')
-            for target in ("/opt", "/root", "/etc", "/run", "/usr/local"):
+            for target in ("/opt", "/root", "/etc", "/run", "/usr/local", "/var/lib"):
                 source = root / target.lstrip("/")
                 source.mkdir(parents=True, exist_ok=True)
                 subprocess.run(["mount", "--bind", str(source), target], check=True)
@@ -80,6 +80,7 @@ esac''',
 exec /usr/bin/install "$@"''',
                 "iptables": "exit 0", "iptables-restore": "cat >/dev/null", "ip6tables": "exit 0",
                 "iptables-save": "echo fixture", "ip6tables-save": "echo fixture", "conntrack": "exit 0",
+                "dpkg-query": "exit 1",  # Actual legacy package auditing is covered in the full VMs.
                 "apt-get": r'''echo "apt $*" >> "$S2L_TEST_LOG"
 [[ "$DEBIAN_FRONTEND:$NEEDRESTART_MODE" == noninteractive:l ]]
 if [[ "$*" == *"update -qq" ]]; then
@@ -122,6 +123,9 @@ fi''',
                 if app.exists():
                     shutil.rmtree(app)
                 app.mkdir()
+                receipt_root = Path('/var/lib/s2l-dependencies')
+                if receipt_root.exists():
+                    shutil.rmtree(receipt_root)
                 (app / "data").mkdir()
                 original = b'{"listen":"127.0.0.1:8080","admin_user":"admin","admin_pass":"unchanged-password"}'
                 (app / "config.json").write_bytes(original)
@@ -205,6 +209,7 @@ fi''',
                     assert not (state / "xl2tpd").exists()
                     assert (app / 'ipsec_nat.py').is_file()
                     assert (app / 'manage_kernel.py').read_bytes() == (checkout / 'script/manage_kernel.py').read_bytes()
+                    assert json.loads(Path('/var/lib/s2l-dependencies/receipt.json').read_text())['legacy_packages'] == []
                     assert (state / 's2l-ipsec').exists() == (scenario == 'success_ipsec')
                     if scenario == 'success_ipsec':
                         assert json.loads((app / 'ipsec-settings.json').read_text()) == dict(enabled=True, psk='fixture-unchanged-psk')
