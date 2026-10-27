@@ -15,6 +15,8 @@ class DependencyTests(unittest.TestCase):
         def command(*args, **kwargs):
             if args[0] == 'apt-get':
                 return subprocess.CompletedProcess(args, 0, 'Purg ppp [1]\nRemv foreign-vpn [2]\n')
+            if args[0] == 'pgrep':
+                return subprocess.CompletedProcess(args, 1, '')
             return subprocess.CompletedProcess(args, 3, '')
         with patch.object(dependencies, 'installed', return_value=True), patch.object(dependencies, 'config_paths', return_value=[]), patch.object(dependencies, 'run', side_effect=command):
             self.assertEqual(dependencies.package_plan(value), ([], ['ppp']))
@@ -43,7 +45,7 @@ class DependencyTests(unittest.TestCase):
             binary = Path(directory) / 'sing-box'
             binary.write_bytes(b'original')
             digest = dependencies.fingerprint(binary)
-            value = {'singbox_sha256': digest}
+            value = {'singbox_sha256': digest, 'packages': {name: {} for name in dependencies.PACKAGES}}
             with patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=True):
                 dependencies.cleanup()
                 self.assertTrue(binary.exists())
@@ -56,7 +58,7 @@ class DependencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             binary = Path(directory) / 'sing-box'
             binary.write_bytes(b'owned')
-            value = {'singbox_sha256': dependencies.fingerprint(binary)}
+            value = {'singbox_sha256': dependencies.fingerprint(binary), 'packages': {name: {} for name in dependencies.PACKAGES}}
             with patch.object(dependencies, 'SINGBOX', binary), patch.object(dependencies, 'read', return_value=value), patch.object(dependencies, 'package_plan', return_value=([], [])), patch.object(dependencies, 'singbox_shared', return_value=False):
                 dependencies.cleanup()
                 self.assertFalse(binary.exists())

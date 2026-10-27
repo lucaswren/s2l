@@ -100,30 +100,39 @@ def record_singbox():
         save(value)
 
 
-def package_plan(value):
+def package_plan(value, report=lambda text: None):
     candidates, retained = [], []
     for name, files in value['packages'].items():
         if not installed(name):
             continue
         if not isinstance(files, dict) or any(not path.startswith('/etc/') or '..' in Path(path).parts for path in files):
             raise RuntimeError('invalid package file inventory')
-        if any(path not in MANAGED and fingerprint(path) != digest for path, digest in files.items()):
+        changed = [path for path, digest in files.items() if path not in MANAGED and fingerprint(path) != digest]
+        if changed:
+            report('modified configuration: ' + ', '.join(changed))
             retained.append(name)
         else:
             candidates.append(name)
     # A retained VPN component can share all of its protocol libraries/tools.
     # Be conservative about configured peers, custom files and reverse deps.
-    if set(config_paths()) - set(value.get('config_paths', [])) - MANAGED:
+    extra = set(config_paths()) - set(value.get('config_paths', [])) - MANAGED
+    if extra:
+        report('additional configuration: ' + ', '.join(sorted(extra)))
         return [], sorted(candidates + retained)
     if retained:
         return [], sorted(candidates + retained)
     if any(run('systemctl', 'is-active', '--quiet', unit, check=False).returncode == 0
            for unit in ('strongswan-starter', 'strongswan', 'charon-systemd', 'ipsec')):
+        report('another IPsec service is active')
+        return [], sorted(candidates)
+    if any(run('pgrep', '-x', process, check=False).returncode != 1 for process in ('charon', 'charon-systemd', 'starter', 'pppd', 'xl2tpd')):
+        report('another VPN process is present or cannot be inspected')
         return [], sorted(candidates)
     if candidates:
         simulation = run('apt-get', '-s', '--no-auto-remove', 'purge', *candidates)
         removed = {line.split()[1].split(':')[0] for line in simulation.stdout.splitlines() if line.startswith(('Remv ', 'Purg '))}
         if not removed or not removed <= set(candidates) or any(line.startswith('Inst ') for line in simulation.stdout.splitlines()):
+            report('APT would change other packages: ' + ', '.join(sorted(removed - set(candidates))))
             return [], sorted(candidates)
     return candidates, []
 
@@ -138,7 +147,7 @@ def singbox_shared():
                 pass
     for root in ('/etc/systemd/system', '/usr/lib/systemd/system', '/etc/cron.d', '/etc/init.d'):
         for path in Path(root).rglob('*'):
-            if path.is_file() and not path.is_symlink() and 's2l' not in path.name:
+            if path.is_file() and not path.is_symlink():
                 if b'sing-box' in path.read_bytes():
                     return True
     return any(Path(path).exists() for path in ('/etc/sing-box', '/usr/local/etc/sing-box'))
@@ -149,7 +158,10 @@ def cleanup(message=lambda en, hant, hans: en):
     if value is None:
         print(message('Dependencies retained: this older installation has no ownership receipt.', '保留相依套件：此舊版安裝沒有歸屬記錄。', '保留依赖：此旧版安装没有归属记录。'))
         return
-    candidates, retained = package_plan(value)
+    unrecorded = [name for name in PACKAGES if name not in value['packages'] and installed(name)]
+    if unrecorded:
+        print(message('Retained pre-existing/unrecorded packages: ', '保留預先存在／無歸屬記錄的套件：', '保留预先存在／无归属记录的软件包：') + ', '.join(unrecorded))
+    candidates, retained = package_plan(value, lambda reason: print('Dependency retention: ' + reason))
     if candidates:
         # Use dpkg for the final exact package list: it cannot expand removal
         # after the APT simulation and refuses newly introduced reverse deps.
@@ -166,6 +178,8 @@ def cleanup(message=lambda en, hant, hans: en):
             print(message('Removed dedicated sing-box binary.', '已刪除專用 sing-box 程式。', '已删除专用 sing-box 程序。'))
         else:
             print(message('Retained shared or changed sing-box binary.', '保留共用或已修改的 sing-box 程式。', '保留共享或已修改的 sing-box 程序。'))
+    elif SINGBOX.exists() or SINGBOX.is_symlink():
+        print(message('Retained pre-existing/unrecorded sing-box.', '保留預先存在／無歸屬記錄的 sing-box。', '保留预先存在／无归属记录的 sing-box。'))
 
 
 if __name__ == '__main__':

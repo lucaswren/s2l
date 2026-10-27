@@ -29,6 +29,23 @@ func TestFreshInstalledServiceDial(t *testing.T) {
 		t.Fatal("refusing non-fixture host")
 	}
 	root := t.TempDir()
+	// Client pppd with usepeerdns writes this global file even though its
+	// network namespace is isolated. Restore it so client fixture artifacts
+	// cannot be mistaken for another VPN configuration by uninstall checks.
+	resolver := "/etc/ppp/resolv.conf"
+	resolverData, resolverErr := os.ReadFile(resolver)
+	if resolverErr != nil && !os.IsNotExist(resolverErr) {
+		t.Fatal(resolverErr)
+	}
+	t.Cleanup(func() {
+		if resolverErr == nil {
+			if err := os.WriteFile(resolver, resolverData, 0644); err != nil {
+				t.Error(err)
+			}
+		} else if err := os.Remove(resolver); err != nil && !os.IsNotExist(err) {
+			t.Error(err)
+		}
+	})
 	cert, ca := integrationCertificate(t)
 	caPath := filepath.Join(root, "ca.pem")
 	os.WriteFile(caPath, ca, 0600)

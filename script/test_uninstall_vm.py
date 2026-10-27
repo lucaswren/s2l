@@ -71,7 +71,7 @@ for path, marker in (('/etc/ppp/chap-secrets','# s2l:'),('/etc/ipsec.secrets','i
 assert 's2l-proof-' not in subprocess.check_output(['ip','netns','list'],text=True)
 for name in json.loads(Path('/tmp/dependencies-before-uninstall.json').read_text())['packages']:
  result=subprocess.run(['dpkg-query','-W','-f=${Status}',name],capture_output=True,text=True)
- assert 'installed' not in result.stdout and 'config-files' not in result.stdout, name+': '+result.stdout
+ assert result.stdout != 'install ok installed' and 'config-files' not in result.stdout, name+': '+result.stdout
 PY''')
     print('PASS uninstall removes source, backups, runtime data and dedicated sing-box; preserves SSH and foreign firewall/Nginx', flush=True)
     guest(install, timeout=900)
