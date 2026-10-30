@@ -2,6 +2,17 @@ package model
 
 import "fmt"
 
+// ManagedLineSettings retires manual tuning while keeping legacy JSON readable.
+// Bandwidth, node identity, credentials and connection observation are preserved.
+func (m TunnelMapping) ManagedLineSettings() TunnelMapping {
+	m.MaxConnections = 0
+	m.MaxSessions = 1
+	m.MTU, m.MSS, m.QueueLength = 1400, 1200, 1000
+	m.UDPPolicy, m.DNSMode = "reject", "auto"
+	m.DNSDoHURL, m.DNSTCPAddress = "", ""
+	return m
+}
+
 func (m TunnelMapping) ValidateOptions() error {
 	if m.MaxSessions < 0 || m.MaxSessions > 128 {
 		return fmt.Errorf("max_sessions must be between 0 and 128")

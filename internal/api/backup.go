@@ -167,7 +167,7 @@ func (s *Server) handleBackupRestore(w http.ResponseWriter, r *http.Request) {
 					stopped = false
 				}
 			}
-			writeJSON(w, 200, map[string]any{"revision": store.Revision(current), "backup_revision": store.Revision(b.State), "changes": backupChanges(current, b.State), "can_restore": stopped, "scope": "nodes and mappings; system account, SSH, IPsec and listener settings are unchanged"})
+			writeJSON(w, 200, map[string]any{"revision": store.Revision(current), "backup_revision": store.Revision(b.State), "changes": backupChanges(current, store.RestoreTarget(b.State, current.NetworkPolicyVersion)), "can_restore": stopped, "scope": "nodes and mappings; system account, SSH, IPsec and listener settings are unchanged"})
 			return
 		}
 		if body.BackupRevision == "" || store.Revision(b.State) != body.BackupRevision {

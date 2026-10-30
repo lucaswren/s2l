@@ -161,6 +161,70 @@ func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]
 	return response, err
 }
 
+// Start the alternate transport when the preferred one fails or stalls. Both
+// still use this mapping's SOCKS5 exit. A buffered result channel and a child
+// context let the first valid answer win without leaving a blocked sender.
+const fallbackDelay = 300 * time.Millisecond
+
+func (r *Resolver) autoAttempt(ctx context.Context, preferred string, query []byte) ([]byte, string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type result struct {
+		answer []byte
+		method string
+		err    error
+	}
+	results := make(chan result, 2)
+	launch := func(method string) {
+		r.mu.Lock()
+		if r.closed {
+			r.mu.Unlock()
+			results <- result{method: method, err: context.Canceled}
+			return
+		}
+		r.wg.Add(1)
+		r.mu.Unlock()
+		q := append([]byte(nil), query...)
+		go func() {
+			defer r.wg.Done()
+			a, err := r.attempt(ctx, method, q)
+			results <- result{answer: a, method: method, err: err}
+		}()
+	}
+	alternate := "tcp"
+	if preferred == "tcp" {
+		alternate = "doh"
+	}
+	launch(preferred)
+	timer := time.NewTimer(fallbackDelay)
+	defer timer.Stop()
+	pending, startedBackup := 1, false
+	startBackup := func() {
+		if !startedBackup {
+			startedBackup = true
+			pending++
+			launch(alternate)
+		}
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		case <-timer.C:
+			startBackup()
+		case v := <-results:
+			pending--
+			if v.err == nil {
+				return v.answer, v.method, nil
+			}
+			startBackup()
+			if pending == 0 {
+				return nil, "", v.err
+			}
+		}
+	}
+}
+
 func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -195,14 +259,24 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	if mode == "doh" {
 		method = "doh"
 	}
-	response, err := r.attempt(ctx, method, query)
+	var response []byte
+	var err error
+	used := method
+	if mode == "auto" {
+		response, used, err = r.autoAttempt(ctx, method, query)
+	} else {
+		response, err = r.attempt(ctx, method, query)
+	}
 	// Caller cancellation is not an upstream fault and must not switch resolvers.
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
+	if r.ctx.Err() != nil {
+		return nil, r.ctx.Err()
+	}
 	r.mu.Lock()
 	if method == "doh" && mode == "auto" {
-		if err != nil {
+		if err != nil || used != "doh" {
 			r.successes = 0
 			r.failures++
 			if r.failures >= 2 && r.status.Active != "tcp" {
@@ -215,13 +289,10 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 		}
 	}
 	r.mu.Unlock()
-	if err != nil && mode == "auto" && method == "doh" && ctx.Err() == nil {
-		response, err = r.attempt(ctx, "tcp", query)
-		if err == nil {
-			r.mu.Lock()
-			r.status.Fallbacks++
-			r.mu.Unlock()
-		}
+	if err == nil && mode == "auto" && used != method {
+		r.mu.Lock()
+		r.status.Fallbacks++
+		r.mu.Unlock()
 	}
 	if err != nil {
 		if ctx.Err() != nil {

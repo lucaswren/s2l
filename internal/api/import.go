@@ -180,8 +180,8 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 				res.Errors = append(res.Errors, fmt.Sprintf("row %d: mapping %s is not stopped, clean up and stop first", i+1, m.ID))
 				continue
 			}
-			// The documented text format has no network tuning columns.
-			// Updating credentials through it must preserve existing tuning.
+			// Text imports preserve bandwidth, groups and observation. Retired
+			// network options are normalized below for both import formats.
 			if textImport {
 				m.Group = existing.Group
 				m.MTU, m.MSS, m.QueueLength = existing.MTU, existing.MSS, existing.QueueLength
@@ -195,6 +195,7 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 			isNew = true
 			m.Status = model.StatusStopped
 		}
+		m = m.ManagedLineSettings()
 		if err := s.store.UpsertMapping(m); err != nil {
 			res.Skipped++
 			res.Errors = append(res.Errors, fmt.Sprintf("row %d: %v", i+1, err))

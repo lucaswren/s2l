@@ -1,4 +1,12 @@
 {
+  "分组、带宽与观测": {
+    "en": "Groups, bandwidth and observation",
+    "tw": "分組、頻寬與觀測"
+  },
+  "网络参数自动管理：MTU 1400、MSS 1200、队列 1000，不限制 TCP 连接数。非 DNS UDP 主动拒绝；DNS 经当前节点自动选择 DoH/TCP，不直连或切换出口。": {
+    "en": "Network settings are managed automatically: MTU 1400, MSS 1200, queue 1000, and no TCP connection limit. Non-DNS UDP is rejected. DNS automatically uses DoH/TCP through the current node without a direct fallback or an exit change.",
+    "tw": "網路參數自動管理：MTU 1400、MSS 1200、佇列 1000，不限制 TCP 連線數。非 DNS UDP 主動拒絕；DNS 經目前節點自動選擇 DoH/TCP，不直連或切換出口。"
+  },
   " / {0} 跳过": {
     "en": " / {0} skipped",
     "tw": " / {0} 跳過"

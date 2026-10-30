@@ -228,3 +228,41 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	// Host upstream access is unaffected.
 	must("ping", "-c", "1", "-W", "1", "198.18.0.2")
 }
+
+func TestLeakGuardsManagedPolicyReclaimsLegacyRules(t *testing.T) {
+	if os.Getenv("S2L_NETNS_TEST") != "1" {
+		t.Skip("requires isolated root network namespace")
+	}
+	if err := NewController().EnsureGuard(); err != nil {
+		t.Fatal(err)
+	}
+	legacy := model.TunnelMapping{ID: "managed-policy", TunName: "tun241", TableID: 241, Subnet: "10.0.241.0/24", MaxConnections: 5, MSS: 1100, UDPPolicy: "allow"}
+	if err := AddFirewall(legacy); err != nil {
+		t.Fatal(err)
+	}
+	current := legacy.ManagedLineSettings()
+	defer DelFirewall(current)
+	if err := AddFirewall(current); err != nil {
+		t.Fatal(err)
+	}
+	filter, err := output("iptables", "-S", "S2L_FORWARD")
+	if err != nil || strings.Contains(filter, "s2l:managed-policy-connections") {
+		t.Fatal("retired connection cap survived recreation", filter, err)
+	}
+	mangle, err := output("iptables", "-t", "mangle", "-S", "FORWARD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, line := range strings.Split(mangle, "\n") {
+		if strings.Contains(line, "s2l:managed-policy-mss") {
+			count++
+			if !strings.Contains(line, "--set-mss 1200") {
+				t.Fatal("legacy MSS survived recreation", line)
+			}
+		}
+	}
+	if count != 2 {
+		t.Fatal("managed mapping must have two MSS rules", mangle)
+	}
+}

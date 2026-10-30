@@ -131,6 +131,7 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	m = m.ManagedLineSettings()
 	if _, ok := s.store.GetNode(m.NodeID); !ok {
 		writeError(w, http.StatusBadRequest, "node not found")
 		return

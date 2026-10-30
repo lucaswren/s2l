@@ -61,7 +61,7 @@ func TestMissingMappingServiceDoesNotPanicOrDeleteRuntimeState(t *testing.T) {
 	}
 }
 
-func TestTextImportPreservesNetworkTuning(t *testing.T) {
+func TestTextImportPreservesBandwidthAndUsesManagedNetworkSettings(t *testing.T) {
 	st, err := store.New(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -83,10 +83,9 @@ func TestTextImportPreservesNetworkTuning(t *testing.T) {
 	if got.Group != m.Group {
 		t.Fatal("text import replaced the mapping group")
 	}
-	if got.EffectiveDNSOptions() != m.EffectiveDNSOptions() {
-		t.Fatal("text import replaced custom DNS", got.EffectiveDNSOptions())
-	}
-	if w.Code != 200 || got.L2TPPass != "new-password" || got.MTU != m.MTU || got.MSS != m.MSS || got.QueueLength != m.QueueLength || got.UDPPolicy != m.UDPPolicy || got.DNSMode != m.DNSMode || got.ObserveConnections != m.ObserveConnections || got.UploadKbps != m.UploadKbps || got.DownloadKbps != m.DownloadKbps || got.MaxConnections != m.MaxConnections || got.MaxSessions != m.MaxSessions {
-		t.Fatalf("import lost tuning: %+v, %s", got, w.Body.String())
+	want := m.ManagedLineSettings()
+	want.L2TPPass = "new-password"
+	if w.Code != 200 || got != want {
+		t.Fatalf("import did not retain bandwidth/identity and normalize retired options: %+v, %s", got, w.Body.String())
 	}
 }

@@ -12,7 +12,7 @@ import (
 	"github.com/lucaswren/s2l/internal/store"
 )
 
-func TestMappingNetworkOptionsRoundTripAndRunningProtection(t *testing.T) {
+func TestMappingManagedOptionsAndRunningProtection(t *testing.T) {
 	st, err := store.New(filepath.Join(t.TempDir(), "state.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -35,8 +35,10 @@ func TestMappingNetworkOptionsRoundTripAndRunningProtection(t *testing.T) {
 		t.Fatal(code)
 	}
 	saved, ok := st.GetMapping("m")
-	if !ok || saved.MTU != 1280 || saved.MSS != 1100 || saved.QueueLength != 500 || saved.UDPPolicy != "allow" || saved.EffectiveDNSOptions() != m.EffectiveDNSOptions() {
-		t.Fatal("network options lost during persistence", saved)
+	want := m.ManagedLineSettings()
+	want.Status = model.StatusStopped
+	if !ok || saved != want {
+		t.Fatal("network options not normalized during persistence", saved)
 	}
 	for _, bad := range []model.DNSOptions{{DoHURL: "http://dns.example/query"}, {DoHURL: "https://dns.example/query#"}, {TCPAddress: "dns.example:0"}} {
 		invalid := m
@@ -52,14 +54,20 @@ func TestMappingNetworkOptionsRoundTripAndRunningProtection(t *testing.T) {
 	if err := st.UpdateMappingStatus("m", model.StatusRunning, ""); err != nil {
 		t.Fatal(err)
 	}
-	changes := []model.TunnelMapping{m, m, m, m, m, m, m}
-	changes[0].MTU = 1300
-	changes[1].MSS = 1150
-	changes[2].QueueLength = 600
-	changes[3].UDPPolicy = "reject-quic"
-	changes[4].DNSMode = "auto"
-	changes[5].DNSDoHURL = "https://other.example/dns-query"
-	changes[6].DNSTCPAddress = "other.internal:53"
+	// Legacy clients cannot re-enable retired options or restart a mapping.
+	if code := post(m); code != http.StatusOK {
+		t.Fatal("legacy settings should normalize to the running policy", code)
+	}
+	got, _ := st.GetMapping("m")
+	want.Status = model.StatusRunning
+	if got != want {
+		t.Fatal("legacy update changed active network policy", got)
+	}
+	changes := []model.TunnelMapping{m, m, m, m}
+	changes[0].UploadKbps = 1000
+	changes[1].DownloadKbps = 2000
+	changes[2].L2TPPass = "different-password"
+	changes[3].ObserveConnections = !m.ObserveConnections
 	for _, change := range changes {
 		if code := post(change); code != http.StatusBadRequest {
 			t.Fatalf("running mapping accepted options change: %+v, code=%d", change, code)

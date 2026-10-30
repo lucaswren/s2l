@@ -71,10 +71,10 @@ func main() {
 	}
 
 	// Migrate before monitoring or rebuilding any running tunnel configuration.
-	if changed, err := st.MigrateTCPOnlyPolicy(); err != nil {
+	if changed, err := st.MigrateManagedLinePolicy(); err != nil {
 		log.Fatalf("migrate network policy: %v", err)
 	} else if changed > 0 {
-		log.Printf("network policy migrated for %d mapping(s): reject UDP, DNS via DoH/TCP", changed)
+		log.Printf("network policy migrated for %d mapping(s): managed MTU/MSS/queue, unlimited TCP connections, reject UDP, automatic DNS", changed)
 	}
 
 	sb := singbox.NewManager(cfg.SingboxBin)

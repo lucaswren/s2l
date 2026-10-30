@@ -327,11 +327,7 @@ func (s *Store) RestoreContext(ctx context.Context, state model.AppState, expect
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	s.state = stoppedState(state)
-	// Restoring business configuration must not roll back installed migrations.
-	if s.state.NetworkPolicyVersion < previous.NetworkPolicyVersion {
-		s.state.NetworkPolicyVersion = previous.NetworkPolicyVersion
-	}
+	s.state = RestoreTarget(state, previous.NetworkPolicyVersion)
 	if err := s.saveLocked(); err != nil {
 		var committed *committedError
 		if !errors.As(err, &committed) {
@@ -340,6 +336,21 @@ func (s *Store) RestoreContext(ctx context.Context, state model.AppState, expect
 		return err
 	}
 	return nil
+}
+
+// RestoreTarget is shared by preview and commit so retired settings cannot
+// appear to be restored when the installed policy will actually replace them.
+func RestoreTarget(state model.AppState, installedPolicy int) model.AppState {
+	state = stoppedState(state)
+	if state.NetworkPolicyVersion < installedPolicy {
+		state.NetworkPolicyVersion = installedPolicy
+	}
+	if state.NetworkPolicyVersion >= managedLinePolicyVersion {
+		for i, m := range state.Mappings {
+			state.Mappings[i] = m.ManagedLineSettings()
+		}
+	}
+	return state
 }
 
 func backupOrdinal(name string) (uint64, bool) {

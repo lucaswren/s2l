@@ -71,7 +71,7 @@ const form = reactive({
   subnet: "10.0.101.0/24",
   l2tp_user: "",
   l2tp_pass: "",
-  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto", dns_doh_url: "", dns_tcp_address: "",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,
 });
 const importText = ref("");
 const importErrors = ref([]);
@@ -122,7 +122,7 @@ function resetForm() {
     subnet: `10.0.${id % 256}.0/24`,
     l2tp_user: `l2tp${id}`,
     l2tp_pass: "",
-  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,max_connections:0,max_sessions:1,mtu: 1400, mss: 1200, queue_length: 1000, udp_policy: "reject", dns_mode: "auto", dns_doh_url: "", dns_tcp_address: "",
+  observe_connections:false,group:"",upload_kbps:0,download_kbps:0,
   });
 }
 
@@ -144,13 +144,12 @@ async function openEdit(m) {
   }
   editingId.value = m.id;editRevision.value=m._revision||"";
   Object.assign(form, {
-    observe_connections:!!m.observe_connections,node_id: m.node_id,group:m.group||"",upload_kbps:m.upload_kbps||0,download_kbps:m.download_kbps||0,max_connections:m.max_connections||0,max_sessions:m.max_sessions||0,
+    observe_connections:!!m.observe_connections,node_id: m.node_id,group:m.group||"",upload_kbps:m.upload_kbps||0,download_kbps:m.download_kbps||0,
     tun_name: m.tun_name,
     table_id: m.table_id,
     subnet: m.subnet,
     l2tp_user: m.l2tp_user || "",
     l2tp_pass: m.l2tp_pass || "",
-    mtu: m.mtu || 1400, mss: m.mss || 1200, queue_length: m.queue_length || 1000, udp_policy: m.udp_policy || "reject", dns_mode: m.dns_mode || "auto", dns_doh_url: m.dns_doh_url || "", dns_tcp_address: m.dns_tcp_address || "",
   });
   mode.value = "edit";
 }
@@ -455,22 +454,13 @@ const editingActive = computed(() => {
               :readonly="editingActive"
               autocomplete="new-password"
           /></el-form-item>
-          <details class="form-wide mapping-advanced"><summary>{{ tr("高级选项 · 分组、限额与网络参数") }}<span v-if="form.upload_kbps || form.download_kbps || form.max_connections"> {{ tr("· 限额已启用") }}</span></summary><div class="form-grid"><el-form-item :label='tr("分组")'><el-input v-model="form.group" maxlength="64"/></el-form-item>
+          <details class="form-wide mapping-advanced"><summary>{{ tr("分组、带宽与观测") }}<span v-if="form.upload_kbps || form.download_kbps"> {{ tr("· 限额已启用") }}</span></summary><div class="form-grid"><el-form-item :label='tr("分组")'><el-input v-model="form.group" maxlength="64"/></el-form-item>
  <el-form-item :label='tr("上传上限 Kbit/s")'><el-input-number v-model="form.upload_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
  <el-form-item :label='tr("下载上限 Kbit/s")'><el-input-number v-model="form.download_kbps" :min="0" :max="10000000" :disabled="editingActive"/></el-form-item>
  <el-form-item :label='tr("拨号保护")'><span>{{tr("同一账号仅允许一条拨号会话；多设备可共享网关。")}}</span></el-form-item>
- <el-form-item :label='tr("连接观测")'><el-switch v-model="form.observe_connections" :disabled="editingActive"/></el-form-item><el-form-item :label='tr("TCP 连接上限")'><el-input-number v-model="form.max_connections" :min="0" :max="1000000" :disabled="editingActive"/></el-form-item>
+ <el-form-item :label='tr("连接观测")'><el-switch v-model="form.observe_connections" :disabled="editingActive"/></el-form-item>
  <p class="muted form-wide">{{ tr("0 表示不限；限额按整条映射合计。下载超额采用丢弃控制速率，非平滑整形。") }}</p>
- <el-form-item label="MTU（1280–1400）"><el-input-number v-model="form.mtu" :min="1280" :max="1400" :disabled="editingActive" /></el-form-item>
-          <el-form-item label="TCP MSS"><el-input-number v-model="form.mss" :min="536" :max="form.mtu - 40" :disabled="editingActive" /></el-form-item>
-          <el-form-item :label='tr("接口队列长度")'><el-input-number v-model="form.queue_length" :min="100" :max="10000" :disabled="editingActive" /></el-form-item>
-          <el-form-item :label='tr("UDP 策略")'><el-select v-model="form.udp_policy" :disabled="editingActive"><el-option value="reject-quic" :label='tr("拒绝 UDP/443，支持时回退 TCP")' /><el-option value="allow" :label='tr("允许 UDP（需上游支持）")' /><el-option value="reject" :label='tr("主动拒绝 UDP（DNS 走 DoH/TCP，推荐）")' /></el-select></el-form-item>
-          <el-form-item :label='tr("DNS 模式")' class="form-wide"><el-select v-model="form.dns_mode" :disabled="editingActive"><el-option value="auto" :label='tr("自动：DoH 故障时切换 TCP DNS")' /><el-option value="doh" :label='tr("仅 DoH")' /><el-option value="tcp" :label='tr("仅 TCP DNS")' /></el-select></el-form-item>
-          <el-form-item :label='tr("DoH 地址")' class="form-wide"><el-input v-model.trim="form.dns_doh_url" name="dns_doh_url" maxlength="2048" placeholder="https://1.1.1.1/dns-query" :disabled="editingActive" /></el-form-item>
-          <el-form-item :label='tr("TCP DNS 地址")' class="form-wide"><el-input v-model.trim="form.dns_tcp_address" name="dns_tcp_address" maxlength="320" placeholder="8.8.8.8:53" :disabled="editingActive" /></el-form-item>
-          <p class="muted form-wide">{{ tr("留空使用默认解析器。DoH 必须是无账号、查询参数和片段的 HTTPS URL；TCP DNS 填写主机:端口，IPv6 地址加方括号。解析器域名和所有 DNS 查询均经当前 SOCKS5。") }}</p>
-          <p class="muted form-wide">{{ tr("自动模式仅在同一节点内切换 DoH/TCP，不切换节点或直连。自定义 DNS 不改变客户端收到的 DNS 地址；进入隧道的 53 端口请求会使用这里的解析器。") }}</p>
-          <p class="muted form-wide">{{ tr("默认 MTU 1400、MSS 1200。减小 MTU 时请同步调整 MSS；允许 UDP 无法为不支持 UDP 的节点增加能力。") }}</p>
+          <p class="muted form-wide">{{ tr("网络参数自动管理：MTU 1400、MSS 1200、队列 1000，不限制 TCP 连接数。非 DNS UDP 主动拒绝；DNS 经当前节点自动选择 DoH/TCP，不直连或切换出口。") }}</p>
           </div></details></div></el-form
       ><template #footer
         ><el-button v-if="!editingId" :disabled="busy" @click="applyPreset"

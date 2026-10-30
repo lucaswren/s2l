@@ -39,7 +39,7 @@ class Handler(SimpleHTTPRequestHandler):
     if n=='n':rows[3].update(tls='unavailable',http='not_tested',status=0,stage='tls')
     return dict(node_id=n,node_name='固定出口 A' if n=='n' else '对照出口 B',checked_at=now,targets=rows,exit=dict(healthy,exit_ip='203.0.113.5'),scope='服务器 → 固定 SOCKS5，不经过手机/接入网络',quic='未发送 UDP/QUIC；不证明 客户端 已回退。')
    return self.reply(dict(kind='google',schema_version=1,ok=False,client_path='unverified',google=[report('n')]+([report('n2')] if body.get('compare_node') else []),mapping_policies=[dict(mapping_id='m',node_id='n',udp_policy='reject',dns_mode='auto',max_connections=0,max_sessions=0,mapping_dns=dict(state='unavailable',report=report('n')))]))
-  if self.path=='/api/mappings?preview=1':return self.reply({'fields':['l2tp_pass','upload_kbps','download_kbps','dns_doh_url','dns_tcp_address'],'affected':['m'],'message':'保存前已校验，测试配置预览。'})
+  if self.path=='/api/mappings?preview=1':return self.reply({'fields':['l2tp_pass','upload_kbps','download_kbps'],'affected':['m'],'message':'保存前已校验，测试配置预览。'})
   if self.path.startswith('/api/mappings/'):
    return self.reply({'ok':True,'rules':healthy,'forwarding':dict(healthy,exit_ip='203.0.113.5'),'node':dict(healthy,exit_ip='203.0.113.5'),'exit_comparison':'same','scope':'PPP 模拟入口 → 现有策略路由与防火墙 → TUN → 固定 SOCKS5；不包含 L2TP 认证'})
   return self.reply({'kind':body.get('kind'),'ok':False,'protocols':{'tcp':dict(healthy,state='restricted',status_code=403,error='目标已响应 HTTP 403')},'target':body.get('target')})

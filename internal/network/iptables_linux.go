@@ -77,6 +77,12 @@ func DelFirewall(m model.TunnelMapping) error {
 		return err
 	}
 	var udpErrors []error
+	// Upgrades may normalize MaxConnections to zero after an unclean stop.
+	// Reclaim marked legacy limits by their recorded rule, not the new value.
+	if m.MaxConnections == 0 {
+		udpErrors = append(udpErrors, deleteRetiredConnectionLimits(m))
+	}
+	udpErrors = append(udpErrors, deleteMarkedRules("mangle", "FORWARD", mappingComment(m)+"-mss", "tcp"))
 	if args := connectionLimitArgs(m); len(args) > 0 {
 		udpErrors = append(udpErrors, deleteFirewallRule(append([]string{"-D", "S2L_FORWARD"}, args...)...))
 	}
@@ -95,6 +101,51 @@ func DelFirewall(m model.TunnelMapping) error {
 		deleteFirewallRule("-D", "FORWARD", "-o", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 		deleteFirewallRule("-D", "FORWARD", "-i", m.TunName, "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT", "-m", "comment", "--comment", cmt),
 	)
+}
+
+func deleteRetiredConnectionLimits(m model.TunnelMapping) error {
+	return deleteMarkedRules("filter", "S2L_FORWARD", mappingComment(m)+"-connections", "connlimit")
+}
+
+func deleteMarkedRules(table, chain, comment, module string) error {
+	snapshot, err := output("iptables", "-t", table, "-S", chain)
+	if err != nil {
+		if IsMissingState(missingFirewall(err, "iptables", []string{"-t", table, "-S", chain})) {
+			return nil
+		}
+		return err
+	}
+	for _, args := range markedRules(snapshot, chain, comment, module) {
+		if err := deleteFirewallRule(append([]string{"-t", table}, args...)...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func markedRules(snapshot, chain, comment, module string) [][]string {
+	var rules [][]string
+	for _, line := range strings.Split(snapshot, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 || fields[0] != "-A" || fields[1] != chain {
+			continue
+		}
+		owned, matchesModule := false, false
+		for i := 2; i+1 < len(fields); i++ {
+			if fields[i] == "--comment" && strings.Trim(fields[i+1], "\"") == comment {
+				owned = true
+				fields[i+1] = comment
+			}
+			if fields[i] == "-m" && fields[i+1] == module {
+				matchesModule = true
+			}
+		}
+		if owned && matchesModule {
+			fields[0] = "-D"
+			rules = append(rules, fields)
+		}
+	}
+	return rules
 }
 
 func mappingReturnArgs(m model.TunnelMapping) []string {

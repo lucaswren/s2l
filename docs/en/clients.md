@@ -28,31 +28,12 @@ When TCP/DoH succeeds and UDP ASSOCIATE is accepted but no datagram returns, com
 
 PPP offers **1.1.1.1 and 8.8.8.8** during IPCP negotiation. Accept automatic VPN DNS. Upgrade existing servers using the [update procedure](operations.md), then reconnect clients to renegotiate DNS. Existing sessions do not receive changed PPP options. Do not hand-edit the generated PPP options file.
 
-These addresses identify DNS requests inside the tunnel. All TCP/UDP port 53 traffic reaching a mapping's TUN is intercepted; actual DNS exchanges use that mapping's fixed SOCKS5 node. Custom resolvers do not change the addresses offered to clients. No public DNS listener or PPP-to-host firewall exception is required. If an offered address is assigned locally on the S2L host, use a different, nonlocal DNS destination routed into the tunnel: local INPUT is blocked before TUN interception.
+These addresses identify DNS requests inside the tunnel. All TCP/UDP port 53 traffic reaching a mapping's TUN is intercepted; actual DNS exchanges use that mapping's fixed SOCKS5 node. No public DNS listener or PPP-to-host firewall exception is required. If an offered address is assigned locally on the S2L host, use a different, nonlocal DNS destination routed into the tunnel: local INPUT is blocked before TUN interception.
 
-Stop the mapping, open **Edit → Advanced options**, configure the following, save and start it:
+DNS is managed automatically. The mapping uses `https://1.1.1.1/dns-query` and `8.8.8.8:53` through its fixed SOCKS5 exit. Manual DNS mode/address settings are retired; legacy fields are readable but normalized during startup migration, API edits/imports and backup restore. A mapping that requires a private resolver needs a separately reviewed deployment; the managed defaults resolve public names.
 
-| UI / JSON field | Default | Accepted values |
-|---|---|---|
-| DNS mode / `dns_mode` | `auto` | `auto`, `doh`, `tcp` |
-| DoH URL / `dns_doh_url` | `https://1.1.1.1/dns-query` | HTTPS URL; optional port/path; no credentials, query, fragment or whitespace |
-| TCP DNS address / `dns_tcp_address` | `8.8.8.8:53` | `host:port` or `[IPv6]:port`, port 1–65535; no scoped IPv6 |
+A failed transport starts the alternate immediately. If no valid response arrives within 300 ms, the alternate runs concurrently; the first valid answer wins and cancels the other request. This also allows a failed TCP backup to fall back to DoH. After two DoH failures or slower responses won by TCP, TCP becomes preferred; background recovery still requires two successful DoH checks before switching back. Valid NXDOMAIN does not trigger fallback. Both methods always use the same SOCKS5 node; if that node is unavailable, alternate DNS cannot restore its connectivity. No direct server DNS or exit switching is used. Working DNS does not require SOCKS5 UDP support. sing-box retains normal DNS caching.
 
-Empty fields restore defaults; omitted fields in older state files keep the same defaults. Resolver hostnames are sent to SOCKS5 for remote resolution. The SOCKS5 server's own hostname may still need the S2L host's resolver; an upstream IP address avoids that bootstrap lookup. IPv6 resolver endpoints require the SOCKS5 server to support them; this does not enable IPv6 PPP forwarding.
-
-For example, a mapping JSON can contain:
-
-```json
-{
-  "dns_mode": "tcp",
-  "dns_doh_url": "",
-  "dns_tcp_address": "10.20.0.53:53"
-}
-```
-
-This is a fragment of a full mapping, not a standalone import. The private DNS address must be reachable **from the SOCKS5 exit**. Use a resolver that answers both required public and private names; no per-domain split-DNS rules are implemented. In auto mode configure both endpoints with the intended DNS view, or select a forced mode to avoid falling back to a public default for private names.
-
-Auto mode tries TCP after a failed DoH query and prefers TCP after repeated primary failures; recovery checks can restore DoH. It never switches SOCKS5 nodes or falls back to a direct server connection. Forced modes use only their chosen transport. Working DNS does not require SOCKS5 UDP support. Valid NXDOMAIN does not trigger fallback. Changing endpoints restarts the mapping resolver and its sing-box cache; clear client/application caches if needed. Text imports preserve existing custom DNS; JSON imports use submitted values. Backups retain both fields. Automatic health probes use the configured endpoints; manual node probes use defaults and do not overwrite custom mapping DNS health.
 
 ## Client settings
 
