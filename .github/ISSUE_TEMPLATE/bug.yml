@@ -1,0 +1,32 @@
+name: Bug report / 问题反馈
+description: Report a reproducible defect or outage / 提供可复现的问题或断网现场
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Use Discussions for setup questions. Do not include passwords, PSKs, full state.json or customer-identifying data. 安装疑问请使用 Discussions；不要提交密码、密钥、完整配置或客户身份信息。"
+  - type: input
+    id: version
+    attributes:
+      label: S2L version or commit / 版本或提交
+      placeholder: "v1.3.16"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: Distribution, kernel, architecture, client, L2TP/IPsec mode, NAT topology and whether mappings share an upstream. 系统、内核、架构、客户端、接入模式、NAT 拓扑及是否共用上游。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected result and actual result / 复现步骤与预期及实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Fault time and sanitized evidence / 故障时间与脱敏现场
+      description: Include timezone, affected mappings and local/upstream/DNS status. Attach reviewed evidence only; note whether a restart changed the result. 填写时区、影响映射及各层检测状态，说明重启是否改变结果。

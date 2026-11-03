@@ -1,0 +1,11 @@
+[Unit]
+Description=S2L PPP traffic leak protection
+Before=xl2tpd.service s2l.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/s2l/s2l -guard-only
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

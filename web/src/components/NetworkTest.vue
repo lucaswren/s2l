@@ -1,0 +1,131 @@
+<script setup>
+import { tr } from '../i18n/index.js';
+
+import GoogleDiagnostic from './GoogleDiagnostic.vue';
+import { computed, ref, watch, onBeforeUnmount } from 'vue';
+import { api } from '../api/client';
+import { mtrHops } from '../utils/mtr';
+import {protocolSummary} from '../utils/health';
+const props = defineProps({ node: Object });
+const emit = defineEmits(['close', 'changed']);
+const mappingID=ref(''),compareMappingID=ref(''),mappings=ref([]);
+api.listMappings().then(rows=>{if(!disposed)mappings.value=rows;}).catch(()=>{});
+const compareNode=ref(''), nodes=ref([]), nodeError=ref('');
+api.listNodes().then(rows=>{if(!disposed)nodes.value=rows;}).catch(()=>{if(!disposed)nodeError.value=tr("无法加载对照节点，可先检测当前节点");});
+const kind = ref('protocols'), mtrProtocol = ref('tcp');
+const target = ref('www.example.com:443');
+const stopped = ref(false),comparisonSnapshot=ref(null);
+const busy = ref(false), result = ref(null), error = ref(''), elapsed = ref(0);
+const labels = {get healthy() { return tr("正常"); }, get degraded() { return tr("仅备用可用"); }, get unavailable() { return tr("不可用"); }, get unsupported() { return tr("不支持"); },get restricted() { return tr("目标已响应 · 状态异常"); }};
+const methods = {get https() { return tr("HTTPS 转发"); }, get 'dns-udp'() { return tr("UDP 中继"); }, get 'udp-associate'() { return tr("UDP 协商"); }, doh:'DoH', tcp:'TCP DNS', get 'tcp-fallback'() { return tr("TCP DNS 备用"); }, 'doh/tcp':'DoH / TCP DNS'};
+const advanced=ref(false);
+const modes = computed(()=>[{value:'protocols',get label() { return tr("协议检测"); }}, {value:'https',label:'HTTPS'}, {value:'quality',get label() { return tr("传输质量"); }}, ...(advanced.value?[{value:'google',get label() { return tr("Google 专项"); }}, {value:'tcping',label:'TCPing'}, {value:'ping',label:'Ping'}, {value:'mtr',get label() { return tr("MTR 追踪"); }}]:[])]);
+watch(advanced,value=>{if(!value&&!['protocols','https','quality'].includes(kind.value))kind.value='protocols'});
+const mobileQuery = window.matchMedia('(max-width: 600px)');
+const mobile = ref(mobileQuery.matches);
+const resized = event => { mobile.value = event.matches; };
+mobileQuery.addEventListener('change', resized);
+const rows = computed(() => Object.entries(result.value?.protocols || {}).map(([name,value]) => ({name:name.toUpperCase(), ...value})));
+const hops = computed(() => mtrHops(result.value?.output));
+const summary = computed(() => result.value?.kind==='google' && !busy.value ? tr("专项检测完成 · 请查看各阶段结果") : stopped.value ? tr("测试已停止 · 保留部分结果") : busy.value ? tr("检测中 · {0} 秒", elapsed.value) : result.value?.kind === 'mtr' && result.value.ok ? (result.value.reached ? tr("追踪完成 · 目标已响应") : tr("追踪完成 · 目标未响应")) : result.value?.kind === 'https' && result.value?.protocols?.tcp?.state === 'restricted' ? tr("目标已响应 · 状态异常") : result.value?.ok ? (result.value.capability_warning ? tr("TCP / DNS 正常 · UDP 能力受限") : tr("检测通过")) : tr("检测完成 · 存在异常"));
+let controller, timer, disposed = false;
+watch(compareNode,()=>{compareMappingID.value=''});
+watch([kind,mtrProtocol], () => { if (!busy.value) { result.value=null;error.value='';stopped.value=false; } });
+onBeforeUnmount(() => { disposed=true;controller?.abort();clearInterval(timer);mobileQuery.removeEventListener('change',resized); });
+async function run() {
+ if (busy.value) return;
+ busy.value=true;comparisonSnapshot.value=null;stopped.value=false;error.value='';result.value=null;elapsed.value=0;
+ controller=new AbortController();
+ const started=Date.now();timer=setInterval(() => {elapsed.value=Math.floor((Date.now()-started)/1000);},1000);
+ try {
+  const body={kind:kind.value,target:target.value.trim(),mtr_protocol:mtrProtocol.value,compare_node:kind.value==='google'?compareNode.value:undefined,mapping_id:kind.value==='google'?mappingID.value:undefined,compare_mapping_id:kind.value==='google'?compareMappingID.value:undefined};
+  if (kind.value === 'mtr') {
+   result.value={kind:'mtr',output:''};
+   result.value=await api.streamNetworkTest(props.node.id,body,controller.signal,event => {
+    if (disposed) return;
+    if (event.type === 'start') result.value={...event.data,output:''};
+    if (event.type === 'output') result.value.output=(result.value.output+event.data).slice(0,32768);
+   });
+  } else { result.value=await api.networkTestNode(props.node.id,body,controller.signal); }
+  if (!disposed) emit('changed');
+ } catch(e) { if (!disposed) { stopped.value=e.name === 'AbortError';error.value=stopped.value ? '' : e.message;if(result.value) result.value={...result.value,partial:true,cancelled:stopped.value,finished_at:new Date().toISOString()}; } }
+ finally {clearInterval(timer);if (!disposed) busy.value=false;}
+}
+function close() {controller?.abort();emit('close');}
+function download() {
+ const blob=new Blob([JSON.stringify({...result.value,comparison_snapshot:comparisonSnapshot.value||undefined},null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob), a=document.createElement('a');a.href=url;a.download='s2l-network-test.json';a.click();setTimeout(() => URL.revokeObjectURL(url),1000);
+}
+</script>
+<template>
+ <el-dialog :model-value="true" :title='tr("网络测试")' class="network-test-dialog" width="760px" :fullscreen="mobile" :close-on-click-modal="false" :close-on-press-escape="!busy" append-to-body @close="close">
+  <div class="network-test-node"><strong>{{ node.name }}</strong><span>{{ node.addr }}</span></div>
+  <div class="network-test-modes"><label for="network-test-kind">{{ tr("检测类型") }}</label><el-select id="network-test-kind" v-model="kind" :disabled="busy"><el-option v-for="mode in modes" :key="mode.value" :value="mode.value" :label="mode.label" /></el-select></div>
+  <el-checkbox v-model="advanced" :disabled="busy">{{tr("高级检测")}}</el-checkbox>
+  <div v-if="kind === 'tcping' || kind === 'https' || kind === 'quality'" class="network-test-options"><label for="network-test-target">{{ tr("目标地址") }}</label><el-input id="network-test-target" v-model="target" :disabled="busy" :placeholder='tr("host:port，例如 www.example.com:443")' @keyup.enter="run" /></div>
+  <div v-if="kind === 'google'" class="network-test-options"><label>{{ tr("对照线路节点（可选）") }}</label><el-select v-model="compareNode" clearable :disabled="busy" :placeholder='tr("仅检测当前节点")'><el-option v-for="n in nodes.filter(n=>n.id!==node.id)" :key="n.id" :value="n.id" :label="n.name" /></el-select><label>{{tr("检测映射")}}</label><el-select v-model="mappingID" clearable :disabled="busy" :placeholder='tr("自动选择一条映射")'><el-option v-for="m in mappings.filter(m=>m.node_id===node.id)" :key="m.id" :value="m.id" :label="m.tun_name"/></el-select><template v-if="compareNode"><label>{{tr("对照映射")}}</label><el-select v-model="compareMappingID" clearable :disabled="busy" :placeholder='tr("自动选择一条映射")'><el-option v-for="m in mappings.filter(m=>m.node_id===compareNode)" :key="m.id" :value="m.id" :label="m.tun_name"/></el-select></template><p v-if="nodeError">{{nodeError}}</p><p class="network-test-hint">{{ tr("分别经所选节点检测，不切换出口。") }}</p></div>
+  <div v-if="kind === 'mtr'" class="network-test-options"><label>{{ tr("探测方式") }}</label><el-radio-group v-model="mtrProtocol" :disabled="busy"><el-radio-button value="tcp">{{ tr("TCP · 节点端口") }}</el-radio-button><el-radio-button value="icmp">ICMP</el-radio-button></el-radio-group></div>
+  <p class="network-test-hint">{{ kind === 'google' ? tr("分项检查 DNS、TCP/TLS 与 HTTP。") : kind === 'quality' ? tr("经固定 SOCKS5 交替请求 1 KB 和 256 KB 响应，默认 8 次。") : kind === 'https' ? tr("经 SOCKS5 检测指定目标的 TLS 与 HTTP 响应，不影响自动健康判断。") : kind === 'tcping' ? tr("经 SOCKS5 节点测试 TCP 建连。") : kind === 'protocols' ? tr("经 SOCKS5 节点检测 TCP、UDP 和 DNS。") : tr("测试 S2L 服务器到节点的网络路径。") }}</p>
+  <div v-if="result?.quality" class="quality-results"><p>{{ tr("成功") }} {{result.quality.successes}} / {{result.quality.samples.length}} {{ tr("· 中位数") }} {{Math.round(result.quality.median_ms)}} ms · P95 {{Math.round(result.quality.p95_ms)}} ms</p><article v-for="(sample,i) in result.quality.samples" :key="i"><strong>{{i+1}} · {{sample.requested/1024}} {{ tr("KB 请求") }}</strong><p>{{ tr("首字节") }} {{Math.round(sample.first_byte_ms)}} {{ tr("ms · 总耗时") }} {{Math.round(sample.duration_ms)}} {{ tr("ms · 收到") }} {{sample.received}} B</p><p>{{sample.error || (sample.bounded?tr("达到读取上限"):sample.complete?tr("响应完整"):tr("响应未完成"))}} · HTTP {{sample.status}}</p></article><p class="muted">{{result.quality.scope}}</p></div>
+  <el-alert v-if="error" :title="error" type="error" :closable="false" />
+  <div v-if="busy || result" class="network-test-result" aria-live="polite" :aria-busy="busy">
+   <div class="network-test-summary"><el-tag :type="busy || stopped ? 'info' : result?.ok ? 'success' : 'warning'">{{ summary }}</el-tag><span v-if="result?.target">{{ result.target }}</span></div>
+   <GoogleDiagnostic v-if="result?.google" :result="result" @baseline="comparisonSnapshot=$event" />
+   <div v-if="rows.length" class="network-protocols"><article v-for="row in rows" :key="row.name" class="network-protocol"><div><strong>{{ row.name }}</strong><el-tag :type="row.state === 'healthy' ? 'success' : 'warning'">{{ labels[row.state] || row.state }}</el-tag></div><span class="network-test-hint">{{ methods[row.method] || row.method }}</span><p>{{protocolSummary(row)}}</p><p v-if="row.error && !(row.state === 'restricted' && row.status_code)">{{ row.error }}</p><details v-if="row.attempts?.length"><summary>{{ tr("分目标结果") }}</summary><p v-for="attempt in row.attempts" :key="attempt.target">{{attempt.target}} · {{protocolSummary(attempt)}}</p></details></article></div>
+   <template v-if="result?.kind === 'mtr'">
+    <p v-if="busy && !hops.length" class="network-test-hint">{{ tr("正在等待跳点响应…") }}</p>
+    <div v-if="hops.length" class="network-hops"><article v-for="hop in hops" :key="hop.hop" class="network-hop"><span class="network-hop-number">{{ hop.hop }}</span><div><strong>{{ hop.address }}</strong><small>{{ tr("响应") }} {{ hop.received }}<template v-if="hop.sent"> / {{ hop.sent }}</template></small></div><div class="network-hop-latency"><strong>{{ hop.average }} <small>ms</small></strong><small>{{ tr("平均 · 最新") }} {{ hop.last }} ms</small></div></article></div>
+    <p v-if="!busy && !hops.length && !result.error && !error" class="network-test-hint">{{ tr("未收到跳点响应。") }}</p>
+    <p class="network-test-hint">{{ tr("中间跳不响应不等于业务丢包。") }}</p>
+   </template>
+   <template v-if="result?.samples"><p>{{ tr("建连成功") }} {{ result.successes }} / {{ result.attempts }}</p><ol class="network-samples"><li v-for="(sample,index) in result.samples" :key="index">{{ sample.error || `${sample.milliseconds.toFixed(2)} ms` }}</li></ol></template>
+   <el-alert v-if="result?.error" :title="result.error" type="warning" :closable="false" />
+   <p v-if="result?.output_truncated" class="network-test-hint">{{ tr("输出已达 32 KiB 上限。") }}</p>
+   <details v-if="result?.output && result.kind === 'mtr'" class="network-raw"><summary>{{ tr("原始输出") }}</summary><pre>{{ result.output }}</pre></details>
+   <pre v-else-if="result?.output" class="network-raw-output">{{ result.output }}</pre>
+  </div>
+  <template #footer><div class="network-test-footer"><el-button v-if="result && !busy" @click="download">{{ tr("导出") }}</el-button><el-button v-if="busy" type="warning" @click="controller?.abort()">{{ tr("停止测试") }}</el-button><el-button v-else type="primary" @click="run">{{ result ? tr("重新测试") : tr("开始测试") }}</el-button></div></template>
+ </el-dialog>
+</template>
+<style>
+.network-test-dialog.el-dialog{max-width:calc(100vw - 32px);max-height:calc(100vh - 48px);max-height:calc(100dvh - 48px);margin:24px auto;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;}
+.network-test-dialog .el-dialog__header{flex:none;margin:0;padding-bottom:14px;}
+.network-test-dialog .el-dialog__body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;max-height:none;padding-bottom:20px;}
+.network-test-dialog .el-dialog__footer{flex:none;padding-top:14px;}
+.network-test-node{display:flex;flex-wrap:wrap;gap:4px 16px;margin-bottom:16px;overflow-wrap:anywhere;}
+.network-test-node span,.network-test-hint{color:var(--el-text-color-secondary);font-size:14px;line-height:1.6;}
+.network-test-modes{display:flex;align-items:center;gap:12px}.network-test-modes label{flex:none;font-size:14px}.network-test-modes .el-select{flex:1;min-width:0}
+
+.network-test-options{display:grid;gap:8px;margin-top:16px;}
+.network-test-options>label{font-size:14px;font-weight:500;}
+.network-test-result{margin-top:16px;min-width:0;}
+.network-test-summary{display:flex;gap:10px;align-items:center;flex-wrap:wrap;overflow-wrap:anywhere;margin-bottom:16px;}
+.network-test-summary>span:not(.el-tag){font-size:14px;color:var(--el-text-color-secondary);}
+.network-protocols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.network-protocol{padding:12px;border:1px solid var(--el-border-color-light);border-radius:8px;min-width:0;}
+.network-protocol>div{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;}
+.network-protocol p{overflow-wrap:anywhere;font-size:14px;margin:8px 0 0;}
+.network-hop{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--el-border-color-lighter);}
+.network-hop-number{flex:none;width:24px;color:var(--el-text-color-secondary);font-size:14px;}
+.network-hop>div{min-width:0;flex:1;display:grid;gap:4px;}
+.network-hop strong{font-size:14px;font-weight:500;overflow-wrap:anywhere;}
+.network-hop small{font-size:14px;color:var(--el-text-color-secondary);font-weight:400;}
+.network-hop .network-hop-latency{flex:none;text-align:right;max-width:46%;}
+.network-samples{padding-left:24px;line-height:1.9;}
+.network-raw{margin-top:12px;font-size:14px;}
+.network-raw summary{cursor:pointer;}
+.network-raw pre,.network-raw-output{max-height:280px;overflow:auto;white-space:pre;font-size:14px;line-height:1.6;padding:12px;background:var(--el-fill-color-light);border-radius:6px;}
+.network-test-footer{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;}
+.network-test-footer .el-button{margin:0;}
+@media(max-width:600px){
+ .network-test-dialog.el-dialog.is-fullscreen{width:100%;max-width:none;height:100vh;height:100dvh;max-height:100vh;max-height:100dvh;margin:0;border-radius:0;padding:16px;}
+ .network-test-dialog .el-dialog__header{padding-top:env(safe-area-inset-top,0px);padding-right:32px;}
+ .network-test-dialog .el-dialog__footer{padding-bottom:env(safe-area-inset-bottom,0px);}
+ .network-protocols{grid-template-columns:1fr;}
+ .network-test-footer .el-button{flex:1;}
+ .network-hop{gap:8px;}
+}
+
+</style>
+
+<style scoped>.quality-results{overflow-wrap:anywhere}.quality-results article{padding:8px 0;border-bottom:1px solid var(--el-border-color-lighter)}</style>

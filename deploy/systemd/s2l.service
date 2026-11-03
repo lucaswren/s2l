@@ -1,0 +1,26 @@
+[Unit]
+Description=S2L SOCKS5-to-L2TP Gateway
+After=network-online.target xl2tpd.service
+Wants=network-online.target
+Requires=s2l-guard.service
+After=s2l-guard.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/s2l
+RuntimeDirectory=s2l
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
+UMask=0077
+ExecStart=/opt/s2l/s2l -config /opt/s2l/config.json
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=1048576
+
+# 保留 running 状态，由 auto_restore 在下次启动时恢复映射
+KillMode=mixed
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

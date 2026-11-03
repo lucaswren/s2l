@@ -1,0 +1,112 @@
+name: CI
+on:
+  push:
+  pull_request:
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.x'
+      - name: Use Ubuntu archive for package downloads
+        run: |
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+      - run: python3 -m unittest discover -s script/tests
+      - run: go test -race ./...
+      - name: Validate runtime configurations with pinned sing-box
+        shell: bash
+        run: |
+          curl -fL --retry 2 --connect-timeout 15 --max-time 180 https://github.com/SagerNet/sing-box/releases/download/v1.11.15/sing-box-1.11.15-linux-amd64.tar.gz -o "$RUNNER_TEMP/sing-box.tgz"
+          tar -xzf "$RUNNER_TEMP/sing-box.tgz" -C "$RUNNER_TEMP"
+          S2L_SINGBOX_CHECK_BIN="$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" go test ./internal/singbox -run 'TestSingBoxRuntimeConfigCheck|TestRuntimeCompatibilityCheck' -v
+      - name: Verify leak protection in isolated Linux networking
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y iproute2 iptables nftables iputils-ping tcpdump fonts-noto-cjk
+          go test -c -o /tmp/s2l-network.test ./internal/network
+          sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run 'Test(LeakGuards|PPPManagement)Integration' -test.v
+          sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run '^TestEffectiveForwardedRouteIntegration$' -test.v
+      - name: Verify payload-free outage capture in isolated Linux networking
+        run: |
+          go test -c -o /tmp/s2l-evidence.test ./internal/evidence
+          sudo unshare --net --mount --propagation private sh -c 'ip link set lo up; S2L_EVIDENCE_TEST=1 /tmp/s2l-evidence.test -test.run TestLiveCapture -test.v'
+      - run: go vet ./...
+      - name: Install L2TP and IPsec test dependencies
+        timeout-minutes: 15
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y xl2tpd ppp curl strongswan strongswan-starter conntrack
+          # Hosted Azure kernels can omit L2TP from their base module package.
+          # Install modules for the running kernel; never skip the real dial test.
+          if ! modinfo l2tp_ppp >/dev/null 2>&1; then
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y "linux-modules-extra-$(uname -r)"
+          fi
+          sudo modprobe ppp_generic
+          sudo modprobe l2tp_ppp
+          sudo modprobe xfrm_user
+      - name: Verify real L2TP, IPsec, NAT, DNS and UDP policies
+        timeout-minutes: 18
+        run: |
+          go test -c -o /tmp/s2l-l2tp.test ./internal/service
+          sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox "$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box"
+          for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+            sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox "$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" --transport "$transport"
+          done
+      - name: Verify upgrade preservation and failure recovery
+        run: sudo env S2L_TEST_GOROOT="$(go env GOROOT)" unshare --mount --net --propagation private /usr/bin/python3 script/test_update_integration.py
+      - run: python3 script/check_docs.py
+      - name: Check all shell scripts
+        run: for script in script/*.sh; do bash -n "$script"; done
+      - run: npm --prefix web ci
+      - run: npm --prefix web test
+      - run: npm --prefix web run build
+      - name: Verify desktop and mobile monitoring dialogs
+        run: node script/test_ui.mjs
+      - name: Verify multilingual login and backend sessions
+        run: node script/test_auth_ui.mjs
+      - run: python3 script/collect_frontend_licenses.py
+      - run: git diff --exit-code -- web/dist
+      - run: go build -o bin/s2l ./cmd/s2l
+
+  fresh-install:
+    strategy:
+      fail-fast: false
+      matrix:
+        distro: [ubuntu-24.04, debian-12]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: stable
+          cache: false
+      - name: Install full-system test dependencies
+        run: |
+          if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+            printf '%s\n' 'https://archive.ubuntu.com/ubuntu' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y qemu-system-x86 qemu-utils cloud-image-utils openssh-client
+      - name: Fresh install, interrupted-install recovery, reboot and real PPP faults
+        run: sudo env PATH="$PATH" python3 script/test_fresh_install.py --distro '${{ matrix.distro }}'
+      - name: Compile Linux ARM64 gateway
+        run: GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -o /tmp/s2l-arm64 ./cmd/s2l

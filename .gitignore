@@ -1,0 +1,34 @@
+/data/
+*.exe
+*.test
+/bin/
+/tmp/
+/.test-tmp/
+.idea/
+*.tmp
+web/node_modules/
+__pycache__/
+*.py[cod]
+/config.json
+.vscode/
+.DS_Store
+
+# Local IDE and AI tool state
+*.iml
+.cursor/
+.claude/
+.codex/
+.gemini/
+.qwen/
+.windsurf/
+.continue/
+.roo/
+.cline/
+.aider*
+
+# Local caches and OS metadata
+.pytest_cache/
+.vite/
+.vite-temp/
+Thumbs.db
+Desktop.ini

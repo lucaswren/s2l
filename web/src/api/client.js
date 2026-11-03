@@ -1,0 +1,206 @@
+import { tr } from '../i18n/index.js';
+let authRevision = 0;
+function checkAuthentication(res, path, revision) {
+  if (res.status === 401 && revision === authRevision && !path.startsWith('/api/auth/')) {
+    globalThis.window?.dispatchEvent(new Event('s2l-auth-required'));
+  }
+}
+async function request(path, options = {}) {
+  const revisionAtStart = authRevision;
+  const res = await fetch(path, {
+    cache: 'no-store',
+    ...options,
+    credentials: 'same-origin',
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  checkAuthentication(res, path, revisionAtStart);
+  let data;
+  try { data = await res.json(); }
+  catch (e) {
+    if (e.name === "AbortError") throw e;
+    if (res.ok) throw new Error(tr("服务器返回了无效数据，请刷新后重试"));
+  }
+  if (!res.ok) {
+    throw new Error(tr(data?.error || res.statusText || `HTTP ${res.status}`));
+  }
+  if (data === null || typeof data !== "object") {
+    throw new Error(tr("服务器返回了无效数据，请刷新后重试"));
+  }
+  const revision=res.headers?.get("ETag");if(revision && !Array.isArray(data))Object.defineProperty(data,"_revision",{value:revision});
+  return data;
+}
+
+async function authRequest(path, body, authenticated) {
+  const result = await request(path, {method:'POST', body:JSON.stringify(body)});
+  if (result.authenticated !== authenticated) throw new Error(tr('服务器返回了无效数据，请刷新后重试'));
+  // Ignore late 401s from requests belonging to the previous session.
+  authRevision++;
+  return result;
+}
+
+async function streamNetworkTest(id, body, signal, onEvent) {
+ const revisionAtStart = authRevision;
+ const res = await fetch(`/api/nodes/${id}/network-test`, {
+  method: 'POST', signal, body: JSON.stringify({...body, stream:true}),
+  credentials: 'same-origin', headers: {'Content-Type':'application/json'},
+ });
+ checkAuthentication(res, '/api/nodes/', revisionAtStart);
+ if (!res.ok) {
+  const data = await res.json().catch(e => { if (e.name === 'AbortError') throw e; return {}; });
+  throw new Error(data.error || res.statusText || `HTTP ${res.status}`);
+ }
+ if (res.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() !== 'application/x-ndjson' || !res.body) throw new Error(tr("服务器不支持实时追踪，请更新服务后重试"));
+ const reader = res.body.getReader(), decoder = new TextDecoder();
+ let pending = '', total = 0, finalResult = null, started = false;
+ const consume = line => {
+  if (!line.trim()) return;
+  let event;
+  try { event = JSON.parse(line); } catch { throw new Error(tr("追踪数据格式无效")); }
+  if (!event || !['start','output','result'].includes(event.type) || (event.type === 'output' ? typeof event.data !== 'string' : !event.data || typeof event.data !== 'object' || Array.isArray(event.data))) throw new Error(tr("追踪数据格式无效"));
+  if (finalResult || (event.type !== 'start' && !started) || (event.type === 'start' && started)) throw new Error(tr("追踪数据顺序无效"));
+  if (event.type === 'start') {
+   if (event.data.kind !== 'mtr') throw new Error(tr("追踪数据格式无效"));
+   started = true;
+  }
+  if (event.type === 'result' && (event.data.kind !== 'mtr' || typeof event.data.ok !== 'boolean' || typeof event.data.output !== 'string')) throw new Error(tr("追踪结束结果无效"));
+  onEvent?.(event);
+  if (event.type === 'result') finalResult = event.data;
+ };
+ try {
+  while (true) {
+   const {value, done} = await reader.read();
+   if (done) break;
+   total += value.byteLength;
+   if (total > 512 * 1024) throw new Error(tr("追踪输出超过限制"));
+   pending += decoder.decode(value, {stream:true});
+   let end;
+   while ((end = pending.indexOf('\n')) !== -1) { consume(pending.slice(0,end)); pending = pending.slice(end+1); }
+  }
+  pending += decoder.decode();
+  if (pending.trim()) consume(pending);
+  if (!finalResult) throw new Error(tr("追踪连接中断，已保留收到的结果"));
+  return finalResult;
+ } finally {
+  await reader.cancel().catch(() => {});
+  reader.releaseLock();
+ }
+}
+
+async function downloadArchive(path, filename) {
+  const revisionAtStart=authRevision;
+  const res=await fetch(path,{credentials:'same-origin',cache:'no-store'});
+  checkAuthentication(res,path,revisionAtStart);
+  if(!res.ok)throw new Error((await res.json().catch(()=>({}))).error||'Export failed');
+  if(res.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/zip')throw new Error(tr("导出响应不是日志 ZIP，请稍后重试"));
+  const blob=await res.blob(),signature=new Uint8Array(await blob.slice(0,4).arrayBuffer());
+  if(signature.length!==4||signature[0]!==0x50||signature[1]!==0x4b||signature[2]!==3||signature[3]!==4)throw new Error(tr("日志 ZIP 内容无效，请重新导出"));
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+export const api = {
+  saveLanguage: async language => {
+    const result=await request('/api/settings/language',{method:'POST',body:JSON.stringify({language})});
+    if(result.language!==language)throw new Error(tr('语言设置保存失败，请重试'));
+    return result;
+  },
+  authStatus: () => request('/api/auth/status'),
+  login: body => authRequest('/api/auth/login', body, true),
+  logout: () => authRequest('/api/auth/logout', {}, false),
+ pppManagement:()=>request('/api/settings/ppp-management'),
+ savePPPManagement:(body)=>request('/api/settings/ppp-management',{method:'POST',body:JSON.stringify(body)}),
+ operations:(signal)=>request('/api/operations',{signal}),
+ saveNotifications:(body)=>request('/api/operations',{method:'POST',body:JSON.stringify(body)}),
+ disconnectSession:(row)=>request('/api/sessions/disconnect',{method:'POST',body:JSON.stringify({interface:row.interface,peer:row.peer_ip,index:row.index})}),
+ connections:(id,signal)=>request(`/api/mappings/${encodeURIComponent(id)}/connections`,{signal}),
+ closeConnection:(id,connection)=>request(`/api/mappings/${encodeURIComponent(id)}/connections`,{method:'POST',body:JSON.stringify({id:connection})}),
+ previewNode:(body,revision)=>request('/api/nodes?preview=1',{method:'POST',headers:revision?{'If-Match':revision}:{},body:JSON.stringify(body)}),
+ previewMapping:(body,revision)=>request('/api/mappings?preview=1',{method:'POST',headers:revision?{'If-Match':revision}:{},body:JSON.stringify(body)}),
+  history:(id,signal)=>request(`/api/history?mapping_id=${encodeURIComponent(id)}`,{signal}),
+  mappingDiagnostic:(id,signal)=>request(`/api/mappings/${encodeURIComponent(id)}/network-test`,{method:"POST",body:"{}",signal}),
+  updateStatus: (signal) => request("/api/settings/update", {signal}),
+  updateSoftware: (body) => request("/api/settings/update", {method:"POST", body:JSON.stringify(body)}),
+  timeSettings: () => request("/api/settings/time"),
+  saveTimeSettings: (body) => request("/api/settings/time", {method:"POST", body:JSON.stringify(body)}),
+  backups: () => request("/api/backups"),
+  createBackup: () => request("/api/backups", {method:"POST",body:"{}"}),
+  deleteBackups: (ids) => request("/api/backups", {method:"DELETE",body:JSON.stringify({ids})}),
+  previewBackup: (id) => request("/api/backups/preview", {method:"POST",body:JSON.stringify({id})}),
+  restoreBackup: (body) => request("/api/backups/restore", {method:"POST",body:JSON.stringify(body)}),
+  debugAnalysis: () => request("/api/debug/analysis"),
+  evidence: (signal) => request("/api/evidence", {signal}),
+  setEvidence: (body) => request("/api/evidence", {method:"POST",body:JSON.stringify(body)}),
+  exportEvidence: (id) => downloadArchive(`/api/evidence/export?id=${encodeURIComponent(id)}`, 's2l-evidence.zip'),
+  debug: (signal) => request("/api/debug", {signal}),
+  setDebug: (enabled) => request("/api/debug", {method:"POST", body:JSON.stringify({enabled})}),
+  exportDebug: () => downloadArchive('/api/debug/export', 's2l-debug.zip'),
+  streamNetworkTest,
+  networkTestNode: (id, body, signal) => request(`/api/nodes/${id}/network-test`, {method:"POST", body:JSON.stringify(body), signal}),
+  listNodes: () => request("/api/nodes"),
+  getNode: (id) => request(`/api/nodes/${id}`),
+  saveNode: (body,revision) =>
+    request("/api/nodes", { method: "POST",
+      headers: revision ? {"If-Match":revision} : {}, body: JSON.stringify(body) }),
+  deleteNode: (id) => request(`/api/nodes/${id}`, { method: "DELETE" }),
+  importNodes: (body) =>
+    request("/api/nodes/import", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  speedTestNode: async (id, bytes) => {
+    const result = await request(`/api/nodes/${id}/speedtest`, {
+      method: "POST",
+      body: JSON.stringify(bytes ? { bytes } : {}),
+    });
+    if (typeof result.ok !== 'boolean' || ['download','upload'].some(key => !result[key] || typeof result[key].ok !== 'boolean')) {
+      throw new Error(tr('服务器返回了无效数据，请刷新后重试'));
+    }
+    return result;
+  },
+
+  listMappings: (signal) => request("/api/mappings", {signal}),
+  getMapping: (id) => request(`/api/mappings/${id}`),
+  saveMapping: (body,revision) =>
+    request("/api/mappings", { method: "POST",
+      headers: revision ? {"If-Match":revision} : {}, body: JSON.stringify(body) }),
+  deleteMapping: (id) => request(`/api/mappings/${id}`, { method: "DELETE" }),
+  importMappings: (body) =>
+    request("/api/mappings/import", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  mappingAction: (id, action) =>
+    request(`/api/mappings/${id}/action`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
+
+  saveIPsec: (body) =>
+    request("/api/settings/ipsec", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  settings: () => request("/api/settings"),
+  saveAccount: (body) =>
+    request("/api/settings/account", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  saveWebPort: (body) =>
+    request("/api/settings/web-port", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  saveSSH: (body) =>
+    request("/api/settings/ssh", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  saveSSHPassword: (body) =>
+    request("/api/settings/ssh-password", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  status: () => request("/api/status"),
+};

@@ -1,0 +1,18 @@
+name: Feature request / 功能建议
+description: Describe a concrete problem and a small useful change / 描述具体问题与必要的改进
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and intended users / 问题与使用场景
+      description: Explain what is difficult today and who is affected. 说明当前困难和受影响的使用者。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and alternatives / 建议行为与替代方案
+      description: Prefer focused changes that keep the gateway simple. 优先考虑保持网关精简的改进。
+    validations:
+      required: true

@@ -1,0 +1,205 @@
+from pathlib import Path
+import sys
+import unittest
+from unittest.mock import patch
+import tempfile
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+import install_preflight
+import install_state
+import manage_config
+import download_go
+import tarfile
+import os
+import subprocess
+import socket
+import json
+
+class InstallChecks(unittest.TestCase):
+    def test_manual_apt_policy_is_rolled_back_if_overridden(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / 'journal'
+            root.mkdir()
+            policy = base / 'apt-policy'
+            state = dict(complete=False, manual_apt=True, files=[], units={}, sysctl={})
+            (root / 'journal.json').write_text(json.dumps(state))
+            with patch.multiple(install_state, ROOT=root, APP=base / 'app',
+                                APT_POLICY=policy, FILES=(), UNITS=(), KEYS=()), \
+                 patch.object(install_state, 'secure_root'), \
+                 patch.object(install_state.os, 'fchmod', create=True), \
+                 patch.object(install_state, 'run') as run:
+                run.return_value = subprocess.CompletedProcess([], 1, "periodic='1'\n")
+                with self.assertRaisesRegex(RuntimeError, 'override'):
+                    install_state.commit()
+                self.assertTrue(policy.is_file())
+                def stopped(*args, **kwargs):
+                    status = 'LoadState=loaded\nActiveState=inactive\nMainPID=0\nControlPID=0\n'
+                    return subprocess.CompletedProcess(args, 1, status if args[:2] == ('systemctl', 'show') else '')
+                run.side_effect = stopped
+                install_state.recover()
+                self.assertFalse(policy.exists())
+                (root / 'journal.json').write_text(json.dumps(state))
+                run.side_effect = None
+                run.return_value = subprocess.CompletedProcess(
+                    [], 0, "periodic='0'\nshutdown='false'\nreboot='false'\n")
+                install_state.commit()
+                self.assertIn('APT::Periodic::Unattended-Upgrade "0";', policy.read_text())
+                self.assertFalse((root / 'journal.json').exists())
+
+    def test_rollback_refuses_cleanup_while_service_is_still_stopping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            journal = root / 'journal.json'
+            journal.write_text('{"files":[],"units":{},"sysctl":{}}')
+            with patch.multiple(install_state, ROOT=root, APP=root / 'app',
+                                FILES=(), UNITS=(), KEYS=()), \
+                 patch.object(install_state, 'secure_root'), \
+                 patch.object(install_state, 'run') as run:
+                run.side_effect = [
+                    subprocess.CompletedProcess([], 1, ''),
+                    subprocess.CompletedProcess([], 0, 'ActiveState=deactivating\nMainPID=123\nControlPID=0\n'),
+                ]
+                with self.assertRaisesRegex(RuntimeError, 'still active'):
+                    install_state.recover()
+                self.assertGreater(run.call_args_list[0].kwargs['timeout'], 60)
+                self.assertEqual(run.call_count, 2)
+                self.assertTrue(journal.is_file())
+
+    def test_manual_apt_commit_does_not_replace_existing_policy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / 'journal'
+            root.mkdir()
+            policy = base / 'apt-policy'
+            policy.write_text('administrator policy')
+            (root / 'journal.json').write_text('{"complete":false,"manual_apt":true}')
+            with patch.multiple(install_state, ROOT=root, APT_POLICY=policy), \
+                 patch.object(install_state, 'secure_root'), \
+                 patch.object(install_state.os, 'fchmod', create=True):
+                with self.assertRaises(FileExistsError):
+                    install_state.commit()
+                self.assertEqual(policy.read_text(), 'administrator policy')
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux socket reuse semantics')
+    def test_backend_time_wait_does_not_block_reinstallation(self):
+        with socket.socket() as listener, socket.socket() as client:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            port = listener.getsockname()[1]
+            listener.listen()
+            client.settimeout(2)
+            client.connect(('127.0.0.1', port))
+            connection, _ = listener.accept()
+            with connection:
+                connection.settimeout(2)
+                connection.shutdown(socket.SHUT_WR)
+                self.assertEqual(client.recv(1), b'')
+                client.close()
+                self.assertEqual(connection.recv(1), b'')
+        # Prove the fixture has the same stale TCP state seen after rollback.
+        with socket.socket() as probe:
+            with self.assertRaises(OSError):
+                probe.bind(('0.0.0.0', port))
+        install_preflight.check_listener_port(port, socket.SOCK_STREAM)
+        manage_config.check_available_port(port)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux socket reuse semantics')
+    def test_active_backend_listener_still_blocks_installation(self):
+        with socket.socket() as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            listener.listen()
+            with self.assertRaisesRegex(OSError, 'TCP port'):
+                install_preflight.check_listener_port(listener.getsockname()[1], socket.SOCK_STREAM)
+            with self.assertRaises(OSError):
+                manage_config.check_available_port(listener.getsockname()[1])
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux socket reuse semantics')
+    def test_active_udp_socket_still_blocks_installation(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(('127.0.0.1', 0))
+            with self.assertRaisesRegex(OSError, 'UDP port'):
+                install_preflight.check_listener_port(listener.getsockname()[1], socket.SOCK_DGRAM)
+
+    def test_kernel_regression_guard(self):
+        for release in ('6.8.0-146-generic', '6.8.0-147-generic'):
+            with self.assertRaisesRegex(RuntimeError, '2169477'):
+                install_preflight.kernel_version('ubuntu', release)
+        for distro, release in (('ubuntu', '6.8.0-142-generic'), ('ubuntu', '6.17.0-35-generic'), ('debian', '6.1.0-42-amd64')):
+            install_preflight.kernel_version(distro, release)
+
+    def test_supported_versions(self):
+        for value in ('go version go1.22.12 linux/amd64','go version go1.27.0 linux/arm64'):
+            install_preflight.go_version(value)
+        for value in ('go version go1.21.13 linux/amd64','garbage','devel go1.21'):
+            with self.assertRaises(ValueError):install_preflight.go_version(value)
+        install_preflight.singbox_version('sing-box version 1.11.15\nEnvironment: go1.24 linux/amd64')
+        for value in ('sing-box version 1.12.0','sing-box version 1.11.15-dev','sing-box version 1.11.15.1'):
+            with self.assertRaises(ValueError):install_preflight.singbox_version(value)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux installation journal')
+    def test_recovery_refuses_replaced_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)/'journal';root.mkdir(mode=0o700)
+            app=Path(directory)/'app';app.mkdir();(app/'foreign').write_text('keep')
+            state=dict(token='old',complete=False,files=[dict(kind='absent') for _ in install_state.FILES],units={name:{} for name in install_state.UNITS},sysctl={key:'0' for key in install_state.KEYS})
+            with patch.object(install_state,'ROOT',root),patch.object(install_state,'APP',app),patch.object(install_state,'secure_root'),patch.object(install_state,'run') as run:
+                install_state.save(state)
+                with self.assertRaisesRegex(RuntimeError,'ownership'):install_state.recover()
+                run.assert_not_called()
+                self.assertEqual((app/'foreign').read_text(),'keep')
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux installation journal')
+    def test_journal_is_private(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(install_state,'ROOT',Path(directory)):
+                install_state.save(dict(complete=False))
+                self.assertEqual((Path(directory)/'journal.json').stat().st_mode&0o777,0o600) if sys.platform!='win32' else None
+
+    def test_go_archive_root_and_escape_rejection(self):
+        directory=tarfile.TarInfo('go');directory.type=tarfile.DIRTYPE
+        download_go.validate_member(directory)
+        download_go.validate_member(tarfile.TarInfo('go/bin/go'))
+        for name in ('go','../go/bin/go','go/../../etc/passwd','/go/bin/go','elsewhere/bin/go'):
+            with self.assertRaises(RuntimeError):download_go.validate_member(tarfile.TarInfo(name))
+        link=tarfile.TarInfo('go/bin/link');link.type=tarfile.SYMTYPE;link.linkname='/etc/passwd'
+        with self.assertRaises(RuntimeError):download_go.validate_member(link)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux shell apt lock probe')
+    def test_idle_update_daemon_does_not_block_install(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tools=Path(directory)
+            for name,body in (('fuser','exit 1'),('pgrep','exit 0')):
+                path=tools/name;path.write_text('#!/bin/sh\n'+body+'\n');path.chmod(0o755)
+            for filename in ('install.sh','remote_install.sh'):
+                source=Path(__file__).resolve().parents[1].joinpath(filename).read_text()
+                start=source.index('wait_for_apt()');end=source.index('\n}',start)+2
+                common = Path(__file__).resolve().parents[1] / 'remote_install.sh'
+                result=subprocess.run(['bash','-c','source "$1"\n'+source[start:end]+'\nwait_for_apt','bash',str(common)],env={**os.environ,'PATH':str(tools)+':'+os.environ['PATH']},capture_output=True,text=True,timeout=2)
+                self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    @unittest.skipUnless(sys.platform == 'linux', 'Linux HTTPS apt lock probe')
+    def test_https_waits_for_apt_lock_and_has_a_deadline(self):
+        source = Path(__file__).resolve().parents[1].joinpath('setup_https.sh').read_text()
+        start = source.index('  wait_for_apt()')
+        end = source.index('\n  }', start) + 4
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scripts = {
+                'fuser': 'n=$(cat "$S2L_APT_TEST_COUNT" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$S2L_APT_TEST_COUNT"; test "$n" -le 2',
+                'sleep': 'exit 0',
+            }
+            for name, body in scripts.items():
+                path = root/name; path.write_text('#!/bin/sh\n'+body+'\n'); path.chmod(0o755)
+            counter = root/'count'
+            env = dict(os.environ, PATH=str(root)+':'+os.environ['PATH'], S2L_APT_TEST_COUNT=str(counter), APT_WAIT_SEC='15')
+            common = Path(__file__).resolve().parents[1] / 'remote_install.sh'
+            command = ['bash', '-c', 'source "$1"\n'+source[start:end]+'\nwait_for_apt','bash',str(common)]
+            result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=3)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(counter.read_text().strip(), '3')
+            counter.unlink()
+            result = subprocess.run(command, env={**env, 'APT_WAIT_SEC': '0'}, capture_output=True, text=True, timeout=3)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(counter.read_text().strip(), '1')

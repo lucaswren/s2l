@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and setup help / 使用与安装讨论
+    url: https://github.com/lucaswren/s2l/discussions
+    about: Ask configuration questions or share a verified setup without credentials.
+  - name: Security reporting / 安全问题
+    url: https://github.com/lucaswren/s2l/blob/main/SECURITY.md
+    about: Follow the private reporting guidance; do not post secrets in a public issue.

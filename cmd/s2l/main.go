@@ -1,0 +1,146 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"io"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/lucaswren/s2l/internal/api"
+	"github.com/lucaswren/s2l/internal/config"
+	"github.com/lucaswren/s2l/internal/debuglog"
+	"github.com/lucaswren/s2l/internal/l2tp"
+	"github.com/lucaswren/s2l/internal/network"
+	"github.com/lucaswren/s2l/internal/service"
+	"github.com/lucaswren/s2l/internal/singbox"
+	"github.com/lucaswren/s2l/internal/store"
+	"github.com/lucaswren/s2l/web"
+)
+
+func main() {
+	log.SetOutput(io.MultiWriter(os.Stderr, debuglog.Default))
+	cfgPath := flag.String("config", "", "path to config JSON (optional)")
+	checkRuntime := flag.Bool("check-runtime", false, "validate sing-box runtime configuration without changing networking")
+	guardOnly := flag.Bool("guard-only", false, "install PPP traffic guards and exit (Linux root only)")
+	checkUninstall := flag.Bool("check-uninstall", false, "validate managed state and route ownership for uninstallation")
+	cleanupNetwork := flag.Bool("cleanup-network", false, "remove mapping network state after all PPP/TUN interfaces have stopped")
+	flag.Parse()
+	if *guardOnly {
+		controller := network.NewController()
+		if err := controller.EnableSessionGuard(); err != nil {
+			log.Fatalf("install PPP session guard: %v", err)
+		}
+		if err := controller.EnsureGuard(); err != nil {
+			log.Fatalf("install traffic guards: %v", err)
+		}
+		return
+	}
+
+	cfg, err := config.Load(*cfgPath)
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid config: %v", err)
+	}
+	if *checkUninstall || *cleanupNetwork {
+		mappings, err := uninstallMappings(cfg.StatePath())
+		if err == nil {
+			err = network.CheckUninstallMappings(mappings)
+		}
+		if err == nil && *cleanupNetwork {
+			err = network.CleanupStoppedMappings(mappings)
+		}
+		if err != nil {
+			log.Fatalf("uninstall network validation/cleanup: %v", err)
+		}
+		return
+	}
+
+	if *checkRuntime {
+		if err := singbox.CheckRuntime(cfg.SingboxBin); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
+	st, err := store.New(cfg.StatePath())
+	if err != nil {
+		log.Fatalf("store: %v", err)
+	}
+
+	sb := singbox.NewManager(cfg.SingboxBin)
+	netCtrl := network.NewController()
+	l2tpMgr := l2tp.NewManager(cfg.ChapSecrets, cfg.Xl2tpdConf, cfg.PPPOptions)
+	svc := service.NewMappingService(st, sb, netCtrl, l2tpMgr)
+
+	if err := netCtrl.EnableSessionGuard(); err != nil {
+		log.Fatalf("install PPP session guard: %v", err)
+	}
+	if err := netCtrl.SetManagementAccess(cfg.PPPManagement); err != nil {
+		log.Fatalf("install traffic guards: %v", err)
+	}
+	if err := network.CleanupProofs(); err != nil {
+		log.Printf("diagnostic cleanup warning: %v", err)
+	}
+	monitorCtx, stopMonitor := context.WithCancel(context.Background())
+	monitorDone := make(chan struct{})
+	go func() { defer close(monitorDone); svc.Monitor(monitorCtx) }()
+
+	// 先修复可能被 # 注释写坏的 xl2tpd.conf，再恢复隧道
+	svc.EnsureL2TP()
+
+	if cfg.ShouldAutoRestore() {
+		go func() {
+			// 稍等 TUN/网络栈就绪
+			time.Sleep(500 * time.Millisecond)
+			svc.RestoreRunning()
+			svc.SetStartupComplete()
+		}()
+	}
+
+	if !cfg.ShouldAutoRestore() {
+		svc.SetStartupComplete()
+	}
+	webFS, err := web.FS()
+	if err != nil {
+		log.Fatalf("embed web: %v", err)
+	}
+
+	srv := api.NewServer(st, svc, webFS, cfg.AdminUser, cfg.AdminPass)
+	srv.ConfigureSettings(*cfgPath)
+	httpSrv := &http.Server{
+		Addr:              cfg.Listen,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       90 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+
+	go func() {
+		log.Printf("s2l listening on %s", cfg.Listen)
+		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("http: %v", err)
+		}
+	}()
+
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	<-ch
+	log.Println("shutting down...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_ = httpSrv.Shutdown(ctx)
+	stopMonitor()
+	<-monitorDone
+	svc.Shutdown()
+	log.Println("bye")
+}

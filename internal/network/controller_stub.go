@@ -1,0 +1,74 @@
+//go:build !linux
+
+package network
+
+import (
+	"context"
+	"fmt"
+	"sync"
+
+	"github.com/lucaswren/s2l/internal/model"
+)
+
+// Controller 非 Linux 占位实现
+type Controller struct {
+	mu     sync.Mutex
+	active map[string]model.TunnelMapping
+}
+
+func NewController() *Controller {
+	return &Controller{active: make(map[string]model.TunnelMapping)}
+}
+
+func (c *Controller) Setup(m model.TunnelMapping) error {
+	return fmt.Errorf("network controller (ip rule/iptables) is only supported on linux")
+}
+
+func (c *Controller) Teardown(m model.TunnelMapping) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := m.ID
+	if key == "" {
+		key = m.TunName
+	}
+	delete(c.active, key)
+	return nil
+}
+
+func (c *Controller) TeardownAll() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.active = make(map[string]model.TunnelMapping)
+	return nil
+}
+
+func (c *Controller) ActiveCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.active)
+}
+
+func (c *Controller) EnsureGuard() error                     { return fmt.Errorf("PPP guards require Linux") }
+func (c *Controller) EnableSessionGuard() error              { return nil }
+func (c *Controller) SyncSessionGuard(context.Context) error { return nil }
+func (c *Controller) VerifyAdmittedPeerRoutes(ctx context.Context, m model.TunnelMapping, peers []model.PPPSession) error {
+	return VerifyPeerRoutes(ctx, m, peers)
+}
+
+func TunePeers(model.TunnelMapping) error { return nil }
+
+func (c *Controller) Verify(model.TunnelMapping) error {
+	return fmt.Errorf("forwarding verification requires Linux")
+}
+
+func (c *Controller) VerifyContext(context.Context, model.TunnelMapping) error {
+	return fmt.Errorf("forwarding verification requires Linux")
+}
+
+func (c *Controller) RepairContext(context.Context, model.TunnelMapping) error {
+	return fmt.Errorf("forwarding repair requires Linux")
+}
+
+func CheckResources(model.TunnelMapping, bool) error {
+	return fmt.Errorf("network resource checks require Linux")
+}

@@ -1,0 +1,60 @@
+# 客户端接入与 DNS
+
+[首页](../../README.zh-Hans.md) · [English](../en/clients.md) · [繁體中文](../zh-Hant/clients.md) · [简体中文](../zh-Hans/clients.md)
+
+## 拨号前准备
+
+启动映射，记录服务器地址、L2TP 账号密码及系统设置中的接入模式。启用 IPsec 时选择 L2TP/IPsec 并填写相同 PSK；所有映射共用此设置。普通 L2TP 不加密，并非所有原生客户端都支持，需核对系统及版本。一条映射只允许一条 PPP 会话；每个独立拨号设备使用不同映射及账号。多台 LAN 设备可共享路由器的一条会话。
+
+服务器需要客户端可达的 IPv4。安装及 HTTPS 辅助脚本要求公网 IPv4；自动获取公网地址不等于外部可接入。服务器位于 NAT 后需配置入站转发及防火墙。无入站转发能力的 CGNAT 不适合直接远程拨号。
+
+| 路径 | 要求 |
+|---|---|
+| 客户端 → 普通 L2TP 服务器 | UDP 1701 |
+| 客户端 → IPsec 服务器 | UDP 500/4500；NAT-T |
+| 服务器 → 固定 SOCKS5 | TCP 可达、凭据有效且支持 CONNECT；手动 UDP 能力检测另需 UDP ASSOCIATE 与可达的中继 |
+| SOCKS5 → 解析器及业务目标 | 可访问配置的 DoH HTTPS、TCP DNS 及应用目标 |
+
+主机防火墙、云安全组、上游 NAT 和客户端网络都需允许所选模式。能打开 HTTPS 面板不代表能拨号。IPsec 启用后会阻止未保护的 L2TP，不要开放裸 UDP 1701 作为替代。参见 [strongSwan NAT-T 说明](https://docs.strongswan.org/docs/latest/features/natTraversal.html)。
+
+S2L 现已在服务器端隔离同一 NAT 公网地址下全部使用 L2TP 源端口 1701 的客户端：每个 IPsec 安全关联使用独立标记、连接跟踪区和内部对端端口，客户端端口与固定 SOCKS5 映射不变。当前配置统一启用 NAT-T（UDP 500/4500），无 NAT 客户端也使用 UDP 封装。Linux 真实拨号覆盖两个 1701 客户端同时接入、密钥轮换、重新拨号、DNS、UDP 和上游中断。原生 Windows/macOS/路由器客户端以及服务器本身位于 NAT 后的部署仍需分别实测，不能据此宣称兼容所有客户端。
+
+手动节点 UDP 检测衡量上游能力，不代表客户端转发；受管映射拒绝非 DNS UDP。服务器须能双向到达 `UDP ASSOCIATE` 返回的 UDP 中继，其端口可能不同于 SOCKS5 TCP 服务端口，关联的 TCP 控制连接也须保持。有效 UDP DNS 回包不能证明所有 UDP 应用或 QUIC 正常。
+
+S2L 提供 L2TP 接入，可选 L2TP/IPsec；尚未实现 WireGuard、OpenVPN 或原生 IKEv2。部署前确认客户端版本及路由器固件具备兼容的 L2TP 功能。
+
+## 下发 DNS 与实际解析器
+
+PPP 在 IPCP 协商时下发 **1.1.1.1 和 8.8.8.8**。客户端接受 VPN 自动 DNS。旧部署按[更新流程](operations.md)升级后，重新拨号获取 DNS；已有会话不会收到新的 PPP 选项。不要手动修改生成的 PPP 配置文件。
+
+这两个地址是隧道内 DNS 请求的入口标识。进入映射 TUN 的 TCP/UDP 53 请求均被接管，实际解析经映射的固定 SOCKS5。无需公开 DNS 监听或开放 PPP 访问主机。如果 S2L 主机本身绑定了上述地址，应在客户端改用其他非本机 DNS 目的地址并路由进隧道：本机 INPUT 会在 TUN 接管前被阻断。
+
+DNS 统一自动管理，经固定 SOCKS5 使用 `https://1.1.1.1/dns-query` 与 `8.8.8.8:53`。依赖私有解析器的部署需单独评估，本受管策略面向公网域名。
+
+当前方式失败立即尝试另一方式；超过 300 毫秒无有效响应时，并发尝试备用，采用首个有效答复并取消另一请求。TCP 备用失败也能回退 DoH。DoH 连续两次失败或被更快的 TCP 取代后优先 TCP，后台连续两次检查成功才恢复 DoH。有效 NXDOMAIN 不触发回退。两种方式都经过同一 SOCKS5，节点不可用时换 DNS 也无法恢复连接；不会直连 DNS 或切换出口。DNS 转发不依赖 SOCKS5 UDP，缓存仍由 sing-box 管理。
+
+## 各类客户端设置
+
+| 客户端 | 设置与路由 |
+|---|---|
+| Windows | 服务器使用 IPsec 时选 L2TP/IPsec + PSK，填写映射账号密码，认证方式需兼容服务器要求的 MS-CHAPv2。VPN 接口使用自动 DNS；全 IPv4 代理需启用 VPN 默认路由／远程默认网关并核对实际路由。 |
+| macOS / iOS | 版本提供 L2TP/IPsec 时填写服务器、账号及共享密钥；可用时启用通过 VPN 发送所有流量并核对 DNS。无普通 L2TP 选项的客户端需要服务器启用 IPsec。 |
+| Linux | 使用 L2TP 客户端，按需搭配 IPsec。pppd 启用 `usepeerdns`，通过 NetworkManager、systemd-resolved 或发行版 PPP hook 应用 DNS；收到 DNS 不代表系统解析器已采用。路由需另行配置。 |
+| 路由器／网关 | 每条拨号会话使用独立账号。将所需 LAN IPv4 流量路由进 L2TP，源 NAT 为分配的 PPP 地址。路由器自身的 DNS 查询也需走此路径，LAN 策略路由未必涵盖本机查询。保留 VPN 服务器经原 WAN 的路由。 |
+| Android／其他 | 确认该版本及客户端支持 L2TP/IPsec + PSK，不假定所有新系统都有兼容的内置客户端。 |
+
+pppd 通过 IP-up hook 的 `DNS1`／`DNS2` 提供协商结果，也可写入 `/etc/ppp/resolv.conf`；这不是系统解析器配置文件。参见 [pppd 手册](https://github.com/ppp-project/ppp/blob/master/pppd/pppd.8)。使用网络管理服务时不要盲目覆盖 `/etc/resolv.conf`。
+
+自动 DNS 未生效时，手动填写 1.1.1.1、8.8.8.8，并**将两者路由进 L2TP**。分别核对局域网 DNS、浏览器安全 DNS、应用 DoH 及分流规则；HTTPS 上的 DoH 不经 S2L 53 端口接管，而是跟随应用路由。
+
+S2L 阻断进入 PPP 的 IPv6，但无法阻断客户端其他接口的 IPv6。需在客户端／路由器落实 IPv6 和断线时的阻断策略；要求失败即阻断时，不应在 VPN 断开后自动恢复 WAN 直连。
+
+## 接入验收
+
+1. 核对 PPP IPv4、两个 DNS 及实际路由。Windows：`ipconfig /all`、`route print -4`；Linux：`ip -4 addr`、`ip -4 route get 1.1.1.1`，可用时执行 `resolvectl status`；macOS：`scutil --dns`、`netstat -rn -f inet`。VPN 服务器应仍经原网络可达。
+2. 分别执行 `nslookup example.com 1.1.1.1`、`nslookup example.com 8.8.8.8`，再测试系统及应用的普通解析。核对映射 DNS 计数；客户端直接取得公共 DNS 回复本身不能证明走了隧道。
+3. 从真实客户端访问 HTTPS，核对所选 SOCKS5 出口。动态出口供应商可返回不同 IP，不能单凭差异判定节点切换。面板测速及协议检测不能代替此步。
+4. 受管映射主动拒绝非 DNS UDP，不提供逐映射 UDP 开关。应用须支持 TCP 回退；仅 UDP 业务需另行评估部署。实测应用及 MTU/MSS 影响。
+5. 维护窗口中断所选上游，确认业务及 DNS 失败且不回退到服务器公网出口；恢复后再次验证。另测 VPN 断线时客户端自身的 IPv6／直连阻断，测试网关多设备共享及同账号重复拨号拒绝。
+
+能拨号但域名失败时，先查 DNS 是否采用、路由是否进隧道，再查 SOCKS5 到默认 DoH/TCP 解析器的连通及回复。健康检查、日志、恢复及防护边界见[操作指南](operations.md)。

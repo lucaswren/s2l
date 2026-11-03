@@ -1,0 +1,11 @@
+{
+  "listen": "127.0.0.1:8080",
+  "admin_user": "",
+  "admin_pass": "",
+  "singbox_bin": "/usr/local/bin/sing-box",
+  "data_dir": "./data",
+  "chap_secrets": "/etc/ppp/chap-secrets",
+  "xl2tpd_conf": "/etc/xl2tpd/xl2tpd.conf",
+  "ppp_options": "/etc/ppp/options.xl2tpd",
+  "auto_restore": true
+}
