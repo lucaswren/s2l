@@ -71,7 +71,7 @@ chrome.on('error',error=>{chromeError=error});
    if(String(path)==='/api/nodes'&&options?.method==='POST'){window.__nodeSaves++;return Promise.resolve(Response.json(JSON.parse(options.body)))}
    if(String(path).endsWith('/action'))window.__nodeActions++;
    return window.__nodeFetch(path,options)};
-   [...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.innerText==='SOCKS5 节点').querySelectorAll('button').forEach((b)=>{if(!window.__nodeOpened&&b.offsetParent&&b.innerText==='编辑'){window.__nodeOpened=true;b.click()}})`);
+   [...document.querySelectorAll('section')].find(s=>s.querySelector('h2')?.innerText==='出口节点').querySelectorAll('button').forEach((b)=>{if(!window.__nodeOpened&&b.offsetParent&&b.innerText==='编辑'){window.__nodeOpened=true;b.click()}})`);
   await wait(`document.querySelector('.edit-dialog input[type=password]')`);
   await evaluate(`(()=>{const e=document.querySelector('.edit-dialog input[type=password]');e.value='changed-secret';e.dispatchEvent(new Event('input',{bubbles:true}));[...document.querySelectorAll('.edit-dialog button')].find(b=>b.innerText==='保存').click()})()`);
   await wait(`document.querySelector('.edit-dialog .el-alert')?.innerText.includes('account-a')`);
