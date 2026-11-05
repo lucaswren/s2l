@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Change the OpenSSH listening port with configuration validation and rollback."""
 
+from installer_i18n import tr
+
 import base64
 import glob
 import json
@@ -36,7 +38,7 @@ def config_files(path, visited=None):
     if path in visited:
         return {}
     if path.is_symlink() or not path.resolve().is_relative_to(SSH_CONFIG.parent):
-        raise ValueError("SSH 配置包含链接或 /etc/ssh 外的文件，请手动修改")
+        raise ValueError(tr("SSH 配置包含链接或 /etc/ssh 外的文件，请手动修改"))
     visited.add(path)
     original = path.read_bytes()
     files = {path: original}
@@ -65,7 +67,7 @@ def effective_ports(output):
 def socket_override(output):
     addresses = [line.split()[1] for line in output.splitlines() if line.startswith("listenaddress ")]
     if not addresses:
-        raise ValueError("未能读取 SSH 监听地址")
+        raise ValueError(tr("未能读取 SSH 监听地址"))
     return ("[Socket]\nListenStream=\n" + "".join(f"ListenStream={address}\n" for address in addresses)).encode()
 
 
@@ -93,19 +95,19 @@ def change_port(value):
     run(sshd, "-t")
     previous = run(sshd, "-T")
     if effective_ports(previous) == {port} and listening(port):
-        print("SSH 端口未改变")
+        print(tr("SSH 端口未改变"))
         return
     check_available_port(port)
     socket_enabled = active("ssh.socket")
     service = next((unit for unit in ("ssh.service", "sshd.service") if active(unit)), None)
     if service is None:
-        raise ValueError("SSH 服务未运行，请先启动 OpenSSH 服务")
+        raise ValueError(tr("SSH 服务未运行，请先启动 OpenSSH 服务"))
     if socket_enabled and run("systemctl", "show", service, "-p", "KillMode", "--value").strip() != "process":
-        raise ValueError("SSH 服务 KillMode 不是 process，自动修改可能中断当前连接，请手动修改")
+        raise ValueError(tr("SSH 服务 KillMode 不是 process，自动修改可能中断当前连接，请手动修改"))
     originals = config_files(SSH_CONFIG)
     if socket_enabled:
         if SOCKET_CONFIG.is_symlink():
-            raise ValueError("SSH socket 配置为链接，请手动修改")
+            raise ValueError(tr("SSH socket 配置为链接，请手动修改"))
         originals[SOCKET_CONFIG] = SOCKET_CONFIG.read_bytes() if SOCKET_CONFIG.exists() else None
     backup = {str(path): base64.b64encode(data).decode() if data is not None else None for path, data in originals.items()}
     write_atomic(BACKUP, (json.dumps(backup, indent=2) + "\n").encode())
@@ -117,10 +119,10 @@ def change_port(value):
         run(sshd, "-t")
         effective = run(sshd, "-T")
         if effective_ports(effective) != {port}:
-            raise ValueError("SSH 有其他端口配置，自动修改已取消")
+            raise ValueError(tr("SSH 有其他端口配置，自动修改已取消"))
         addresses = [line.split()[1] for line in effective.splitlines() if line.startswith("listenaddress ")]
         if any(address.rsplit(":", 1)[-1] != str(port) for address in addresses):
-            raise ValueError("ListenAddress 显式指定了其他端口，请手动修改")
+            raise ValueError(tr("ListenAddress 显式指定了其他端口，请手动修改"))
         if socket_enabled:
             SOCKET_CONFIG.parent.mkdir(parents=True, exist_ok=True)
             write_atomic(SOCKET_CONFIG, socket_override(effective))
@@ -128,11 +130,11 @@ def change_port(value):
         apply_runtime(service, socket_enabled)
         for _ in range(25):
             if listening(port) and active(service) and (not socket_enabled or active("ssh.socket")):
-                print(f"SSH 端口已改为 {port}；请在新终端使用 ssh -p {port} 用户名@服务器IP 验证登录")
-                print(f"配置备份：{BACKUP}；确认新连接成功前不要关闭当前终端")
+                print(tr("SSH 端口已改为 {port}；请在新终端使用 ssh -p {port} 用户名@服务器IP 验证登录").format(port=port))
+                print(tr("配置备份：{path}；确认新连接成功前不要关闭当前终端").format(path=BACKUP))
                 return
             time.sleep(0.2)
-        raise RuntimeError("新 SSH 端口未正常监听")
+        raise RuntimeError(tr("新 SSH 端口未正常监听"))
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         for path, data in originals.items():
             if data is None:
@@ -143,13 +145,13 @@ def change_port(value):
             try:
                 apply_runtime(service, socket_enabled)
             except (OSError, subprocess.SubprocessError):
-                raise RuntimeError(f"原配置已恢复，但 SSH 重载失败；请通过服务器控制台检查，备份：{BACKUP}") from error
-        raise RuntimeError("修改失败，已恢复原 SSH 配置") from error
+                raise RuntimeError(tr("原配置已恢复，但 SSH 重载失败；请通过服务器控制台检查，备份：{path}").format(path=BACKUP)) from error
+        raise RuntimeError(tr("修改失败，已恢复原 SSH 配置")) from error
 
 
 if __name__ == "__main__":
     try:
         change_port(sys.stdin.read())
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
-        print(f"SSH 端口修改失败：{error}", file=sys.stderr)
+        print(tr("SSH 端口修改失败：{error}").format(error=error), file=sys.stderr)
         sys.exit(1)

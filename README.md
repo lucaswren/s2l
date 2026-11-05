@@ -50,7 +50,7 @@ For installations created by the current installer, run during a maintenance win
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
-The updater follows **`main`**, while new installations default to the latest stable release. To choose a reviewed tag or commit, replace `sudo bash` with `sudo env S2L_REF=YOUR_REVIEWED_REF bash`. It builds first, backs up the deployment and preserves settings; running clients must reconnect. Read [upgrade and recovery](docs/en/operations.md#upgrade) before updating. Do not rerun the installer to upgrade.
+The updater selects the latest stable release and pins its commit. It runs in the background; SSH disconnection does not cancel it. Check `/var/lib/s2l/cli-update/update.log` and `result.json` for progress and completion. To choose a reviewed tag or commit, replace `sudo bash` with `sudo env S2L_REF=YOUR_REVIEWED_REF bash`. It builds first, backs up the deployment and preserves settings; running clients must reconnect. Read [upgrade and recovery](docs/en/operations.md#upgrade) before updating. Do not rerun the installer to upgrade.
 
 ## Documentation
 

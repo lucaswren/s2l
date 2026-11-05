@@ -32,6 +32,7 @@ BACKUPS = Path('/var/backups')
 ROOT_HOME = Path('/root')
 CACHES = {
     Path('/var/lib/s2l/web-update'): {'job.json', 'release.json', 'control.lock', 'worker.lock'},
+    Path('/var/lib/s2l/cli-update'): {'runner.sh', 'update.log', 'result.json'},
     Path('/run/s2l-ipsec-nat'): {'state.json', 'lock'},
     Path('/var/lib/s2l-dependencies'): {'receipt.json'},
 }
@@ -129,7 +130,7 @@ def cleanup_inventory():
     if source:
         targets.append(source)
     runtime_tree()
-    for path, allowed in ((Path('/var/lib/s2l'), {'web-update'}), (Path('/var/lib/s2l-install'), set())):
+    for path, allowed in ((Path('/var/lib/s2l'), {'web-update', 'cli-update'}), (Path('/var/lib/s2l-install'), set())):
         if path.exists() or path.is_symlink():
             checked_tree(path)
             if any(item.name not in allowed for item in path.iterdir()):
@@ -271,6 +272,12 @@ def check_stopped_links(mappings, links, firewall):
         raise RuntimeError('PPP or managed TUN remains; guards retained')
 
 
+def check_background_tasks():
+    for unit in ('s2l-cli-update', 's2l-web-update', 's2l-cert-renew', 's2l-cert-renew.timer'):
+        if run('systemctl', 'is-active', '--quiet', unit, check=False).returncode == 0:
+            raise RuntimeError('update/certificate task is active; finish it first: ' + unit)
+
+
 def plan():
     if Path('/run/s2l-ikev2-active').exists():
         raise RuntimeError('Disable IKEv2 sites and reboot before uninstalling')
@@ -295,9 +302,7 @@ def plan():
     state = json.loads(state_path.read_text()) if state_path.exists() else {}
     mappings = state.get('mappings') or []
     check_connection(mappings)
-    for unit in ('s2l-web-update', 's2l-cert-renew', 's2l-cert-renew.timer'):
-        if run('systemctl', 'is-active', '--quiet', unit, check=False).returncode == 0:
-            raise RuntimeError('update/certificate task is active; finish it first: ' + unit)
+    check_background_tasks()
     if Path('/var/lib/s2l-install/journal.json').exists():
         raise RuntimeError('recover the incomplete installation before uninstalling')
     for directory, names in CACHES.items():
@@ -410,7 +415,7 @@ def verify_removed(paths, mappings):
     for path, marker in ((CHAP, b'# s2l:'), (L2TP, b'; BEGIN s2l managed block'), (SECRET, b'include /opt/s2l/ipsec.secrets'), (ARMOR, ARMOR_LINE.encode())):
         if marker in (read_file(path) or b''):
             raise RuntimeError('S2L configuration remains: ' + str(path))
-    for unit in (*UNITS, 'xl2tpd', 's2l-web-update', 's2l-cert-renew', 's2l-cert-renew.timer'):
+    for unit in (*UNITS, 'xl2tpd', 's2l-cli-update', 's2l-web-update', 's2l-cert-renew', 's2l-cert-renew.timer'):
         result = run('systemctl', 'show', unit, '--property=ActiveState', '--value', check=False)
         if result.stdout.strip() not in ('inactive', 'failed'):
             raise RuntimeError('service remains active or cannot be inspected: ' + unit)
@@ -586,7 +591,7 @@ def main():
     import fcntl
     with ExitStack() as locks:
         lock_files = []
-        for name in ('s2l-bootstrap', 's2l-install', 's2l-update', 's2l-kernel'):
+        for name in ('s2l-bootstrap', 's2l-install', 's2l-update', 's2l-kernel', 's2l-cli-update-launch'):
             fd = os.open('/run/' + name + '.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
             stream = locks.enter_context(os.fdopen(fd, 'r+'))
             lock_files.append((Path('/run/' + name + '.lock'), stream))

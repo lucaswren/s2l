@@ -11,6 +11,29 @@ import uninstall
 
 
 class UninstallTests(unittest.TestCase):
+    def test_active_cli_upgrade_prevents_uninstall(self):
+        for active in ('s2l-cli-update', 's2l-web-update'):
+            def status(*args, **kwargs):
+                return subprocess.CompletedProcess(args, 0 if args[-1] == active else 3, '')
+            with patch.object(uninstall, 'run', side_effect=status), self.assertRaisesRegex(RuntimeError, active):
+                uninstall.check_background_tasks()
+        with patch.object(uninstall, 'run', return_value=subprocess.CompletedProcess([], 3, '')):
+            uninstall.check_background_tasks()
+
+    def test_cli_job_directory_is_owned_but_unknown_persistent_data_is_retained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            parent = root / 'state'
+            parent.mkdir()
+            (parent / 'cli-update').mkdir()
+            redirect = lambda p: Path({'/var/lib/s2l': parent, '/var/lib/s2l-install': root / 'install'}.get(str(p), p))
+            with patch.object(uninstall, 'Path', side_effect=redirect), patch.object(uninstall, 'backup_trees', return_value=[]), patch.object(uninstall, 'source_tree', return_value=None), patch.object(uninstall, 'runtime_tree'):
+                self.assertEqual(uninstall.cleanup_inventory(), [])
+                (parent / 'user-data').mkdir()
+                with self.assertRaisesRegex(RuntimeError, 'unknown persistent file'):
+                    uninstall.cleanup_inventory()
+                self.assertTrue((parent / 'user-data').is_dir())
+
     def test_plan_requires_fresh_install_receipt_before_preflight(self):
         with patch('dependencies.read', return_value=None), patch('verify_update.preflight') as preflight:
             with self.assertRaisesRegex(RuntimeError, 'fresh S2L install'):
@@ -123,7 +146,7 @@ COMMIT
     def test_shortcut_help_and_invalid_arguments_are_read_only(self):
         script = str(Path(__file__).resolve().parents[1] / 's2l.sh')
         result = subprocess.run(['bash', script, '--help'], capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('uninstall --dry-run', result.stdout)
         for arguments in (['uninstall', '--yes'], ['2', '--dry-run'], ['13', '--dry-run', 'extra']):
             result = subprocess.run(['bash', script, *arguments], capture_output=True, text=True)

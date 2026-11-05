@@ -32,12 +32,16 @@ def main():
         script = checkout / "script/update.sh"
         mounted = []
         try:
-            # Keep the actual Go toolchain available after hiding /opt. The
-            # no-HOME case must compile real Go, not just exercise a mock.
-            toolchain = root / 'go-toolchain'
-            toolchain.mkdir()
-            subprocess.run(['mount', '--bind', str(go_root), str(toolchain)], check=True)
-            mounted.append(str(toolchain))
+            # Hidden managed toolchains need a preserved mount. Distribution
+            # toolchains under /usr/lib must retain their native path because
+            # they can contain relative symlinks into /usr/share.
+            hidden = tuple(map(Path, ('/opt', '/root', '/etc', '/run', '/usr/local', '/var/lib')))
+            toolchain = go_root
+            if any(path == go_root or path in go_root.parents for path in hidden):
+                toolchain = root / 'go-toolchain'
+                toolchain.mkdir()
+                subprocess.run(['mount', '--bind', str(go_root), str(toolchain)], check=True)
+                mounted.append(str(toolchain))
             go_source = root / 'probe.go'
             go_source.write_text('package main\nfunc main() {}\n')
             for target in ("/opt", "/root", "/etc", "/run", "/usr/local", "/var/lib"):

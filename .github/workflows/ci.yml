@@ -76,6 +76,8 @@ jobs:
           done
       - name: Verify upgrade preservation and failure recovery
         run: sudo env S2L_TEST_GOROOT="$(go env GOROOT)" unshare --mount --net --propagation private /usr/bin/python3 script/test_update_integration.py
+      - name: Verify detached CLI upgrade survives an SSH hangup
+        run: sudo env S2L_UPDATE_SYSTEMD_TEST=1 python3 script/test_remote_update_integration.py
       - run: python3 script/check_docs.py
       - name: Check all shell scripts
         run: for script in script/*.sh; do bash -n "$script"; done

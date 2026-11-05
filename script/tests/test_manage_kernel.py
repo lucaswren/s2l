@@ -301,14 +301,14 @@ class KernelCommandTests(unittest.TestCase):
             log = root / 'calls'
             commands = {
                 'id': '#!/bin/sh\necho 0\n',
-                'python3': '#!/bin/sh\nprintf "%s\\n" "$*" >> "$KERNEL_CLI_LOG"\nexit "${KERNEL_CLI_EXIT:-0}"\n',
+                'python3': '#!/bin/sh\ncase "$1" in */installer_i18n.py) exec "$KERNEL_REAL_PYTHON" "$@" ;; esac\nprintf "%s\\n" "$*" >> "$KERNEL_CLI_LOG"\nexit "${KERNEL_CLI_EXIT:-0}"\n',
                 'systemctl': '#!/bin/sh\necho unexpected-service-change >> "$KERNEL_CLI_LOG"\nexit 99\n',
             }
             for name, content in commands.items():
                 path = root / name
                 path.write_text(content)
                 path.chmod(0o755)
-            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'], KERNEL_CLI_LOG=str(log))
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ['PATH'], KERNEL_CLI_LOG=str(log), KERNEL_REAL_PYTHON=sys.executable)
             cli = Path(__file__).resolve().parents[1] / 's2l.sh'
             for argument in ('kernel-upgrade', '12'):
                 result = subprocess.run(['bash', str(cli), argument], env=env, capture_output=True, text=True, timeout=10)

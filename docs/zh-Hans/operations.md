@@ -222,13 +222,15 @@ journalctl -k -b --no-pager | grep -Ei 'refcount|use-after-free|l2tp|lockup|pani
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
+SSH 命令会启动独立后台任务，断开 SSH 不会中止升级；映射切换仍会中断 L2TP 及经其连接的 SSH。使用 `tail -f /var/lib/s2l/cli-update/update.log` 查看进度，使用 `cat /var/lib/s2l/cli-update/result.json` 核对结果，只有 `succeeded` 表示成功。编译按包串行执行并显示进度。直接执行 `script/update.sh` 仍是前台操作，请使用独立管理连接或终端复用工具。
+
 更新脚本仅接受本安装器生成的依赖归属记录，并在停止服务前检查 conntrack 和 nftables。
 
 脚本先下载并编译，再停止服务、在 `/root/s2l-backup.*` 创建私有备份、更新程序与管理脚本及服务单元；原本运行中的 S2L 会验证本机认证 API。配置、账号、节点、证书和端口保留，原本停止的服务仍保持停止；运行中的客户端需重新拨号。
 
 停止服务后若升级失败，脚本会尝试恢复已备份文件，保留阻断规则并让 PPP 服务保持停止，不会自动恢复拨号；根据输出的备份位置与日志检查后重试或手动恢复。下载或编译失败不停止服务。脚本不修改 Nginx、SSH、Go 工具链或 sing-box；需要使用标准文件路径与本机后端监听，自定义部署使用手动流程。
 
-远端命令以 root 执行下载代码，默认跟随 `main`，请先审阅。若要固定提交，将 `sudo bash` 改成 `sudo env S2L_REF=COMMIT bash`。首次升级后可用 `s2l 11` 调用相同流程；已审阅的本地工作副本可直接执行 `sudo bash script/update.sh`。
+远端命令以 root 执行下载代码，默认选择最新稳定版并固定提交，请先审阅。若要固定提交，将 `sudo bash` 改成 `sudo env S2L_REF=COMMIT bash`。首次升级后可用 `s2l 11` 调用相同流程；已审阅的本地工作副本可直接执行 `sudo bash script/update.sh`。
 
 ### 已审阅源码与自定义部署
 
@@ -286,7 +288,10 @@ s2l 10  # 按提示修改 SSH 端口
 | 11 | 升级 S2L，保留配置 |
 | 12 / `kernel-upgrade` | 准备 Ubuntu 24.04 内核，不自动重启 |
 | 13 / `uninstall` | 预览、确认、备份并卸载 S2L |
+| 14 / `language` | 选择英语、繁体中文或简体中文 |
 | 0 | 退出菜单 |
+
+使用 `s2l language`（菜单 14）选择语言，也可直接执行 `s2l language en`、`s2l language zh-Hant` 或 `s2l language zh-Hans`。命令行与 Web 共用已保存的语言：返回菜单时读取 Web 设置，命令行切换后刷新 Web 即可同步。切换通过本机认证 API 保存，不重启服务或映射；未保存语言时命令行默认英语。
 
 ### 卸载
 

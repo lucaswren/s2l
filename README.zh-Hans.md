@@ -50,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
-升级默认跟随 **`main`**，新安装则默认使用最新稳定版。若要指定已审阅标签或提交，将 `sudo bash` 改成 `sudo env S2L_REF=YOUR_REVIEWED_REF bash`。脚本先构建、备份并保留配置；运行中的客户端须重新连接。操作前阅读[升级与恢复](docs/zh-Hans/operations.md#更新-s2l-应用)，不要重跑安装程序升级。
+升级默认选择最新稳定版并固定提交，在后台执行，SSH 断开不会中止任务。进度与结果见 `/var/lib/s2l/cli-update/update.log` 和 `result.json`。若要指定已审阅标签或提交，将 `sudo bash` 改成 `sudo env S2L_REF=YOUR_REVIEWED_REF bash`。脚本先构建、备份并保留配置；运行中的客户端须重新连接。操作前阅读[升级与恢复](docs/zh-Hans/operations.md#更新-s2l-应用)，不要重跑安装程序升级。
 
 ## 文档
 

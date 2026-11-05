@@ -150,13 +150,15 @@ For an existing default `/opt/s2l` installation, run:
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
+The CLI command starts a background systemd task. SSH disconnection does not cancel it; restarting mappings still interrupts L2TP and any SSH connection carried by them. Track `tail -f /var/lib/s2l/cli-update/update.log` and inspect `cat /var/lib/s2l/cli-update/result.json`; only `succeeded` means completion. Package compilation is serialized and prints progress. Direct `script/update.sh` execution stays in the foreground and needs an independent management connection or terminal multiplexer.
+
 The updater requires the dependency receipt created by this installer and checks that conntrack and nftables are available before stopping services.
 
 The updater downloads and builds before stopping services, then creates a private backup in `/root/s2l-backup.*`, installs the application, management scripts and service units, and verifies the local authenticated API when S2L was running. Configuration, accounts, nodes, certificates and ports are preserved; services that were stopped remain stopped. Running clients must reconnect.
 
 If an upgrade fails after stopping services, it attempts to restore backed-up files and keeps PPP services stopped with guards in place. This is not an automatic return to service: inspect the printed backup path and logs, then retry or recover manually. Interrupted downloads/builds leave services running. The script does not change Nginx, SSH, the Go toolchain or sing-box. It requires the standard file paths and a local backend listener; custom deployments use the manual procedure.
 
-The remote command follows `main` and executes downloaded code as root. Review it before use; set `S2L_REF` to a reviewed commit using `sudo env S2L_REF=COMMIT bash` instead of `sudo bash`. After the first upgrade, `s2l 11` invokes the same updater. From a reviewed local checkout, use `sudo bash script/update.sh`.
+The remote command selects the latest stable release, pins its commit and executes downloaded code as root. Review it before use; set `S2L_REF` to a reviewed commit using `sudo env S2L_REF=COMMIT bash` instead of `sudo bash`. After the first upgrade, `s2l 11` invokes the same updater. From a reviewed local checkout, use `sudo bash script/update.sh`.
 
 ### Reviewed source and custom deployments
 
@@ -203,7 +205,10 @@ Run `s2l` for the interactive menu, or `s2l NUMBER` for one action. Unprivileged
 | 11 | Upgrade S2L, preserving configuration |
 | 12 / `kernel-upgrade` | Prepare Ubuntu 24.04 HWE kernel without rebooting |
 | 13 / `uninstall` | Preview, confirm, back up and uninstall S2L |
+| 14 / `language` | Choose English, Traditional Chinese or Simplified Chinese |
 | 0 | Exit menu |
+
+Run `s2l language` (menu 14), or `s2l language en`, `s2l language zh-Hant`, `s2l language zh-Hans`. CLI and Web share the saved language. Returning to the CLI menu reloads the Web preference; refresh the Web interface after a CLI change. Language changes use the local authenticated API and do not restart services or mappings. Without a saved preference, CLI defaults to English.
 
 ### Uninstall
 

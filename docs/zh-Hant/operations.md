@@ -150,13 +150,15 @@ dpkg-query -W -f='${Depends}\n' linux-image-generic-hwe-24.04
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
+SSH 命令會啟動獨立背景任務，中斷 SSH 不會停止升級；映射切換仍會中斷 L2TP 及經其連線的 SSH。使用 `tail -f /var/lib/s2l/cli-update/update.log` 查看進度，使用 `cat /var/lib/s2l/cli-update/result.json` 核對結果，只有 `succeeded` 表示成功。編譯按套件依序執行並顯示進度。直接執行 `script/update.sh` 仍是前景操作，請使用獨立管理連線或終端多工工具。
+
 更新腳本僅接受本安裝程式產生的相依套件歸屬記錄，並在停止服務前檢查 conntrack 和 nftables。
 
 腳本先下載並編譯，再停止服務、於 `/root/s2l-backup.*` 建立私有備份、更新程式與管理腳本及服務單元；原本執行中的 S2L 會驗證本機認證 API。設定、帳號、節點、憑證與連接埠保留，原本停止的服務仍保持停止；執行中的用戶端須重新撥號。
 
 停止服務後若升級失敗，腳本會嘗試還原已備份檔案，保留阻斷規則並讓 PPP 服務保持停止，不會自動恢復撥號；依輸出的備份位置與日誌檢查後重試或手動恢復。下載或編譯失敗不停止服務。腳本不修改 Nginx、SSH、Go 工具鏈或 sing-box；須使用標準檔案路徑與本機後端監聽，自訂部署使用手動流程。
 
-遠端命令以 root 執行下載程式碼，預設跟隨 `main`，請先審閱。若要固定提交，將 `sudo bash` 改成 `sudo env S2L_REF=COMMIT bash`。首次升級後可用 `s2l 11` 呼叫相同流程；已審閱的本機工作副本可直接執行 `sudo bash script/update.sh`。
+遠端命令以 root 執行下載程式碼，預設選擇最新穩定版並固定提交，請先審閱。若要固定提交，將 `sudo bash` 改成 `sudo env S2L_REF=COMMIT bash`。首次升級後可用 `s2l 11` 呼叫相同流程；已審閱的本機工作副本可直接執行 `sudo bash script/update.sh`。
 
 ### 已審閱原始碼與自訂部署
 
@@ -199,7 +201,10 @@ Ubuntu 使用套件附帶的 charon AppArmor 設定時，IPsec 啟動僅在 `/et
 | 11 | 升級 S2L，保留設定 |
 | 12 / `kernel-upgrade` | 準備 Ubuntu 24.04 核心，不自動重啟 |
 | 13 / `uninstall` | 預覽、確認、備份並解除安裝 S2L |
+| 14 / `language` | 選擇英語、繁體中文或簡體中文 |
 | 0 | 離開 |
+
+使用 `s2l language`（選單 14）選擇語言，也可直接執行 `s2l language en`、`s2l language zh-Hant` 或 `s2l language zh-Hans`。命令列與 Web 共用已儲存的語言：返回選單時讀取 Web 設定，命令列切換後重新整理 Web 即可同步。切換透過本機驗證 API 儲存，不重啟服務或映射；未儲存語言時命令列預設英語。
 
 ### 解除安裝
 

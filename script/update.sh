@@ -2,21 +2,36 @@
 # Run from any reviewed source checkout. Only the default managed layout is supported.
 set -euo pipefail
 umask 077
-[[ "$(id -u)" -eq 0 ]] || { echo "[ERROR] 请使用 sudo bash script/update.sh" >&2; exit 1; }
+text() {
+  case "${_S2L_INSTALL_LANG:-en}" in
+    zh-Hant) printf '%s' "$2" ;;
+    zh-Hans) printf '%s' "$3" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+[[ "$(id -u)" -eq 0 ]] || { echo "$(text "[ERROR] Run sudo bash script/update.sh" "[ERROR] 請使用 sudo bash script/update.sh" "[ERROR] 请使用 sudo bash script/update.sh")" >&2; exit 1; }
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="/usr/local/go/bin:$PATH"
+export _S2L_INSTALL_LANG="$(python3 - /opt/s2l/config.json <<'PYLANG'
+import json,sys
+try:
+ value=json.load(open(sys.argv[1],encoding='utf-8')).get('ui_language')
+except (OSError,ValueError,AttributeError):value=None
+print({'en':'en','zh-TW':'zh-Hant','zh-CN':'zh-Hans'}.get(value,'en') if isinstance(value,str) else 'en')
+PYLANG
+)"
 # Do not replace a deployment while retired site routes or profiles remain.
 python3 "$ROOT_DIR/script/manage_ipsec.py" check-l2tp
 for command in go python3 systemctl flock iptables iptables-restore ip6tables iptables-save ip6tables-save install cp conntrack nft; do
-  command -v "$command" >/dev/null || { echo "[ERROR] 缺少 $command；现有服务未修改。" >&2; exit 1; }
+  command -v "$command" >/dev/null || { echo "$(text "[ERROR] Missing $command; existing services unchanged." "[ERROR] 缺少 $command；既有服務未變更。" "[ERROR] 缺少 $command；现有服务未修改。")" >&2; exit 1; }
 done
 exec 9>/run/s2l-update.lock
-flock -n 9 || { echo "[ERROR] 另一个 S2L 升级正在运行。" >&2; exit 1; }
+flock -n 9 || { echo "$(text "[ERROR] Another S2L upgrade is running." "[ERROR] 另一個 S2L 升級正在執行。" "[ERROR] 另一个 S2L 升级正在运行。")" >&2; exit 1; }
 python3 "$ROOT_DIR/script/dependencies.py" require
 python3 "$ROOT_DIR/script/verify_update.py" preflight /opt/s2l/config.json
-[[ -x /opt/s2l/s2l && -f "$ROOT_DIR/web/dist/index.html" ]] || { echo "[ERROR] 缺少已安装程序或内嵌前端。" >&2; exit 1; }
+[[ -x /opt/s2l/s2l && -f "$ROOT_DIR/web/dist/index.html" ]] || { echo "$(text "[ERROR] Installed binary or embedded frontend missing." "[ERROR] 缺少已安裝程式或內嵌前端。" "[ERROR] 缺少已安装程序或内嵌前端。")" >&2; exit 1; }
 for file in deploy/systemd/{s2l,s2l-guard,s2l-ipsec}.service deploy/systemd/xl2tpd-s2l.conf script/{s2l.sh,remote_update.sh,manage_config.py,manage_ssh.py,manage_ipsec.py,ipsec_nat.py,manage_time.py,manage_kernel.py,installer_i18n.py,manage_update.py,verify_update.py,uninstall.py,dependencies.py}; do
-  [[ -f "$ROOT_DIR/$file" ]] || { echo "[ERROR] 源码不完整：$file" >&2; exit 1; }
+  [[ -f "$ROOT_DIR/$file" ]] || { echo "$(text "[ERROR] Incomplete source: $file" "[ERROR] 原始碼不完整：$file" "[ERROR] 源码不完整：$file")" >&2; exit 1; }
 done
 report_web_update() {
   if [[ -n "${S2L_WEB_UPDATE_ID:-}" && -f /opt/s2l/manage_update.py ]]; then
@@ -37,12 +52,12 @@ finish() {
   trap - EXIT INT TERM
   if (( changed && !complete )); then
     report_web_update rolling_back
-    echo "[ERROR] 升级未完成，停止拨号服务并尝试恢复备份..." >&2
+    echo "$(text "[ERROR] Upgrade incomplete; stopping VPN services and restoring the backup..." "[ERROR] 升級未完成，正在停止撥號服務並嘗試還原備份..." "[ERROR] 升级未完成，停止拨号服务并尝试恢复备份...")" >&2
     systemctl stop xl2tpd s2l s2l-ipsec || true
     if (( snapshot )); then
-      cp -a "$backup/app/." /opt/s2l/ || echo "[ERROR] 程序/配置恢复失败，请使用备份手动恢复。" >&2
+      cp -a "$backup/app/." /opt/s2l/ || echo "$(text "[ERROR] Application/configuration restore failed; recover manually from the backup." "[ERROR] 程式／設定還原失敗，請使用備份手動還原。" "[ERROR] 程序/配置恢复失败，请使用备份手动恢复。")" >&2
       while IFS= read -r file; do
-        cp -a "$backup/system$file" "$file" || echo "[ERROR] 系统文件恢复失败：$file" >&2
+        cp -a "$backup/system$file" "$file" || echo "$(text "[ERROR] System file restore failed: $file" "[ERROR] 系統檔案還原失敗：$file" "[ERROR] 系统文件恢复失败：$file")" >&2
       done < "$backup/system-paths.txt"
     fi
     # Keep the boot guard installed while the backed-up deployment is recovered.
@@ -50,8 +65,8 @@ finish() {
     mkdir -p /etc/systemd/system/xl2tpd.service.d
     install -m 644 "$ROOT_DIR/deploy/systemd/xl2tpd-s2l.conf" /etc/systemd/system/xl2tpd.service.d/s2l.conf || true
     systemctl daemon-reload || true
-    if [[ -x "$work/s2l" ]]; then "$work/s2l" -guard-only || echo "[ERROR] 阻断规则安装失败；请勿启动拨号服务。" >&2; fi
-    echo "[ERROR] 拨号服务保持停止；备份：${backup:-未创建}。请检查 journalctl -u s2l -u s2l-guard，再重试升级。" >&2
+    if [[ -x "$work/s2l" ]]; then "$work/s2l" -guard-only || echo "$(text "[ERROR] Guard installation failed; do not start VPN services." "[ERROR] 阻斷規則安裝失敗；請勿啟動撥號服務。" "[ERROR] 阻断规则安装失败；请勿启动拨号服务。")" >&2; fi
+    echo "$(text "[ERROR] VPN services remain stopped; backup: ${backup:-not created}. Check journalctl -u s2l -u s2l-guard before retrying." "[ERROR] 撥號服務保持停止；備份：${backup:-未建立}。請檢查 journalctl -u s2l -u s2l-guard，再重試升級。" "[ERROR] 拨号服务保持停止；备份：${backup:-未创建}。请检查 journalctl -u s2l -u s2l-guard，再重试升级。")" >&2
     (( result != 0 )) || result=1
   fi
   [[ "$work" == /tmp/s2l-build.* ]] && rm -rf -- "$work"
@@ -72,16 +87,18 @@ if [[ -z "${GOPATH:-}" && -z "${HOME:-}" ]]; then
 fi
 
 report_web_update building
-echo "[INFO] 编译 S2L，现有服务继续运行..."
+echo "$(text "[INFO] Building S2L; existing services remain running..." "[INFO] 編譯 S2L，既有服務繼續執行..." "[INFO] 编译 S2L，现有服务继续运行...")"
 S2L_BUILD_VERSION="${S2L_VERSION:-${S2L_REF:-source}}"
 S2L_BUILD_COMMIT="${S2L_COMMIT:-}"
-[[ "$S2L_BUILD_VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]] || { echo "[ERROR] 无效的构建版本" >&2; exit 1; }
-[[ -z "$S2L_BUILD_COMMIT" || "$S2L_BUILD_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "[ERROR] 无效的构建提交" >&2; exit 1; }
+[[ "$S2L_BUILD_VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]] || { echo "$(text "[ERROR] Invalid build version" "[ERROR] 無效的建置版本" "[ERROR] 无效的构建版本")" >&2; exit 1; }
+[[ -z "$S2L_BUILD_COMMIT" || "$S2L_BUILD_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "$(text "[ERROR] Invalid build commit" "[ERROR] 無效的建置提交" "[ERROR] 无效的构建提交")" >&2; exit 1; }
 S2L_BUILD_FLAGS="-X github.com/lucaswren/s2l/internal/buildinfo.Version=$S2L_BUILD_VERSION -X github.com/lucaswren/s2l/internal/buildinfo.Revision=$S2L_BUILD_COMMIT"
-(cd "$ROOT_DIR" && go build -ldflags "$S2L_BUILD_FLAGS" -o "$work/s2l" ./cmd/s2l)
+# Serialize package compilation and expose package progress on small gateways.
+# Keep the installed services running until the new binary is ready.
+(cd "$ROOT_DIR" && GOMAXPROCS="${GOMAXPROCS:-2}" go build -v -p 1 -ldflags "$S2L_BUILD_FLAGS" -o "$work/s2l" ./cmd/s2l)
 backup="$(mktemp -d /root/s2l-backup.XXXXXXXX)"
 report_web_update backup
-echo "[INFO] 构建完成；短暂停止拨号并备份到 $backup ..."
+echo "$(text "[INFO] Build complete; briefly stopping VPN services and backing up to $backup ..." "[INFO] 建置完成；短暫停止撥號並備份至 $backup ..." "[INFO] 构建完成；短暂停止拨号并备份到 $backup ...")"
 systemctl is-active --quiet s2l && was_s2l=1 || true
 systemctl is-active --quiet xl2tpd && was_l2tp=1 || true
 systemctl is-active --quiet s2l-ipsec && was_ipsec=1 || true
@@ -131,6 +148,6 @@ fi
 if (( was_l2tp )); then systemctl is-active --quiet xl2tpd; fi
 systemctl is-active --quiet s2l-guard.service
 complete=1
-echo "[OK] S2L 升级完成；配置、账号、节点、证书和端口已保留。"
-echo "[INFO] 备份：$backup；原本停止的服务保持停止。"
-echo "[INFO] 运行中的客户端需重新拨号；刷新网页查看上游健康状态。"
+echo "$(text "[OK] S2L upgrade complete; settings, accounts, nodes, certificates and ports preserved." "[OK] S2L 升級完成；設定、帳號、節點、憑證及連接埠已保留。" "[OK] S2L 升级完成；配置、账号、节点、证书和端口已保留。")"
+echo "$(text "[INFO] Backup: $backup; previously stopped services remain stopped." "[INFO] 備份：$backup；原本停止的服務保持停止。" "[INFO] 备份：$backup；原本停止的服务保持停止。")"
+echo "$(text "[INFO] Active clients must reconnect; refresh the Web interface to check upstream health." "[INFO] 執行中的用戶端須重新撥號；重新整理網頁查看上游健康狀態。" "[INFO] 运行中的客户端需重新拨号；刷新网页查看上游健康状态。")"

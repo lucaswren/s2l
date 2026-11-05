@@ -1,7 +1,7 @@
-"""Installer messages. Language is chosen only by install.sh --lang.
+"""Installer and management CLI messages. Installation uses install.sh --lang.
 
 The private environment value carries that choice into child processes. Helpers
-called outside installation keep their original messages for CLI compatibility.
+called without an explicit language keep their source messages for API consumers.
 """
 import os
 
@@ -109,9 +109,231 @@ MESSAGES = {
 }
 
 
+# CLI terminology shared with the Web interface.
+MESSAGES.update({'S2L 管理': ('S2L management', 'S2L 管理', 'S2L 管理'),
+ '服务': ('Service', '服務', '服务'),
+ '管理': ('Management', '管理', '管理'),
+ '维护': ('Maintenance', '維護', '维护'),
+ '管理地址': ('Management URL', '管理位址', '管理地址'),
+ '服务状态': ('Service status', '服務狀態', '服务状态'),
+ '重启服务': ('Restart services', '重啟服務', '重启服务'),
+ '服务日志': ('Service logs', '服務日誌', '服务日志'),
+ '启动服务': ('Start service', '啟動服務', '启动服务'),
+ '停止服务': ('Stop service', '停止服務', '停止服务'),
+ '管理密码': ('Management password', '管理密碼', '管理密码'),
+ '管理用户名': ('Management username', '管理用戶名', '管理用户名'),
+ '管理端口': ('Management port', '管理連接埠', '管理端口'),
+ 'SSH 端口': ('SSH port', 'SSH 連接埠', 'SSH 端口'),
+ '软件更新': ('Software updates', '軟體更新', '软件更新'),
+ '内核维护': ('Kernel maintenance', '核心維護', '内核维护'),
+ '卸载 S2L': ('Uninstall S2L', '解除安裝 S2L', '卸载 S2L'),
+ '退出': ('Exit', '結束', '退出'),
+ '用法：s2l [0-14|kernel-upgrade|uninstall]；s2l uninstall --dry-run 只读预览': ('Usage: s2l [0-14|kernel-upgrade|uninstall]; '
+                                                                         's2l uninstall --dry-run previews removal',
+                                                                         '用法：s2l [0-14|kernel-upgrade|uninstall]；s2l '
+                                                                         'uninstall --dry-run 僅預覽',
+                                                                         '用法：s2l [0-14|kernel-upgrade|uninstall]；s2l '
+                                                                         'uninstall --dry-run 只读预览'),
+ '用法：s2l 打开菜单；s2l [0-14] 执行对应操作；s2l kernel-upgrade 准备内核（不自动重启）；s2l uninstall --dry-run 只读预览卸载。': ('Usage: s2l opens '
+                                                                                                  'the menu; s2l '
+                                                                                                  '[0-14] runs an '
+                                                                                                  'action; s2l '
+                                                                                                  'kernel-upgrade '
+                                                                                                  'prepares the kernel '
+                                                                                                  'without rebooting; '
+                                                                                                  's2l uninstall '
+                                                                                                  '--dry-run previews '
+                                                                                                  'removal.',
+                                                                                                  '用法：s2l 開啟選單；s2l '
+                                                                                                  '[0-14] 執行對應操作；s2l '
+                                                                                                  'kernel-upgrade '
+                                                                                                  '準備核心（不自動重啟）；s2l '
+                                                                                                  'uninstall --dry-run '
+                                                                                                  '僅預覽解除安裝。',
+                                                                                                  '用法：s2l 打开菜单；s2l '
+                                                                                                  '[0-14] 执行对应操作；s2l '
+                                                                                                  'kernel-upgrade '
+                                                                                                  '准备内核（不自动重启）；s2l '
+                                                                                                  'uninstall --dry-run '
+                                                                                                  '只读预览卸载。'),
+ '无效选项：': ('Invalid option: ', '無效選項：', '无效选项：'),
+ '；使用 s2l --help 查看用法。': ('; see s2l --help.', '；使用 s2l --help 查看用法。', '；使用 s2l --help 查看用法。'),
+ '请以 root 执行：sudo s2l': ('Run as root: sudo s2l', '請以 root 執行：sudo s2l', '请以 root 执行：sudo s2l'),
+ '按回车返回菜单...': ('Press Enter to return to the menu...', '按 Enter 返回選單...', '按回车返回菜单...'),
+ '未找到配置文件：': ('Configuration file not found: ', '找不到設定檔：', '未找到配置文件：'),
+ '请选择操作 [0-14]: ': ('Select an action [0-14]: ', '請選擇操作 [0-14]：', '请选择操作 [0-14]: '),
+ '保存后将重启服务，当前拨号连接会中断；留空取消。': ('Saving restarts the service and disconnects VPN clients. Leave blank to cancel.',
+                              '儲存後會重啟服務並中斷 VPN 連線；留空取消。',
+                              '保存后将重启服务，当前拨号连接会中断；留空取消。'),
+ '新管理用户名: ': ('New management username: ', '新管理使用者名稱：', '新管理用户名: '),
+ '新管理密码（12-128 位）: ': ('New management password (12-128 characters): ', '新管理密碼（12–128 字元）：', '新管理密码（12-128 位）: '),
+ '再次输入密码: ': ('Confirm password: ', '再次輸入密碼：', '再次输入密码: '),
+ '两次密码不一致，未修改。': ('Passwords do not match; nothing changed.', '兩次密碼不一致，未變更。', '两次密码不一致，未修改。'),
+ '请先放行新 TCP 端口；HTTPS 部署将修改 Nginx 端口，保留现有证书。': ('Allow the new TCP port first. HTTPS changes the Nginx port and retains '
+                                               'its certificate.',
+                                               '請先開放新 TCP 連接埠；HTTPS 部署會修改 Nginx 連接埠並保留憑證。',
+                                               '请先放行新 TCP 端口；HTTPS 部署将修改 Nginx 端口，保留现有证书。'),
+ '新网页端口（1-65535）: ': ('New management port (1-65535): ', '新管理連接埠（1–65535）：', '新网页端口（1-65535）: '),
+ '请先在安全组/防火墙放行新 SSH 端口，并保持当前连接。': ('Allow the new SSH port in the security group/firewall and keep this connection '
+                                   'open.',
+                                   '請先在安全群組／防火牆開放新 SSH 連接埠，並保留目前連線。',
+                                   '请先在安全组/防火墙放行新 SSH 端口，并保持当前连接。'),
+ '旧端口将停止接受新连接；修改后需在另一个终端验证登录。': ('The old port will stop accepting new connections. Verify login in another terminal.',
+                                 '舊連接埠將停止接受新連線；修改後請在另一個終端驗證登入。',
+                                 '旧端口将停止接受新连接；修改后需在另一个终端验证登录。'),
+ '新 SSH 端口（1-65535，留空取消）: ': ('New SSH port (1-65535, blank to cancel): ',
+                              '新 SSH 連接埠（1–65535，留空取消）：',
+                              '新 SSH 端口（1-65535，留空取消）: '),
+ '已放行新端口并准备验证？输入 yes 继续: ': ('Is the port allowed and a verification terminal ready? Type yes to continue: ',
+                             '已開放新連接埠並準備驗證？輸入 yes 繼續：',
+                             '已放行新端口并准备验证？输入 yes 继续: '),
+ '已取消': ('Cancelled', '已取消', '已取消'),
+ '无效选项': ('Invalid option', '無效選項', '无效选项'),
+ 'S2L 已重启': ('S2L restarted', 'S2L 已重啟', 'S2L 已重启'),
+ 'S2L 已启动': ('S2L started', 'S2L 已啟動', 'S2L 已启动'),
+ 'S2L 已停止': ('S2L stopped', 'S2L 已停止', 'S2L 已停止'),
+ '管理监听地址格式错误': ('Invalid management listener address', '管理監聽位址格式錯誤', '管理监听地址格式错误'),
+ '网页管理地址：{address}': ('Management URL: {address}', '網頁管理位址：{address}', '网页管理地址：{address}'),
+ '未能查询公网地址，以上为本机出口地址；存在 NAT 时请使用实际公网 IP。': ('Public IP lookup failed; this is the local egress address. Use the actual '
+                                            'public IP behind NAT.',
+                                            '無法查詢公網位址，以上為本機出口位址；有 NAT 時請使用實際公網 IP。',
+                                            '未能查询公网地址，以上为本机出口地址；存在 NAT 时请使用实际公网 IP。'),
+ '无法自动识别服务器地址，请访问 http://服务器公网IP:{port}': ('Cannot detect the server address; visit http://SERVER_PUBLIC_IP:{port}',
+                                           '無法自動識別伺服器位址，請開啟 http://伺服器公網IP:{port}',
+                                           '无法自动识别服务器地址，请访问 http://服务器公网IP:{port}'),
+ '管理服务仅在本机监听，请通过 SSH 隧道或反向代理访问。': ('The backend listens locally; use an SSH tunnel or reverse proxy.',
+                                   '管理服務僅在本機監聽，請透過 SSH 隧道或反向代理存取。',
+                                   '管理服务仅在本机监听，请通过 SSH 隧道或反向代理访问。'),
+ '证书类型：自签证书，浏览器会显示信任警告；证书位于 /opt/s2l/tls/self-signed.crt。': ('Certificate: self-signed; browsers show a trust warning. '
+                                                             'File: /opt/s2l/tls/self-signed.crt.',
+                                                             '憑證：自簽憑證，瀏覽器會顯示信任警告；檔案位於 /opt/s2l/tls/self-signed.crt。',
+                                                             '证书类型：自签证书，浏览器会显示信任警告；证书位于 /opt/s2l/tls/self-signed.crt。'),
+ '管理监听地址：{listen}': ('Backend listener: {listen}', '管理監聽位址：{listen}', '管理监听地址：{listen}'),
+ '管理用户名：{user}': ('Management username: {user}', '管理使用者名稱：{user}', '管理用户名：{user}'),
+ '未启用认证': ('Authentication disabled', '未啟用驗證', '未启用认证'),
+ '管理密码：不在命令输出中显示。': ('Management password: not shown.', '管理密碼：不會顯示於命令輸出。', '管理密码：不在命令输出中显示。'),
+ '读取配置失败：{error}': ('Cannot read configuration: {error}', '讀取設定失敗：{error}', '读取配置失败：{error}'),
+ '配置错误：{error}': ('Configuration error: {error}', '設定錯誤：{error}', '配置错误：{error}'),
+ '设置已保存，S2L 已重启': ('Settings saved; S2L restarted', '設定已儲存，S2L 已重啟', '设置已保存，S2L 已重启'),
+ '配置必须是 JSON 对象': ('Configuration must be a JSON object', '設定必須是 JSON 物件', '配置必须是 JSON 对象'),
+ '请先在配置文件中设置管理用户名和至少 12 位的密码': ('Configure a management username and a password of at least 12 characters first',
+                                '請先在設定檔中指定管理使用者名稱及至少 12 字元的密碼',
+                                '请先在配置文件中设置管理用户名和至少 12 位的密码'),
+ '不支持符号链接形式的 Nginx 配置': ('Symlinked Nginx configuration is unsupported', '不支援符號連結形式的 Nginx 設定', '不支持符号链接形式的 Nginx 配置'),
+ '仅支持 S2L 管理的 Nginx HTTPS 配置': ('Only S2L-managed Nginx HTTPS configuration is supported',
+                                '僅支援 S2L 管理的 Nginx HTTPS 設定',
+                                '仅支持 S2L 管理的 Nginx HTTPS 配置'),
+ 'Nginx 配置与管理地址不一致，未修改': ('Nginx configuration and management URL differ; nothing changed',
+                          'Nginx 設定與管理位址不一致，未變更',
+                          'Nginx 配置与管理地址不一致，未修改'),
+ '缺少配置项': ('Missing configuration field', '缺少設定項目', '缺少配置项'),
+ '用户名需为 1-64 位字母、数字、点、下划线或连字符': ('Username must be 1-64 letters, digits, dots, underscores or hyphens',
+                                 '使用者名稱須為 1–64 字元，可含字母、數字、點、底線或連字號',
+                                 '用户名需为 1-64 位字母、数字、点、下划线或连字符'),
+ 'HTTPS 端口修改失败，已恢复原配置': ('HTTPS port change failed; original configuration restored',
+                         'HTTPS 連接埠修改失敗，已還原原始設定',
+                         'HTTPS 端口修改失败，已恢复原配置'),
+ '网页端口未改变': ('Management port unchanged', '管理連接埠未變更', '网页端口未改变'),
+ '新配置启动失败，已恢复原配置和服务': ('Startup with the new settings failed; original settings and service restored',
+                       '新設定啟動失敗，已還原原始設定及服務',
+                       '新配置启动失败，已恢复原配置和服务'),
+ '密码需为 12-128 位字母、数字或 _ . @ + -': ('Password must be 12-128 letters, digits or _ . @ + -',
+                                   '密碼須為 12–128 字元，可含字母、數字或 _ . @ + -',
+                                   '密码需为 12-128 位字母、数字或 _ . @ + -'),
+ '不支持的配置项': ('Unsupported configuration field', '不支援的設定項目', '不支持的配置项'),
+ '原监听地址格式错误，请检查配置': ('Invalid existing listener address; check the configuration',
+                     '原監聽位址格式錯誤，請檢查設定',
+                     '原监听地址格式错误，请检查配置'),
+ '已恢复原配置，但 Nginx 重载失败，请检查服务日志': ('Original configuration restored, but Nginx reload failed; check service logs',
+                                 '已還原原始設定，但 Nginx 重新載入失敗，請檢查服務日誌',
+                                 '已恢复原配置，但 Nginx 重载失败，请检查服务日志'),
+ '已恢复原配置，但服务启动失败；请查看 journalctl -u s2l': ('Original settings restored, but startup failed; check journalctl -u s2l',
+                                          '已還原原始設定，但服務啟動失敗；請檢查 journalctl -u s2l',
+                                          '已恢复原配置，但服务启动失败；请查看 journalctl -u s2l'),
+ 'HTTPS 管理地址格式错误': ('Invalid HTTPS management URL', 'HTTPS 管理位址格式錯誤', 'HTTPS 管理地址格式错误'),
+ '新 HTTPS 端口未正常监听': ('The new HTTPS port is not listening', '新 HTTPS 連接埠未正常監聽', '新 HTTPS 端口未正常监听'),
+ 'SSH 配置包含链接或 /etc/ssh 外的文件，请手动修改': ('SSH configuration includes symlinks or files outside /etc/ssh; edit manually',
+                                     'SSH 設定包含連結或 /etc/ssh 外的檔案，請手動修改',
+                                     'SSH 配置包含链接或 /etc/ssh 外的文件，请手动修改'),
+ '未能读取 SSH 监听地址': ('Cannot read SSH listen addresses', '無法讀取 SSH 監聽位址', '未能读取 SSH 监听地址'),
+ 'SSH 端口未改变': ('SSH port unchanged', 'SSH 連接埠未變更', 'SSH 端口未改变'),
+ 'SSH 服务未运行，请先启动 OpenSSH 服务': ('SSH is not running; start OpenSSH first',
+                               'SSH 服務未執行，請先啟動 OpenSSH',
+                               'SSH 服务未运行，请先启动 OpenSSH 服务'),
+ 'SSH 服务 KillMode 不是 process，自动修改可能中断当前连接，请手动修改': ('SSH KillMode is not process; an automatic change may disconnect '
+                                                   'this session. Edit manually.',
+                                                   'SSH KillMode 不是 process，自動修改可能中斷目前連線，請手動修改',
+                                                   'SSH 服务 KillMode 不是 process，自动修改可能中断当前连接，请手动修改'),
+ '新 SSH 端口未正常监听': ('The new SSH port is not listening', '新 SSH 連接埠未正常監聽', '新 SSH 端口未正常监听'),
+ 'SSH socket 配置为链接，请手动修改': ('SSH socket configuration is a symlink; edit manually',
+                            'SSH socket 設定為連結，請手動修改',
+                            'SSH socket 配置为链接，请手动修改'),
+ 'SSH 有其他端口配置，自动修改已取消': ('Other SSH port settings were found; automatic change cancelled',
+                         'SSH 有其他連接埠設定，已取消自動修改',
+                         'SSH 有其他端口配置，自动修改已取消'),
+ 'ListenAddress 显式指定了其他端口，请手动修改': ('ListenAddress specifies another port; edit manually',
+                                   'ListenAddress 明確指定其他連接埠，請手動修改',
+                                   'ListenAddress 显式指定了其他端口，请手动修改'),
+ '修改失败，已恢复原 SSH 配置': ('Change failed; original SSH configuration restored', '修改失敗，已還原原始 SSH 設定', '修改失败，已恢复原 SSH 配置'),
+ 'SSH 端口修改失败：{error}': ('SSH port change failed: {error}', 'SSH 連接埠修改失敗：{error}', 'SSH 端口修改失败：{error}'),
+ 'SSH 端口已改为 {port}；请在新终端使用 ssh -p {port} 用户名@服务器IP 验证登录': ('SSH port changed to {port}; verify in another terminal: '
+                                                           'ssh -p {port} USER@SERVER_IP',
+                                                           'SSH 連接埠已改為 {port}；請在另一個終端驗證：ssh -p {port} 使用者@伺服器IP',
+                                                           'SSH 端口已改为 {port}；请在新终端使用 ssh -p {port} 用户名@服务器IP 验证登录'),
+ '配置备份：{path}；确认新连接成功前不要关闭当前终端': ('Configuration backup: {path}; keep this terminal open until the new login succeeds',
+                                  '設定備份：{path}；確認新連線成功前請勿關閉目前終端',
+                                  '配置备份：{path}；确认新连接成功前不要关闭当前终端'),
+ '原配置已恢复，但 SSH 重载失败；请通过服务器控制台检查，备份：{path}': ('Original configuration restored, but SSH reload failed; use the server '
+                                             'console. Backup: {path}',
+                                             '已還原原始設定，但 SSH 重新載入失敗；請透過伺服器控制台檢查。備份：{path}',
+                                             '原配置已恢复，但 SSH 重载失败；请通过服务器控制台检查，备份：{path}')})
+
+
+MESSAGES.update({'语言': ('Language', '語言', '语言'),
+ '语言无效，请选择 en、zh-Hant 或 zh-Hans': ('Invalid language; choose en, zh-Hant or zh-Hans',
+                               '語言無效，請選擇 en、zh-Hant 或 zh-Hans',
+                               '语言无效，请选择 en、zh-Hant 或 zh-Hans'),
+ '语言设置保存失败，请检查本机面板服务。': ('Cannot save language; check the local Web service.',
+                         '無法儲存語言，請檢查本機網頁服務。',
+                         '语言设置保存失败，请检查本机面板服务。'),
+ '语言设置已保存，Web 刷新后同步。': ('Language saved; refresh the Web interface to synchronize.',
+                        '語言已儲存，重新整理網頁後同步。',
+                        '语言设置已保存，Web 刷新后同步。'),
+ '选择语言 [1-3，0 取消]: ': ('Select a language [1-3, 0 to cancel]: ', '選擇語言 [1–3，0 取消]：', '选择语言 [1-3，0 取消]: ')})
+
+
+MESSAGES['语言切换需要本机管理服务监听。'] = ('Language changes require a local management listener.', '切換語言需要本機管理服務監聽。', '语言切换需要本机管理服务监听。')
+
+
 def tr(message):
     language = os.environ.get('_S2L_INSTALL_LANG')
     if language not in ('en', 'zh-Hant', 'zh-Hans'):
         return message
     translations = MESSAGES.get(message)
     return translations[('en', 'zh-Hant', 'zh-Hans').index(language)] if translations else message
+
+
+def cli_catalog(config_path):
+    """Read only the saved Web language; never serialize configuration secrets."""
+    import json
+    from pathlib import Path
+    language = 'en'
+    try:
+        config = json.loads(Path(config_path).read_text(encoding='utf-8'))
+        value = config.get('ui_language') if isinstance(config, dict) else None
+        if isinstance(value, str):
+            language = {'en': 'en', 'zh-TW': 'zh-Hant', 'zh-CN': 'zh-Hans'}.get(value, 'en')
+    except (OSError, ValueError):
+        pass
+    index = ('en', 'zh-Hant', 'zh-Hans').index(language)
+    return {'_language': language, **{key: values[index] for key, values in MESSAGES.items()}}
+
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) != 3 or sys.argv[1] != '--cli':
+        raise SystemExit('Usage: installer_i18n.py --cli CONFIG')
+    # NUL framing is data, not shell code: translations and configuration are
+    # never evaluated by bash, including quotes and control characters.
+    for key, value in cli_catalog(sys.argv[2]).items():
+        sys.stdout.buffer.write((key + '\0' + value + '\0').encode('utf-8'))
