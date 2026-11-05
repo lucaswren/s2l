@@ -8,6 +8,21 @@ import (
 	"time"
 )
 
+func TestProxyRejectionEvidenceOnlyUsesMatchingDestination(t *testing.T) {
+	lines := "+0800 2026-11-05 10:00:00 INFO [1 0ms] inbound connection to 1.1.1.1:443\n" +
+		"+0800 2026-11-05 10:00:01 ERROR [2 1ms] socks5: request rejected, code=2\n" +
+		"+0800 2026-11-05 10:00:02 ERROR [1 1ms] socks5: request rejected, code=1\n"
+	got := ProxyRejections(lines)
+	if len(got) != 2 || got[0].Target != "" || got[0].ReplyCode != "2" ||
+		got[1].Target != "1.1.1.1:443" || got[1].ReplyCode != "1" ||
+		got[1].LogTime != "+0800 2026-11-05 10:00:02" {
+		t.Fatalf("unexpected rejection evidence: %+v", got)
+	}
+	if got := ProxyRejections(strings.Repeat(lines, 40)); len(got) != 32 {
+		t.Fatalf("unbounded rejection evidence: %d entries", len(got))
+	}
+}
+
 func TestConnectionsCorrelateChunksAndRemainBounded(t *testing.T) {
 	c := &Collector{}
 	source := "sing-box//run/s2l/s2l-tun101.log"

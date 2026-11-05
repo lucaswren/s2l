@@ -76,12 +76,22 @@ func (m TunnelMapping) EffectiveDNSMode() string {
 }
 
 type ResolverStatus struct {
-	Mode      string `json:"mode"`
-	Active    string `json:"active"`
-	Queries   uint64 `json:"queries"`
-	Failures  uint64 `json:"failures"`
-	Fallbacks uint64 `json:"fallbacks"`
-	Switches  uint64 `json:"switches"`
+	Mode           string             `json:"mode"`
+	Active         string             `json:"active"`
+	Queries        uint64             `json:"queries"`
+	Failures       uint64             `json:"failures"`
+	Fallbacks      uint64             `json:"fallbacks"`
+	Switches       uint64             `json:"switches"`
+	LastDoHFailure *DNSAttemptFailure `json:"last_doh_failure,omitempty"`
+	LastTCPFailure *DNSAttemptFailure `json:"last_tcp_failure,omitempty"`
+}
+
+// DNSAttemptFailure describes a failed transport attempt, even when fallback succeeds.
+type DNSAttemptFailure struct {
+	At         time.Time `json:"at"`
+	Endpoint   string    `json:"endpoint"`
+	Stage      string    `json:"stage"`
+	SOCKSReply byte      `json:"socks_reply,omitempty"`
 }
 
 type ProcessStatus struct {

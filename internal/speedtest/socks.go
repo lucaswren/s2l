@@ -44,6 +44,14 @@ func (e *socksReplyError) Error() string {
 	return fmt.Sprintf("SOCKS request rejected: code %d", e.code)
 }
 
+func SOCKSReplyCode(err error) byte {
+	var reply *socksReplyError
+	if errors.As(err, &reply) {
+		return reply.code
+	}
+	return 0
+}
+
 func dialSOCKSCommand(ctx context.Context, proxyAddr, username, password string, command byte, target string) (result net.Conn, boundAddr string, retErr error) {
 	stage := "proxy-connect"
 	defer func() {

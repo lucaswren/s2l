@@ -7,6 +7,18 @@ import (
 	"testing"
 )
 
+func TestSiteForwardGuardPrecedesTUNReturnGuard(t *testing.T) {
+	const tun = "FORWARD -i tun101 -j S2L_RETURN\n"
+	const site = "FORWARD -j S2L-SITE-FORWARD\n"
+	plan := guardOrderPlan("-A "+tun+"-A "+site, false)
+	if !strings.Contains(plan, "-I "+tun+"-I "+site) {
+		t.Fatalf("site hook must be inserted last so it runs first: %s", plan)
+	}
+	if plan := guardOrderPlan("-A "+site+"-A "+tun, false); plan != "" {
+		t.Fatalf("correct site guard order changed: %s", plan)
+	}
+}
+
 func TestGuardOrderPlanPreservesForeignRules(t *testing.T) {
 	snapshot := `-P INPUT ACCEPT
 -A INPUT -j ACCEPT

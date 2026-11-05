@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/debuglog"
 	"github.com/lucaswren/s2l/internal/evidence"
 	"github.com/lucaswren/s2l/internal/model"
 )
@@ -28,6 +29,12 @@ func (s *MappingService) newEvidence() *evidence.Recorder {
 		result := evidence.CollectSystem(ctx, req)
 		if s.singbox != nil {
 			result.Snapshots["singbox-after"] = s.singbox.LogTail(req.Mapping.TunName)
+		}
+		for phase, tail := range map[string]string{"before": req.LogTail, "after": result.Snapshots["singbox-after"]} {
+			if rejected := debuglog.ProxyRejections(tail); len(rejected) > 0 {
+				sample, _ := json.Marshal(rejected)
+				result.Snapshots["proxy-rejections-"+phase] = string(sample)
+			}
 		}
 		events := s.operations.View().Events
 		if len(events) > 80 {

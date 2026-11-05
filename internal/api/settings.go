@@ -384,3 +384,64 @@ func (s *Server) handleIPsec(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, result)
 }
+
+func (s *Server) handleIKEv2Sites(w http.ResponseWriter, r *http.Request) {
+	if runtime.GOOS != "linux" {
+		writeError(w, 409, "IKEv2 requires Linux")
+		return
+	}
+	s.authMu.RLock()
+	configured := s.adminUser != "" && s.adminPass != ""
+	s.authMu.RUnlock()
+	if !configured {
+		writeError(w, 403, "Configure panel authentication first")
+		return
+	}
+	args := []string{"/opt/s2l/manage_ikev2_site.py", "status"}
+	var payload []byte
+	if r.Method != http.MethodGet {
+		if !s.settingsWrite(w, r) {
+			return
+		}
+		var body struct {
+			Enabled         *bool             `json:"enabled"`
+			Gateway         string            `json:"gateway"`
+			LocalSubnet     string            `json:"local_subnet"`
+			Sites           []json.RawMessage `json:"sites"`
+			CurrentPassword string            `json:"current_password"`
+		}
+		if decodeJSON(r, &body) != nil || body.Enabled == nil {
+			writeError(w, 400, "Invalid IKEv2 site configuration")
+			return
+		}
+		s.settingsMu.Lock()
+		defer s.settingsMu.Unlock()
+		if !s.checkCurrent(body.CurrentPassword) {
+			writeError(w, 403, "Current panel password is incorrect")
+			return
+		}
+		if *body.Enabled {
+			cfg, err := config.Load(s.configPath)
+			if err != nil || !cfg.ShouldAutoRestore() {
+				writeError(w, 409, "Enable mapping auto-restore before saving IKEv2 sites")
+				return
+			}
+		}
+		args[1] = "save"
+		args = append(args, filepath.Join(s.store.DataDir(), "state.json"))
+		payload, _ = json.Marshal(map[string]any{
+			"enabled": *body.Enabled, "gateway": body.Gateway, "local_subnet": body.LocalSubnet, "sites": body.Sites,
+		})
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "python3", args...)
+	cmd.Stdin = strings.NewReader(string(payload))
+	out, err := cmd.Output()
+	var result map[string]any
+	if err != nil || json.Unmarshal(out, &result) != nil {
+		writeError(w, 409, "Check site settings, running mappings and IPsec service conflicts")
+		return
+	}
+	writeJSON(w, 200, result)
+}

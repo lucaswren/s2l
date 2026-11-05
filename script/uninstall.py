@@ -272,6 +272,8 @@ def check_stopped_links(mappings, links, firewall):
 
 
 def plan():
+    if Path('/run/s2l-ikev2-active').exists():
+        raise RuntimeError('Disable IKEv2 sites and reboot before uninstalling')
     from verify_update import preflight
     import dependencies
     dependencies.require()

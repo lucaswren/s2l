@@ -1,4 +1,18 @@
 {
+  "站点出口": {"en": "Site egress", "tw": "站點出口"},
+  "本机 WAN": {"en": "Local WAN", "tw": "本機 WAN"},
+  "WAN 网卡": {"en": "WAN interface", "tw": "WAN 網卡"},
+  "启用": {"en": "Enable", "tw": "啟用"},
+  "站点设置保存后，在服务器重启并恢复映射后生效。": {"en": "Saved site settings take effect after the server reboots and restores its mappings.", "tw": "站點設定儲存後，會在伺服器重新啟動並復原映射後生效。"},
+  "等待维护窗口重启": {"en": "Pending maintenance reboot", "tw": "等待維護時段重新啟動"},
+  "本端网关 IPv4": {"en": "Local gateway IPv4", "tw": "本端閘道 IPv4"},
+  "受保护的目标网段": {"en": "Protected destination subnet", "tw": "受保護的目的子網"},
+  "站点名称": {"en": "Site name", "tw": "站點名稱"},
+  "对端网关 IPv4": {"en": "Peer gateway IPv4", "tw": "對端閘道 IPv4"},
+  "对端子网": {"en": "Peer subnet", "tw": "對端子網"},
+  "SOCKS5 映射": {"en": "SOCKS5 mapping", "tw": "SOCKS5 映射"},
+  "已有站点留空保留密钥": {"en": "Leave blank to keep the existing key", "tw": "留空以保留現有金鑰"},
+  "新增站点": {"en": "Add site", "tw": "新增站點"},
   "分组、带宽与观测": {
     "en": "Groups, bandwidth and observation",
     "tw": "分組、頻寬與觀測"

@@ -12,6 +12,7 @@ import TimeSettings from "./TimeSettings.vue";
 import Backups from "./Backups.vue";
 import DebugSettings from "./DebugSettings.vue";
 import FaultEvidence from "./FaultEvidence.vue";
+import IKEv2Sites from "./IKEv2Sites.vue";
 defineProps({active:{type:Boolean,default:true}});
 const emit = defineEmits(["toast", "changed"]);
 const settings = ref({
@@ -387,6 +388,7 @@ onMounted(load);
    </details>
    <details class="settings-group settings-disclosure" :aria-label='tr("远程管理")'><summary>{{ tr("远程管理") }}<span>{{ tr("面板、SSH、L2TP 管理访问") }}</span></summary>
  <PPPManagement />
+ <IKEv2Sites />
     <div class="settings-grid"><div class="settings-stack"><el-card shadow="never" class="settings-card">
     <template #header>{{ tr("HTTPS 管理端口") }}</template>
     <el-alert

@@ -212,6 +212,12 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 	if _, err := blocked.Query(context.Background(), q); err == nil {
 		t.Fatal("DNS succeeded with unavailable SOCKS upstream")
 	}
+	status := blocked.Resolver.Status()
+	for _, failure := range []*model.DNSAttemptFailure{status.LastDoHFailure, status.LastTCPFailure} {
+		if failure == nil || failure.Stage != "proxy-connect" || failure.Endpoint == "" {
+			t.Fatalf("missing DNS proxy-connect failure: %+v", failure)
+		}
+	}
 	if tcpQueries.Load() != beforeTCP || dohQueries.Load() != beforeDoH {
 		t.Fatal("failed SOCKS connection fell back to direct DNS")
 	}

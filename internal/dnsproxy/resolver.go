@@ -11,6 +11,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -25,6 +26,8 @@ type Resolver struct {
 	nextProbe           time.Time
 	probing             bool
 	exchange            func(context.Context, string, []byte) ([]byte, error)
+	dohEndpoint         string
+	tcpEndpoint         string
 	transport           *http.Transport
 	tcp                 *tcpPool
 	ctx                 context.Context
@@ -43,6 +46,10 @@ func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolve
 		mode = "auto"
 	}
 	r := &Resolver{status: model.ResolverStatus{Mode: mode, Active: "doh"}}
+	if endpoint, err := url.Parse(dohURL); err == nil {
+		r.dohEndpoint = endpoint.Host
+	}
+	r.tcpEndpoint = tcpAddress
 	r.ctx, r.cancel = context.WithCancel(context.Background())
 	if mode == "tcp" {
 		r.status.Active = "tcp"
@@ -71,11 +78,11 @@ func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolve
 			defer resp.Body.Close()
 			media, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 			if err != nil || media != "application/dns-message" || resp.StatusCode != 200 {
-				return nil, errors.New("invalid DoH response")
+				return nil, &speedtest.StageError{Stage: "doh-http-response", Err: errors.New("invalid DoH response")}
 			}
 			body, err := io.ReadAll(io.LimitReader(resp.Body, 65536))
 			if len(body) > 65535 {
-				return nil, errors.New("DNS response too large")
+				return nil, &speedtest.StageError{Stage: "dns-response", Err: errors.New("DNS response too large")}
 			}
 			return body, err
 		}
@@ -155,8 +162,29 @@ func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]
 	exchange := r.exchange
 	r.mu.Unlock()
 	response, err := exchange(ctx, method, query)
+	stage := "exchange"
 	if err == nil {
+		stage = "dns-response"
 		err = ValidateResponse(query, response)
+	}
+	if err != nil && !errors.Is(ctx.Err(), context.Canceled) {
+		var protocolError *speedtest.StageError
+		switch {
+		case errors.Is(ctx.Err(), context.DeadlineExceeded):
+			stage = "timeout"
+		case errors.As(err, &protocolError):
+			stage = protocolError.Stage
+		}
+		r.mu.Lock()
+		failure := &model.DNSAttemptFailure{At: time.Now(), Stage: stage, SOCKSReply: speedtest.SOCKSReplyCode(err)}
+		if method == "doh" {
+			failure.Endpoint = r.dohEndpoint
+			r.status.LastDoHFailure = failure
+		} else {
+			failure.Endpoint = r.tcpEndpoint
+			r.status.LastTCPFailure = failure
+		}
+		r.mu.Unlock()
 	}
 	return response, err
 }

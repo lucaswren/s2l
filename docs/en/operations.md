@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.0 on a clean, dedicated server.**
+**Install S2L 1.0.1 on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
@@ -101,6 +101,12 @@ Healthy checks run every 45–55 seconds plus probe duration and scheduling, wit
 L2TP remains connected during upstream outages. Failed application connections need to reconnect. A missing sing-box process or TUN triggers bounded-rate recovery without stopping L2TP. Recovery failures appear in health status and service logs. No automatic switch to another node is performed; change a mapping's node after stopping it. Connection settings of nodes used by running mappings cannot be edited.
 
 S2L requires a dedicated host: its persistent guard covers **all `ppp+` interfaces**. IPv4 forwarding from PPP is permitted only for a configured source subnet toward its assigned TUN; other forwarding and PPP access to the host are dropped, except explicitly configured local management access. PPP IPv6 is blocked. A terminal unreachable route prevents main-table fallback when the TUN disappears. Guards remain after stopping S2L or a mapping so existing PPP sessions cannot escape via the host uplink. `s2l-guard.service` installs them before xl2tpd starts; failure prevents xl2tpd/S2L startup. Do not flush these rules or run another firewall manager that replaces them. Client-side split routing and other network adapters remain outside this server's control.
+
+## IKEv2 site-to-site IPsec
+
+In System Settings, configure each site's peer gateway, IPv4 subnet, PSK and egress. Select an existing SOCKS5 mapping or a local WAN interface with one IPv4 default gateway. A SOCKS5 site stays blocked if its mapping is unavailable. WAN source NAT applies only to sites configured to use WAN.
+
+Enable mapping auto-restore and turn off L2TP/IPsec before enabling site mode. Saved settings take effect at the next server reboot, after the mappings and forwarding guards are restored. Site mode covers explicitly configured IPv4 destination subnets.
 
 ## Kernel preparation and manual upgrade
 

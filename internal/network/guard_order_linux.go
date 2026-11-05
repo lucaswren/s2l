@@ -19,7 +19,7 @@ var returnHook = regexp.MustCompile(`^-A FORWARD -i [A-Za-z0-9_.-]{1,15} -j S2L_
 func guardOrderPlan(snapshot string, ipv6 bool) string {
 	var plan strings.Builder
 	for _, chain := range []string{"INPUT", "FORWARD"} {
-		var rules, owned, desired, gates []string
+		var rules, owned, desired, gates, sites []string
 		seen := make(map[string]bool)
 		for _, line := range strings.Split(snapshot, "\n") {
 			line = strings.TrimSpace(line)
@@ -36,13 +36,16 @@ func guardOrderPlan(snapshot string, ipv6 bool) string {
 				}
 			}
 			gate := !ipv6 && chain == "FORWARD" && isSessionGate(line)
-			if !isOwned && !gate {
+			site := !ipv6 && chain == "FORWARD" && line == "-A FORWARD -j S2L-SITE-FORWARD"
+			if !isOwned && !gate && !site {
 				continue
 			}
 			owned = append(owned, line)
 			if !seen[line] {
 				seen[line] = true
-				if gate {
+				if site {
+					sites = append(sites, line)
+				} else if gate {
 					gates = append(gates, line)
 				} else if !ipv6 && line == "-A INPUT -i ppp+ -j "+managementChain {
 					desired = append([]string{line}, desired...)
@@ -52,6 +55,7 @@ func guardOrderPlan(snapshot string, ipv6 bool) string {
 			}
 		}
 		desired = append(gates, desired...)
+		desired = append(sites, desired...)
 		correct := len(owned) == len(desired)
 		for i, rule := range desired {
 			correct = correct && rules[i] == rule

@@ -33,6 +33,49 @@ type FailedTarget struct {
 
 var replyPattern = regexp.MustCompile(`code[= ](\d+)`)
 
+type ProxyRejection struct {
+	LogTime   string `json:"log_time,omitempty"`
+	Target    string `json:"target,omitempty"`
+	ReplyCode string `json:"reply_code,omitempty"`
+}
+
+// ProxyRejections extracts a bounded sample from one process's evidence tail.
+// Warning-level logs may omit the destination. Only correlate matching IDs.
+func ProxyRejections(tail string) []ProxyRejection {
+	const limit = 32
+	targets := map[string]string{}
+	var recent []ProxyRejection
+	for _, raw := range strings.Split(tail, "\n") {
+		line := ansiPattern.ReplaceAllString(raw, "")
+		match := connectionPattern.FindStringSubmatch(line)
+		var target string
+		if len(match) == 3 {
+			for _, prefix := range []string{"inbound connection to ", "inbound packet connection to ", "outbound connection to ", "outbound packet connection to "} {
+				if strings.Contains(match[2], prefix) {
+					targets[match[1]] = tailAddress(match[2], prefix)
+					break
+				}
+			}
+			target = targets[match[1]]
+		}
+		if !strings.Contains(line, "socks5: request rejected") {
+			continue
+		}
+		entry := ProxyRejection{Target: target}
+		if fields := strings.Fields(line); len(fields) >= 3 && strings.HasPrefix(fields[0], "+") {
+			entry.LogTime = strings.Join(fields[:3], " ")
+		}
+		if reply := replyPattern.FindStringSubmatch(line); len(reply) == 2 {
+			entry.ReplyCode = reply[1]
+		}
+		recent = append(recent, entry)
+		if len(recent) > limit {
+			recent = recent[1:]
+		}
+	}
+	return recent
+}
+
 // This is log evidence, not packet accounting. "outbound connection" records an
 // attempted forward, not a completed handshake or a successful image transfer.
 func (c *Collector) observeConnectionsLocked(source string, p []byte) {

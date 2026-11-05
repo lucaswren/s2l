@@ -30,7 +30,7 @@ S2L runs on a dedicated Linux server. A Go backend and embedded Vue / Element Pl
 
 ## Installation
 
-**Install S2L 1.0.0 on a clean, dedicated server.**
+**Install S2L 1.0.1 on a clean, dedicated server.**
 
 Review the scripts before running them as root. Installation changes packages, forwarding, PPP/L2TP, firewall rules and services; use a new, dedicated host and apply security updates in maintenance windows. New installs default to [manual APT maintenance](docs/en/operations.md#system-update-policy). The installer selects the latest stable release by default.
 

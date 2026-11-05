@@ -84,6 +84,11 @@ func TestAutoDNSFailedTCPImmediatelyRetriesDoH(t *testing.T) {
 	if s := r.Status(); s.Fallbacks != 1 || s.Failures != 0 || s.Active != "tcp" {
 		t.Fatal("fallback must preserve recovery hysteresis", s)
 	}
+	s := r.Status()
+	if s.LastDoHFailure != nil || s.LastTCPFailure == nil ||
+		s.LastTCPFailure.Endpoint != model.DefaultDNSTCPAddress || s.LastTCPFailure.Stage != "exchange" {
+		t.Fatal("backup transport failure must remain visible after successful fallback", s)
+	}
 }
 
 func TestAutoDNSBothFailCountOneQueryFailure(t *testing.T) {
