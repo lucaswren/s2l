@@ -8,13 +8,15 @@
 
 ![S2L 映射与 SOCKS5 节点管理，使用示例数据](docs/assets/zh-Hans/showcase-overview.png)
 
-截图来自隔离测试中的真实界面，地址与账号均为示例。[映射与带宽设置](docs/assets/zh-Hans/showcase-mapping.png) · [断网自动取证](docs/assets/zh-Hans/showcase-evidence.png)
+截图来自隔离测试中的真实界面，地址与账号均为示例。[映射与带宽设置](docs/assets/zh-Hans/showcase-mapping.png) · [断网自动取证](docs/assets/zh-Hans/showcase-evidence.png) · [运行监控](docs/assets/zh-Hans/showcase-monitoring.png)
 
 - 每台拨号设备使用独立映射及固定 SOCKS5 出口，一个账号对应一条 PPP 会话。
 - 按映射设置上传、下载上限，DNS 备用查询保持同一出口。
 - 出现异常先保留状态、日志和 IPv4 报文头，减少重启映射后丢失现场。
 
-S2L 在专用 Linux 主机上运行，由 Go 后端与内嵌 Vue / Element Plus 界面管理 sing-box、L2TP/PPP 和策略路由。每条映射保持指定的 SOCKS5 上游，诊断区分本地转发、上游和 DNS 故障。
+S2L 在专用 Linux 主机上运行，由 Go 后端与内嵌 Vue / Element Plus 界面管理 sing-box、L2TP/PPP 和策略路由。每条映射明确选择 SOCKS5 或本机 WAN 出口，SOCKS5 故障不会回落到 WAN。诊断区分本地转发、上游和 DNS 故障。
+
+界面分为 **线路管理、运行监控、系统设置** 三个标签页。[运行监控](docs/zh-Hans/operations.md#运行监控) 显示 PPP 上下行速率、新增与累计错误、采样时效及最近事件。
 
 ## 环境与限制
 
@@ -30,7 +32,7 @@ S2L 在专用 Linux 主机上运行，由 Go 后端与内嵌 Vue / Element Plus 
 
 ## 安装与安全
 
-**请在干净的专用服务器上全新安装 S2L 1.0.1。**
+**请在干净的专用服务器上全新安装 S2L 1.0.3。**
 
 以 root 执行前先审阅脚本。安装会修改软件包、转发、PPP/L2TP、防火墙和服务，请使用全新专用主机并在维护窗口安装安全更新。新安装默认采用[人工 APT 维护](docs/zh-Hans/operations.md#系统更新策略)。安装程序默认获取最新稳定版。
 

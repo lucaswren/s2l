@@ -11,7 +11,7 @@ import {
   ref,
 } from "vue";
 import { api } from "./api/client";
-const monitorOpen = ref(false);
+import { normalizeStatus } from './utils/runtime.js';
 const Guide = defineAsyncComponent(() => import("./components/Guide.vue"));
 import Node from "./components/Node.vue";
 import Mapping from "./components/Mapping.vue";
@@ -39,6 +39,7 @@ let timer;
 const refreshing = ref(false);
 let refreshPending = false;
 let disposed = false;
+let refreshController;
 
 const runningCount = computed(
   () => mappings.value.filter((m) => m.status === "running").length,
@@ -91,31 +92,25 @@ async function refresh() {
   }
   if (disposed) return;
   refreshing.value = true;
+  const controller=new AbortController();refreshController=controller;
+  const timeout=setTimeout(()=>controller.abort(),12000);
   try {
     const [n, m, st] = await Promise.all([
-      api.listNodes(),
-      api.listMappings(),
-      api.status(),
+      api.listNodes(controller.signal),
+      api.listMappings(controller.signal),
+      api.status(controller.signal),
     ]);
     if (disposed) return;
     nodes.value = Array.isArray(n) ? n : [];
     mappings.value = Array.isArray(m) ? m : [];
-    status.value = {
-      uptime_sec: st?.uptime_sec || 0,
-	  build: st?.build || {},
-      tun_traffic: Array.isArray(st?.tun_traffic) ? st.tun_traffic : [],
-      singbox_pids: st?.singbox_pids || {},
-      upstream_health: st?.upstream_health || {},
-	  mappings: Array.isArray(st?.mappings) ? st.mappings : (Array.isArray(m) ? m : []),
-	  sessions: Array.isArray(st?.sessions) ? st.sessions : [],
-	  sessions_error: st?.sessions_error || '',
-	  sessions_checked_at: st?.sessions_checked_at || '',
-      configuration_recovery: st?.configuration_recovery || '',
-    };
+    status.value = normalizeStatus(st,mappings.value);
     error.value = "";
   } catch (e) {
-    error.value = e.message;
+    if(!disposed)error.value = e.name==='AbortError'?tr('状态刷新超时，保留上次结果'):e.message;
   } finally {
+    clearTimeout(timeout);
+    controller.abort();
+    if(refreshController===controller)refreshController=undefined;
     refreshing.value = false;
     if (refreshPending && !disposed) {
       refreshPending = false;
@@ -138,14 +133,14 @@ onMounted(() => {
   refresh();
   timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
 });
-onUnmounted(() => { disposed = true; clearInterval(timer); });
+onUnmounted(() => { disposed = true; clearInterval(timer);refreshController?.abort(); });
 </script>
 <template>
   <el-config-provider size="default">
     <div class="page">
       <header class="hero" :class="{compact:activeTab==='settings'}">
         <div>
-          <h1>S2L</h1><p class="muted">SOCKS5 → L2TP</p>
+          <h1>S2L</h1><p class="muted">{{tr('L2TP 出口网关')}}</p>
         </div>
         <div class="toolbar">
           <el-input
@@ -213,9 +208,10 @@ onUnmounted(() => { disposed = true; clearInterval(timer); });
               @changed="refresh"
               @toast="pushToast"
             />
-            </section><details class="settings-disclosure monitor-disclosure" @toggle="monitorOpen = $event.target.open"><summary>{{tr("运行监控")}}</summary>
-              <div class="monitor-content"><Status v-if="monitorOpen" :active="activeTab === 'lines'" :status="status" @changed="refresh" @toast="pushToast" /></div>
-            </details>
+            </section>
+          </el-tab-pane>
+          <el-tab-pane :label='tr("运行监控")' name="monitoring" lazy>
+            <Status :active="activeTab === 'monitoring'" :status="status" @changed="refresh" @toast="pushToast" />
           </el-tab-pane>
           <el-tab-pane :label='tr("系统设置")' name="settings" lazy
             ><Settings :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"

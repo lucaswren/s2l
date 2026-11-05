@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.2 on a clean, dedicated server.**
+**Install S2L 1.0.3 on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
@@ -297,6 +297,14 @@ Credential/comment updates no longer restart xl2tpd. A real global config change
 Mappings use the managed policy from creation. Backups restore nodes and mappings with the same policy. Upgrades wait for previously running mappings to recover locally. Forwarding rules, NAT, policy routes and MSS are checked every 30 seconds and repaired without restarting a healthy process.
 
 Unsupported or persistently unavailable UDP is retried every ten minutes; the first success triggers confirmation after ten seconds. Automatic probes share short-lived results for identical node credentials, DNS modes and endpoints; manual node probes update TCP/UDP health and only matching default-DNS health. Debug includes protocol transitions, 256 recent connection observations and 20 failed-target summaries. Logs do not prove transfer success or original pre-NAT client identity.
+
+## Runtime monitoring
+
+Use the **Monitoring** tab for mapping health, PPP sessions, traffic, the last 24 hours and operational events. **Lines** manages nodes and mappings; **Settings** manages the host and maintenance. Leaving Monitoring pauses its history/event polling.
+
+Client upload/download rates use consecutive PPP byte samples and show the entire session in Mbps. A reconnect, process restart, counter reset or sampling gap shows **—** until two valid samples are available. Classified errors count each matching log line once; category counts can overlap and are not failed-request counts. New errors, cumulative errors and the latest error time are shown separately. Host TCP retransmissions and conntrack usage cover the whole server, not one mapping.
+
+A snapshot older than 30 seconds is marked stale. Status requests time out after 12 seconds so polling can recover. A blocked UDP policy is shown as **Blocked by policy** even if an older node test succeeded. Successful upstream or simulated forwarding tests do not validate the full client/iWAN/L2TP path or guarantee throughput.
 
 ## Layered diagnostics and monitoring history
 

@@ -7,7 +7,34 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestErrorLinesAreDeduplicatedAndTimestampedWithoutDebug(t *testing.T) {
+	debuglog.Default.Set(false)
+	w, _ := openDebugLog("unused")
+	defer w.Close()
+	if w.Status().StartedAt.IsZero() || !w.Status().LastErrorAt.IsZero() {
+		t.Fatal("incorrect initial process timestamps", w.Status())
+	}
+	before := time.Now()
+	w.Write([]byte("ERROR TLS failed: socks5: request re"))
+	if w.Status().ErrorLines != 0 {
+		t.Fatal("counted an unfinished line")
+	}
+	w.Write([]byte("jected, connection refused\nINFO normal\nnetwork is unreachable\n"))
+	got := w.Status()
+	if got.ErrorLines != 2 || got.ProxyRejections != 1 || got.TLSFailures != 1 || got.Refused != 1 || got.NetworkErrors != 1 {
+		t.Fatal("a classified line was counted more than once", got)
+	}
+	if got.LastErrorAt.Before(before) || got.LastErrorAt.After(time.Now()) {
+		t.Fatal("missing error observation time", got)
+	}
+	w.Write([]byte("INFO normal\n"))
+	if w.Status().LastErrorAt != got.LastErrorAt {
+		t.Fatal("healthy output changed the latest error time")
+	}
+}
 
 func TestDisabledWriterCountsFragmentedLinesAndRejectsWritesAfterClose(t *testing.T) {
 	debuglog.Default.Set(false)

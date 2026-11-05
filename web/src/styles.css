@@ -368,8 +368,6 @@ body .el-checkbox__label { min-width: 0; line-height: 1.5; white-space: normal; 
 .settings-disclosure { min-width:0; }
 .settings-disclosure > summary { cursor:pointer; padding:12px 0; font-weight:600; min-height:44px; color:var(--el-text-color-primary); }
 .settings-disclosure > summary::marker { color:var(--el-color-primary); }
-.monitor-content { display:grid; gap:var(--section-gap); min-width:0; margin-top:8px; }
-.monitor-content > .el-card { margin:0; }
 .content-section { min-width:0; padding:20px; background:var(--el-bg-color); border:1px solid var(--el-border-color-light); border-radius:12px; }
 .stats .el-card { border-top:3px solid var(--el-color-primary); background:var(--el-color-primary-light-9); }
 .stats .el-col:nth-child(2) .el-card { border-color:var(--el-color-warning); background:var(--el-color-warning-light-9); }

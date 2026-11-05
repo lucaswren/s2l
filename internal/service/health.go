@@ -475,7 +475,9 @@ func (h *healthRecord) applyReport(report speedtest.HealthReport, now time.Time)
 	}
 	h.TCP = h.tcp.ProtocolHealth
 	h.UDP = h.udp.ProtocolHealth
-	if h.UDPPolicy == "reject" && h.UDP.CheckedAt.IsZero() {
+	if h.UDPPolicy == "reject" {
+		// The effective mapping policy takes precedence over a cached or manual
+		// node-capability result. Keep that evidence in h.udp for a later probe.
 		h.UDP = model.ProtocolHealth{State: "blocked", Method: "policy-reject"}
 	}
 	h.DNS = h.dns.ProtocolHealth

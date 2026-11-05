@@ -137,7 +137,7 @@ export const api = {
   exportDebug: () => downloadArchive('/api/debug/export', 's2l-debug.zip'),
   streamNetworkTest,
   networkTestNode: (id, body, signal) => request(`/api/nodes/${id}/network-test`, {method:"POST", body:JSON.stringify(body), signal}),
-  listNodes: () => request("/api/nodes"),
+  listNodes: (signal) => request("/api/nodes", {signal}),
   getNode: (id) => request(`/api/nodes/${id}`),
   saveNode: (body,revision) =>
     request("/api/nodes", { method: "POST",
@@ -202,5 +202,5 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  status: () => request("/api/status"),
+  status: (signal) => request("/api/status", {signal}),
 };

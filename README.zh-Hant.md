@@ -8,13 +8,15 @@
 
 ![S2L 映射與 SOCKS5 節點管理，使用範例資料](docs/assets/zh-Hant/showcase-overview.png)
 
-截圖來自隔離測試中的真實介面，位址與帳號皆為範例。[映射與頻寬設定](docs/assets/zh-Hant/showcase-mapping.png) · [斷網自動取證](docs/assets/zh-Hant/showcase-evidence.png)
+截圖來自隔離測試中的真實介面，位址與帳號皆為範例。[映射與頻寬設定](docs/assets/zh-Hant/showcase-mapping.png) · [斷網自動取證](docs/assets/zh-Hant/showcase-evidence.png) · [運行監控](docs/assets/zh-Hant/showcase-monitoring.png)
 
 - 每台撥號設備使用獨立映射及固定 SOCKS5 出口，一個帳號對應一條 PPP 會話。
 - 按映射設定上傳、下載上限，DNS 備用查詢維持同一出口。
 - 異常時先保留狀態、日誌與 IPv4 報文頭，減少重啟映射後遺失現場。
 
-S2L 在專用 Linux 主機上執行，由 Go 後端與內嵌 Vue / Element Plus 介面管理 sing-box、L2TP/PPP 與策略路由。每條映射保持指定的 SOCKS5 上游，診斷區分本地轉送、上游與 DNS 故障。
+S2L 在專用 Linux 主機上執行，由 Go 後端與內嵌 Vue / Element Plus 介面管理 sing-box、L2TP/PPP 與策略路由。每條映射明確選擇 SOCKS5 或本機 WAN 出口，SOCKS5 故障不會回落到 WAN。診斷區分本地轉發、上游與 DNS 故障。
+
+介面分為 **線路管理、運行監控、系統設定** 三個分頁。[運行監控](docs/zh-Hant/operations.md#運行監控) 顯示 PPP 上下行速率、新增與累計錯誤、採樣時效及最近事件。
 
 ## 環境與限制
 
@@ -30,7 +32,7 @@ S2L 在專用 Linux 主機上執行，由 Go 後端與內嵌 Vue / Element Plus 
 
 ## 安裝與安全
 
-**請在乾淨的專用伺服器上全新安裝 S2L 1.0.1。**
+**請在乾淨的專用伺服器上全新安裝 S2L 1.0.3。**
 
 以 root 執行前先審閱腳本。安裝會修改套件、轉送、PPP/L2TP、防火牆與服務，請使用全新專用主機並在維護時段安裝安全更新。新安裝預設採用[人工 APT 維護](docs/zh-Hant/operations.md#系統更新策略)。安裝程式預設取得最新穩定版。
 

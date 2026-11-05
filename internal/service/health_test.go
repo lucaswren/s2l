@@ -196,13 +196,28 @@ func TestRejectUDPPolicyDoesNotDowngradeTCPMapping(t *testing.T) {
 	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "unsupported"}}
 	h.applyReport(report, time.Now())
 	h.applyReport(report, time.Now())
-	if h.State != "healthy" || h.UDP.State != "unsupported" {
+	if h.State != "healthy" || h.UDP.State != "blocked" || h.udp.State != "unsupported" {
 		t.Fatal(h)
 	}
 	h.UDPPolicy = "allow"
 	h.applyReport(report, time.Now())
 	if h.State != "degraded" {
 		t.Fatal("allow policy did not expose missing UDP", h)
+	}
+}
+
+func TestRejectUDPPolicyMasksOldCapabilityWithoutDiscardingEvidence(t *testing.T) {
+	now := time.Now()
+	h := healthRecord{UpstreamHealth: model.UpstreamHealth{UDPPolicy: "allow"}}
+	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "healthy"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "healthy", CheckedAt: now, Method: "dns-udp"}}
+	h.applyReport(report, now)
+	h.UDPPolicy = "reject"
+	h.applyReport(speedtest.HealthReport{TCP: report.TCP, DNS: report.DNS}, now.Add(time.Second))
+	if h.State != "healthy" || h.UDP.State != "blocked" || h.UDP.Method != "policy-reject" || !h.UDP.CheckedAt.IsZero() {
+		t.Fatal("old UDP probe overrode the effective policy", h)
+	}
+	if h.udp.CheckedAt != now || h.udp.MeasuredState != "healthy" {
+		t.Fatal("capability evidence lost", h.udp)
 	}
 }
 func TestRestrictedTargetDoesNotCondemnProxy(t *testing.T) {

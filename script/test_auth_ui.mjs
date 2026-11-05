@@ -33,7 +33,7 @@ try {
     await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
     await send('Page.navigate',{url:`http://127.0.0.1:${httpPort}/`});
     await wait(`!!document.querySelector('#login-user')`);
-    for(const[language,login,settings]of [['en','Sign in','Settings'],['zh-TW','登入','系統設置'],['zh-CN','登录','系统设置']]) {
+    for(const[language,login,settings]of [['en','Sign in','Settings'],['zh-TW','登入','系統設定'],['zh-CN','登录','系统设置']]) {
       await evaluate(`(()=>{const s=document.querySelector('.language-selector');s.value=${JSON.stringify(language)};s.dispatchEvent(new Event('change',{bubbles:true}))})()`);
       await wait(`document.documentElement.lang===${JSON.stringify(htmlLanguage(language))}&&document.querySelector('.login-submit').innerText===${JSON.stringify(login)}`);
       if(await evaluate(`document.documentElement.scrollWidth>innerWidth+2`))throw Error('login overflow '+width+' '+language);
@@ -61,7 +61,7 @@ try {
       await send('Page.reload');await wait(`!!document.querySelector('.workspace')`);
       if(!await evaluate(`document.documentElement.lang===${JSON.stringify(htmlLanguage(language))}`))throw Error('language persistence failed');
       if(await evaluate(`document.querySelectorAll('.hero .el-button').length!==2 || !document.querySelector('.toolbar-buttons').lastElementChild.classList.contains('header-signout')`))throw Error('header sign-out missing or misplaced');
-      await evaluate(`document.querySelectorAll('[role=tab]')[1].click()`);
+      await evaluate(`document.querySelector('#tab-settings').click()`);
       await wait(`!!document.querySelector('.system-settings')`);
       await evaluate(`document.querySelector('.system-settings details').open=true`);
       const signOutLabel={en:'Sign out','zh-TW':'登出','zh-CN':'退出登录'}[language];

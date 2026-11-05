@@ -8,13 +8,15 @@
 
 ![S2L mapping and SOCKS5 node management with example data](docs/assets/showcase-overview.png)
 
-Actual interface rendered from isolated test fixtures; the addresses and accounts are examples. [Mapping and bandwidth settings](docs/assets/showcase-mapping.png) · [Automatic outage evidence](docs/assets/showcase-evidence.png)
+Actual interface rendered from isolated test fixtures; the addresses and accounts are examples. [Mapping and bandwidth settings](docs/assets/showcase-mapping.png) · [Automatic outage evidence](docs/assets/showcase-evidence.png) · [Monitoring](docs/assets/showcase-monitoring.png)
 
 - Give each dialing device its own mapping and fixed SOCKS5 exit; one PPP session per account.
 - Set upload/download limits per mapping; keep DNS failover on that same exit.
 - Save bounded fault status, logs and IPv4 packet headers before restarting a mapping.
 
-S2L runs on a dedicated Linux server. A Go backend and embedded Vue / Element Plus interface manage sing-box, L2TP/PPP and Linux policy routing. Each mapping keeps its selected SOCKS5 upstream; diagnostics distinguish local forwarding, upstream and DNS failures.
+S2L runs on a dedicated Linux server. A Go backend and embedded Vue / Element Plus interface manage sing-box, L2TP/PPP and Linux policy routing. Each mapping uses an explicitly selected SOCKS5 or Local WAN egress; a SOCKS5 failure never falls back to WAN. Diagnostics distinguish local forwarding, upstream and DNS failures.
+
+Three tabs keep daily operation separate: **Lines**, **Monitoring** and **Settings**. [Monitoring](docs/en/operations.md#runtime-monitoring) shows PPP upload/download rates, new and cumulative errors, sample freshness and recent events.
 
 ## Requirements and limits
 
@@ -30,7 +32,7 @@ S2L runs on a dedicated Linux server. A Go backend and embedded Vue / Element Pl
 
 ## Installation
 
-**Install S2L 1.0.1 on a clean, dedicated server.**
+**Install S2L 1.0.3 on a clean, dedicated server.**
 
 Review the scripts before running them as root. Installation changes packages, forwarding, PPP/L2TP, firewall rules and services; use a new, dedicated host and apply security updates in maintenance windows. New installs default to [manual APT maintenance](docs/en/operations.md#system-update-policy). The installer selects the latest stable release by default.
 

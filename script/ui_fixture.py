@@ -7,7 +7,7 @@ now=datetime.now(timezone.utc).isoformat()
 node={"id":"n","name":"SOCKS A","addr":"192.0.2.5:1080"}
 mapping={"observe_connections":True,"id":"m","node_id":"n","tun_name":"tun101","table_id":101,"subnet":"10.0.101.0/24","l2tp_user":"account-a","status":"running","udp_policy":"reject","dns_mode":"auto"}
 healthy={"state":"healthy","method":"https","checked_at":now,"duration_ms":123,"stage":"http","status_code":204}
-status={"mappings":[mapping],"sessions":[{"interface":"ppp0","index":5,"mapping_id":"m","peer_ip":"10.0.101.2","mtu":1400,"first_seen":now,"rx_bytes":524288,"tx_bytes":125000,"dropped":0,"errors":0}],"upstream_health":{"m":{"state":"healthy","tun_name":"tun101","udp_policy":"reject","local_state":"healthy","checked_at":now,"tcp":healthy,"dns":dict(healthy,method="doh"),"udp":dict(healthy,state="unsupported",method="udp-associate"),"resolver":{"active":"doh"}}},"singbox_pids":{"tun101":100},"tun_traffic":[{"tun_name":"tun101","rx_bytes":10240,"tx_bytes":20480}]}
+status={"mappings":[mapping],"sessions":[{"interface":"ppp0","index":5,"mapping_id":"m","peer_ip":"10.0.101.2","mtu":1400,"first_seen":now,"rx_bytes":524288,"tx_bytes":125000,"dropped":0,"errors":0}],"upstream_health":{"m":{"state":"healthy","tun_name":"tun101","udp_policy":"reject","local_state":"healthy","checked_at":now,"tcp":healthy,"dns":dict(healthy,method="doh"),"udp":{"state":"blocked","method":"policy-reject"},"process":{"started_at":now,"error_lines":82,"last_error_at":now,"proxy_rejections":82},"resolver":{"active":"doh"}}},"singbox_pids":{"tun101":100},"tun_traffic":[{"tun_name":"tun101","rx_bytes":10240,"tx_bytes":20480}]}
 class Handler(SimpleHTTPRequestHandler):
  def __init__(self,*args,**kwargs):super().__init__(*args,directory=str((Path(__file__).resolve().parents[1] / 'web/dist')),**kwargs)
  def log_message(self,*args):pass
@@ -26,7 +26,7 @@ class Handler(SimpleHTTPRequestHandler):
   if self.path.endswith('/connections'):return self.reply({'rows':[{'id':'c1','metadata':{'host':'example.com','destinationPort':'443','network':'tcp'},'upload':1024,'download':2048,'start':now}]})
   if self.path=='/api/nodes':return self.reply([node,dict(node,id='n2',name='SOCKS B')])
   if self.path=='/api/mappings':return self.reply([mapping])
-  if self.path=='/api/status':return self.reply(status)
+  if self.path=='/api/status':return self.reply(dict(status,collected_at=datetime.now(timezone.utc).isoformat(),sessions_checked_at=datetime.now(timezone.utc).isoformat(),uptime_sec=1000,host_stats={'CurrEstab':12,'RetransSegs':24,'OutSegs':12000,'conntrack_count':80,'conntrack_max':7680}))
   if self.path.startswith('/api/history'):return self.reply({'buckets':[{'at':int(datetime.now().timestamp())//300*300,'tcp':{'pass':8,'fail':1,'restricted':1},'dns':{'pass':10},'latency_total_ms':800,'latency_samples':8,'repairs':1,'restarts':0,'session_changes':1}],'warning':''})
   return super().do_GET()
  def do_POST(self):

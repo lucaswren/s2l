@@ -22,7 +22,7 @@ chrome.on('error',error=>{chromeError=error});
  socket.onmessage=e=>{const d=JSON.parse(e.data);if(d.id){const p=pending.get(d.id);if(p){pending.delete(d.id);d.error?p.reject(Error(d.error.message)):p.resolve(d.result)}}else if(d.method==='Runtime.exceptionThrown')errors.push(d.params.exceptionDetails.text)};
  function send(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params}));setTimeout(()=>{if(pending.has(id)){pending.delete(id);reject(Error('CDP timeout '+method))}},10000).unref()})}
  async function evaluate(expression){const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result.value}
- async function wait(expression){for(let i=0;i<70;i++){if(await evaluate(expression))return;await pause(100)}throw Error('UI readiness timeout: '+expression+' BODY='+await evaluate('document.documentElement.outerHTML.slice(0,2500)')+' ERRORS='+JSON.stringify(errors))}
+ async function wait(expression){for(let i=0;i<70;i++){if(await evaluate(expression))return;await pause(100)}await writeFile(`${cwd}/tmp/ui-failure.html`,await evaluate('document.documentElement.outerHTML'));await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-failure.png`,Buffer.from(r.data,'base64')));throw Error('UI readiness timeout: '+expression+' BUTTONS='+JSON.stringify(await evaluate('[...document.querySelectorAll("button")].filter(b=>b.offsetParent).map(b=>b.innerText)'))+' ERRORS='+JSON.stringify(errors))}
  async function setLanguage(locale,lang){
   await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);
   await wait(`document.documentElement.lang===${JSON.stringify(lang)}`);
@@ -63,7 +63,7 @@ chrome.on('error',error=>{chromeError=error});
  for(const width of [1440,768,390,320]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
   await send('Page.navigate',{url:`http://127.0.0.1:${apiPort}/`});
-  await wait(`!!document.querySelector('.monitor-disclosure > summary') && document.body.innerText.includes('SOCKS A')`);
+  await wait(`!!document.querySelector('#tab-monitoring') && document.body.innerText.includes('SOCKS A')`);
   if(width===1440)await showcase('overview');
   await evaluate(`window.__nodeFetch=window.fetch;window.__nodeSaves=0;window.__nodeActions=0;window.__nodeBlocked=true;window.fetch=(path,options)=>{
    if(String(path)==='/api/nodes/n')return Promise.resolve(Response.json({id:'n',name:'SOCKS A',addr:'192.0.2.5:1080',username:'fixture-user',password:'fixture-secret'}));
@@ -121,9 +121,19 @@ chrome.on('error',error=>{chromeError=error});
   await wait(`!!document.querySelector('.batch-results')&&document.querySelector('.batch-results').innerText.includes('成功')`);
   if(await evaluate(`window.__batchPosts!==1`))throw Error('batch action duplicate or failed '+width);
   await evaluate(`window.fetch=window.__beforeBatchFetch`);
-  await evaluate(`document.querySelector('.monitor-disclosure > summary').click()`);
+  await evaluate(`document.querySelector('#tab-monitoring').click()`);
   await wait(`document.body.innerText.includes('首次观测') && document.body.innerText.includes('80.0%')`);
   await wait(`document.body.innerText.includes('故障事件与操作记录') && document.body.innerText.includes('节点转发异常 · 处理中')`);
+  await wait(`document.querySelector('.runtime-monitor').innerText.includes('最近新增重传段')`);
+  if(width===1440){await evaluate(`window.scrollTo(0,0)`);await showcase('monitoring',1100);}
+  if(width===1440){
+   await evaluate(`window.__monitorFetch=window.fetch;window.__staleMonitor=true;window.fetch=async(path,options)=>{const response=await window.__monitorFetch(path,options);if(path==='/api/status'&&response.ok&&window.__staleMonitor){const data=await response.json();data.collected_at=new Date(Date.now()-60000).toISOString();return Response.json(data)}return response}`);
+   await wait(`document.querySelector('.runtime-monitor').innerText.includes('监控采集已超过 30 秒未更新')`);
+   await evaluate(`window.__staleMonitor=false`);
+   await wait(`!document.querySelector('.runtime-monitor').innerText.includes('监控采集已超过 30 秒未更新')`);
+   await evaluate(`window.fetch=window.__monitorFetch`);
+  }
+  await wait(`[...document.querySelectorAll('button')].some(b=>b.offsetParent && b.innerText.includes('查看连接'))`);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText.includes('查看连接')).click()`);
   await wait(`document.querySelector('.connections-dialog')?.innerText.includes('example.com')`);
   await pause(650);
@@ -136,6 +146,7 @@ chrome.on('error',error=>{chromeError=error});
   await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(b=>b.classList.contains('el-button--primary')).click()`);await pause(350);
   if(await evaluate(`window.__closeRequests!==0`))throw Error('closed dialog still closed a connection '+width);
   await evaluate(`window.fetch=window.__beforeFetch`);
+  await wait(`!!document.querySelector('.operations-panel')?.offsetParent`);
   await evaluate(`[...document.querySelectorAll('.operations-panel .el-collapse-item__header')].find(b=>b.innerText.includes('故障通知')).click()`);await pause(350);
   await evaluate(`window.__notificationPosts=0;window.__beforeFetch=window.fetch;window.fetch=(path,options)=>{if(path==='/api/operations'&&options?.method==='POST'){window.__notificationPosts++;window.__notificationBody=JSON.parse(options.body);return new Promise(resolve=>setTimeout(()=>resolve(Response.json({events:[],incidents:[],enabled:false,configured:false,revision:'fixture-r2'})),450))}return window.__beforeFetch(path,options)};const save=[...document.querySelectorAll('.operations-panel button')].find(b=>b.innerText==='保存通知设置');save.click();save.click()`);
   await pause(650);
@@ -148,6 +159,8 @@ chrome.on('error',error=>{chromeError=error});
   await pause(650);
   await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-mapping-${width}.png`,Buffer.from(r.data,'base64')));
   await evaluate(`document.querySelector('.mapping-diagnostic .el-dialog__headerbtn').click()`);await pause(350);
+  await evaluate(`document.querySelector('#tab-lines').click()`);
+  await wait(`[...document.querySelectorAll('button')].some(b=>b.offsetParent && b.innerText==='网络测试')`);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='网络测试').click()`);
   await wait(`!!document.querySelector('.network-test-dialog')`);
   await evaluate(`[...document.querySelectorAll('.network-test-dialog .el-checkbox')].find(e=>e.innerText.includes('高级检测')).click()`);
@@ -242,7 +255,7 @@ chrome.on('error',error=>{chromeError=error});
    await evaluate(`document.querySelector('.edit-dialog details').open=true`);await pause(100);
    await checkLayout(width+' '+locale+' advanced form');
    await evaluate(`document.querySelector('.edit-dialog .el-dialog__headerbtn').click()`);await pause(250);
-   await evaluate(`document.querySelector('.monitor-disclosure').open=true`);await pause(150);
+   await evaluate(`document.querySelector('#tab-monitoring').click()`);await pause(150);
    await checkLayout(width+' '+locale+' monitoring');
    if(await evaluate(`(()=>{const p=document.querySelector('.workspace').getBoundingClientRect();return [...document.querySelectorAll('.runtime-monitor,.runtime-monitor .el-card,.runtime-monitor .el-table')].some(e=>{if(!e.offsetParent)return false;const r=e.getBoundingClientRect();return r.right>p.right+1||r.left<p.left-1})})()`))throw Error('expanded monitoring exceeds workspace '+width+' '+locale);
 

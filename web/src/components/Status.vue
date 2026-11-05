@@ -1,7 +1,8 @@
 <script setup>
 import { tr, dateTime } from '../i18n/index.js';
 
-import { computed, ref, defineAsyncComponent, onBeforeUnmount } from "vue";
+import { computed, ref, watch, defineAsyncComponent, onBeforeUnmount } from "vue";
+import { sampleRuntime, validSampleTime } from '../utils/runtime.js';
 import { api } from "../api/client";
 import {healthLabels,protocolSummary} from "../utils/health";
 const MonitoringDetails=defineAsyncComponent(()=>import("./MonitoringDetails.vue"));
@@ -43,6 +44,16 @@ const pids = computed(() =>
 );
 
 const health = computed(() => Object.entries(props.status.upstream_health || {}).map(([id, h]) => ({id, ...h})));
+const samples=ref(sampleRuntime(null,props.status));
+const now=ref(Date.now());
+watch(()=>props.status,(current,previous)=>{
+ now.value=Date.now();
+ if(current.collected_at!==previous?.collected_at)samples.value=sampleRuntime(previous,current);
+});
+const freshnessTimer=setInterval(()=>{if(props.active&&!document.hidden)now.value=Date.now()},5000);
+onBeforeUnmount(()=>clearInterval(freshnessTimer));
+const stale=computed(()=>{const at=validSampleTime(props.status.collected_at);return at!==null&&now.value-at>30000;});
+function freshErrors(row){const n=stale.value?null:samples.value.processes[row.id];return Number.isFinite(n)?String(n):'—';}
 function protocolLabel(result) {
  if (result?.method === "udp-associate" && result?.error?.includes("code=")) return tr("节点拒绝 UDP");
  if (result?.state === "degraded" && result?.method === "tcp-fallback") return tr("仅备用可用");
@@ -69,6 +80,7 @@ function formatBytes(n) {
  <section class="runtime-monitor" :class="{'show-tables':tableView}">
   <div class="mobile-table-toggle"><el-switch v-model="tableView" :active-text="tr('表格视图')" /></div>
   <p v-if="status.collected_at" class="muted">{{tr('采集于')}} {{date(status.collected_at)}}</p>
+  <el-alert v-if="stale" :title="tr('监控采集已超过 30 秒未更新，以下为上次结果')" type="warning" :closable="false" show-icon />
   <el-card shadow="never" class="section-gap">
     <template #header>{{ tr("映射健康状态") }}</template>
     <el-table scrollbar-always-on class="desktop-list" :data="health" :empty-text='tr("暂无活动映射")'>
@@ -79,7 +91,7 @@ function formatBytes(n) {
       </el-table-column>
       <el-table-column :label='tr("本地链路")' min-width="100"><template #default="{row}"><el-tooltip :content="row.recovery_error || tr(&quot;独立检查进程和 TUN，不受上游探测退避影响&quot;)"><span>{{ healthLabels[row.local_state] || tr("检测中") }}</span></el-tooltip></template></el-table-column>
       <el-table-column :label='tr("实际 DNS")' min-width="145"><template #default="{row}"><div>{{ row.resolver?.active === 'tcp' ? 'TCP DNS' : row.resolver?.active === 'doh' ? 'DoH':tr("等待启动") }}</div><div class="muted">{{ tr("备用成功") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</div></template></el-table-column>
-      <el-table-column :label='tr("连接错误记录")' min-width="180"><template #default="{row}"><el-tooltip :content="tr(&quot;当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 &quot;) + (row.process?.network_errors || 0) + tr(&quot;，本次服务累计退出 &quot;) + (row.process?.exits || 0)"><span>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }}</span></el-tooltip></template></el-table-column>
+      <el-table-column :label='tr("连接错误记录")' min-width="220"><template #default="{row}"><p>{{tr('最近采样新增')}} {{freshErrors(row)}} · {{tr('累计分类错误')}} {{row.process?.error_lines ?? '—'}}</p><el-tooltip :content="tr(&quot;当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 &quot;) + (row.process?.network_errors || 0) + tr(&quot;，本次服务累计退出 &quot;) + (row.process?.exits || 0)"><span>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }}</span></el-tooltip><p class="muted">{{tr('最近错误')}} {{date(row.process?.last_error_at)}}</p></template></el-table-column>
       <el-table-column min-width="130" :label='tr("最近检测")'><template #default="{ row }">{{ row.checked_at && !row.checked_at.startsWith('0001') ? dateTime(row.checked_at) : tr("等待检测") }}</template></el-table-column>
       <el-table-column :label='tr("说明 / 实测")' min-width="220"><template #default="{row}"><p>{{row.error}}</p><p v-if="row.udp_policy === 'reject'" class="muted">{{ tr("策略：拒绝非 DNS UDP") }}</p><el-button :disabled="!!diagnosing" @click="diagnose(row.id)">{{ tr("映射转发实测") }}</el-button></template></el-table-column>
       <el-table-column :label='tr("自动恢复")' min-width="230"><template #default="{row}">
@@ -94,18 +106,19 @@ function formatBytes(n) {
       <div class="item-title"><span>{{ row.tun_name }}</span><el-tag :type="row.local_state === 'healthy' ? 'success' : 'warning'">{{ tr("本地") }}{{ healthLabels[row.local_state] || tr("检测中") }}</el-tag></div>
       <div class="monitor-protocols"><details v-for="protocol in ['tcp','udp','dns']" :key="protocol"><summary><strong>{{ protocol.toUpperCase() }}</strong><span>{{ protocolLabel(row[protocol]) }}</span></summary><p>{{ protocolDetail(row[protocol]) }}</p></details></div>
       <p v-if="row.error || row.recovery_error" class="error-text">{{ row.recovery_error || row.error }}</p>
-      <details><summary>{{ tr("解析器与错误计数") }}</summary><p>{{ tr("实际 DNS：") }}{{ row.resolver?.active || tr("等待启动") }} {{ tr("· 备用") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</p><p>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} {{ tr("· 网络不可达") }} {{ row.process?.network_errors || 0 }}</p></details>
+      <p>{{tr('最近采样新增')}} {{freshErrors(row)}} · {{tr('累计分类错误')}} {{row.process?.error_lines ?? '—'}}</p>
+      <details><summary>{{ tr("解析器与错误计数") }}</summary><p>{{ tr("实际 DNS：") }}{{ row.resolver?.active || tr("等待启动") }} {{ tr("· 备用") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</p><p>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} {{ tr("· 网络不可达") }} {{ row.process?.network_errors || 0 }}</p><p>{{tr('最近错误')}} {{date(row.process?.last_error_at)}}</p></details>
       <p class="muted">{{healthLabels[row.state] || row.state}} {{ tr("· 最近检测") }} {{ date(row.checked_at) }}</p><p v-if="row.udp_policy === 'reject'" class="muted">{{ tr("策略：拒绝非 DNS UDP") }}</p><el-button :disabled="!!diagnosing" @click="diagnose(row.id)">{{ tr("映射转发实测") }}</el-button>
       <template v-if="row.local_state !== 'healthy'"><p class="muted">{{ tr("恢复尝试") }} {{ row.recovery?.attempts || 0 }} {{ tr("· 失败") }} {{ row.recovery?.failures || 0 }} {{ tr("· 下次") }} {{ date(row.recovery?.next_retry) }}</p><el-button :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">{{ tr("重试恢复") }}</el-button></template>
      </article>
     </div>
 
-    <details class="muted"><summary>{{ tr("检测与恢复说明") }}</summary><p>{{ tr("错误数为当前进程累计值。") }}</p>
+    <details class="muted"><summary>{{ tr("检测与恢复说明") }}</summary><p>{{ tr("错误数为当前进程累计值。") }} {{tr('新增值按最近两次有效采样计算；重启、计数重置或采样中断时显示 —。分类错误按日志行去重，不等于失败请求数。')}}</p>
      <p>{{ tr("DNS 为独立探测，“实际 DNS”为映射当前解析器。拒绝 UDP 策略下，UDP 不支持不影响映射正常判断。UDP 确认不支持或不可用后每 10 分钟复测；节点网络测试可立即复测。") }}</p>
      <p>{{ tr("本地恢复在 10 分钟内最多尝试 3 次，冷却 5 分钟；稳定 2 分钟后重置。上游异常不会触发隧道重启，手动重试会重置预算。") }}</p>
     </details>
   </el-card>
-  <MonitoringDetails :active="active" :status="status"/>
+  <MonitoringDetails :active="active" :status="status" :samples="samples" :stale="stale"/>
   <el-dialog :model-value="!!diagnosing || !!diagnostic || !!diagnosticError" :title='tr("映射转发实测")' class="mapping-diagnostic" width="min(640px, calc(100vw - 24px))" append-to-body :close-on-click-modal="false" @close="closeDiagnostic"><p v-if="diagnosing">{{ tr("正在通过隔离入口检测映射转发…") }}</p><el-alert v-if="diagnosticError" :title="diagnosticError" type="error" :closable="false"/><template v-if="diagnostic"><el-tag :type="diagnostic.ok ? 'success' : 'warning'">{{diagnostic.ok ? tr("映射转发正常") : tr("检测完成，请查看分项")}}</el-tag><p>{{ tr("规则检查：") }}{{healthLabels[diagnostic.rules.state]}}</p><p>{{ tr("HTTPS 转发：") }}{{healthLabels[diagnostic.forwarding.state]}} · {{diagnostic.forwarding.duration_ms}} ms</p><p v-if="diagnostic.forwarding.exit_ip">{{ tr("映射出口 IP：") }}{{diagnostic.forwarding.exit_ip}}</p><p v-if="diagnostic.node?.exit_ip">{{ tr("节点出口 IP：") }}{{diagnostic.node.exit_ip}}</p><p v-if="diagnostic.exit_comparison === 'different'">{{ tr("两次出口观测不同；上游可能采用动态出口，请结合节点配置核对。") }}</p><p v-if="diagnostic.node?.error">{{diagnostic.node.error}}</p><p v-if="diagnostic.forwarding.error">{{diagnostic.forwarding.error}}</p><p class="muted">{{diagnostic.scope}}</p></template><template #footer><el-button @click="closeDiagnostic">{{diagnosing ? tr("停止检测") : tr("关闭")}}</el-button></template></el-dialog>
   <div class="monitor-secondary"><section><el-card shadow="never" class="section-gap"
         ><template #header>{{ tr("运行进程") }}</template

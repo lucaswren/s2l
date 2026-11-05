@@ -6,7 +6,7 @@ Screenshots use isolated example data and show the matching interface language. 
 
 ## English
 
-Web-managed L2TP gateway for Linux with fixed SOCKS5 exits, per-mapping bandwidth limits and automatic outage diagnostics.
+Web-managed L2TP gateway for Linux with SOCKS5 or Local WAN egress, per-mapping bandwidth limits and automatic outage diagnostics. A dedicated Monitoring tab shows PPP traffic, fresh versus historical errors and operational events.
 
 When a tunnel connects but applications cannot reach the network, S2L separates local forwarding, upstream and DNS checks. Automatic outage evidence retains bounded status history, process logs and short IPv4 header-only captures without restarting mappings or switching exits. Client-side network faults still require separate investigation.
 
@@ -16,11 +16,11 @@ Project: [github.com/lucaswren/s2l](https://github.com/lucaswren/s2l). Stars, pr
 
 ![S2L overview with example data](assets/showcase-overview.png)
 
-[Mapping and bandwidth settings](assets/showcase-mapping.png) · [Automatic outage evidence](assets/showcase-evidence.png)
+[Mapping and bandwidth settings](assets/showcase-mapping.png) · [Automatic outage evidence](assets/showcase-evidence.png) · [Monitoring](assets/showcase-monitoring.png)
 
 ## 繁體中文
 
-支援網頁管理的 Linux L2TP 閘道，提供固定 SOCKS5 出口、按映射限速及故障自動診斷。
+支援網頁管理的 Linux L2TP 閘道，提供 SOCKS5 或本機 WAN 出口、按映射限速及故障自動診斷。獨立監控分頁顯示 PPP 流量、新增與歷史錯誤及操作事件。
 
 針對「能撥號但網頁打不開」的問題，提供本地轉發、上游與 DNS 分層檢查，以及故障狀態、日誌和短時 IPv4 報文頭取證。取證不重啟映射或切換出口，用戶端網路故障仍須另行排查。全新安裝已在 Ubuntu 24.04 與 Debian 12 驗證；預設普通 L2TP 不加密，可選 L2TP/IPsec。
 
@@ -28,11 +28,11 @@ Project: [github.com/lucaswren/s2l](https://github.com/lucaswren/s2l). Stars, pr
 
 ![S2L 總覽，使用範例資料](assets/zh-Hant/showcase-overview.png)
 
-[映射與頻寬設定](assets/zh-Hant/showcase-mapping.png) · [故障自動取證](assets/zh-Hant/showcase-evidence.png)
+[映射與頻寬設定](assets/zh-Hant/showcase-mapping.png) · [故障自動取證](assets/zh-Hant/showcase-evidence.png) · [運行監控](assets/zh-Hant/showcase-monitoring.png)
 
 ## 简体中文
 
-支持网页管理的 Linux L2TP 网关，提供固定 SOCKS5 出口、按映射限速和故障自动诊断。
+支持网页管理的 Linux L2TP 网关，提供 SOCKS5 或本机 WAN 出口、按映射限速和故障自动诊断。独立监控标签页显示 PPP 流量、新增与历史错误及操作事件。
 
 遇到“能拨号但网页打不开”的问题，S2L 可以分别检查本地转发、上游连通性和 DNS，并自动保存故障状态、日志及短时 IPv4 报文头抓包，方便保留现场。取证不会重启映射或切换出口，也不能代替客户端网络排查。
 
@@ -42,4 +42,4 @@ Project: [github.com/lucaswren/s2l](https://github.com/lucaswren/s2l). Stars, pr
 
 ![S2L 总览，使用示例数据](assets/zh-Hans/showcase-overview.png)
 
-[映射与带宽设置](assets/zh-Hans/showcase-mapping.png) · [故障自动取证](assets/zh-Hans/showcase-evidence.png)
+[映射与带宽设置](assets/zh-Hans/showcase-mapping.png) · [故障自动取证](assets/zh-Hans/showcase-evidence.png) · [运行监控](assets/zh-Hans/showcase-monitoring.png)

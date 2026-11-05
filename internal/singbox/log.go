@@ -4,6 +4,7 @@ import (
 	"github.com/lucaswren/s2l/internal/debuglog"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/lucaswren/s2l/internal/model"
 )
@@ -71,6 +72,10 @@ func (l *processLog) observe(p []byte) {
 	for _, ch := range p {
 		if ch == '\n' {
 			f := l.classifier.found
+			if f[0] || f[1] || f[2] || (f[3] && (f[4] || f[5])) || f[6] || f[7] || f[8] || f[9] {
+				l.status.ErrorLines++
+				l.status.LastErrorAt = time.Now()
+			}
 			if f[0] || f[1] {
 				l.status.Timeouts++
 			}
@@ -137,5 +142,5 @@ var logKeywordPrefixes = func() (out [10][]int) {
 }()
 
 func openDebugLog(path string) (*processLog, error) {
-	return &processLog{path: path}, nil
+	return &processLog{path: path, status: model.ProcessStatus{StartedAt: time.Now()}}, nil
 }
