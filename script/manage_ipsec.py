@@ -16,8 +16,7 @@ import time
 from manage_config import write_atomic
 
 ROOT = Path('/opt/s2l')
-SITE_STATE = ROOT / 'ikev2-sites.json'
-SITE_ACTIVE = Path('/run/s2l-ikev2-active')
+RETIRED_SITE_ACTIVE = Path('/run/s2l-ikev2-active')
 STATE = ROOT / 'ipsec-settings.json'
 CONF = ROOT / 'ipsec.conf'
 SECRET = ROOT / 'ipsec.secrets'
@@ -198,7 +197,7 @@ def status():
     state = read_state()
     protected = firewall_protected()
     return {'available': ready(), 'enabled': bool(state.get('enabled')),
-            'active': not SITE_ACTIVE.exists() and active(UNIT), 'psk_configured': bool(state.get('psk')),
+            'active': active(UNIT), 'psk_configured': bool(state.get('psk')),
             'protected': protected}
 
 
@@ -249,9 +248,7 @@ def change(request):
         raise ValueError('enabled 必须为布尔值')
     if not ready():
         raise ValueError('IPsec 依赖未安装，请升级服务器安装文件')
-    if SITE_ACTIVE.exists() or (request['enabled'] and SITE_STATE.exists()
-                                and json.loads(SITE_STATE.read_text()).get('enabled')):
-        raise ValueError('请先关闭 IKEv2 站点模式并在维护窗口重启服务器')
+    reject_retired_site_config()
     old = read_state()
     enabled = request['enabled']
     psk = request.get('psk', '') or old.get('psk', '')
@@ -305,22 +302,22 @@ def change(request):
     return {'message': 'L2TP/IPsec 已启用' if enabled else 'IPsec 已关闭，恢复普通 L2TP', **status()}
 
 
+def reject_retired_site_config():
+    """Refuse to reuse a site responder as L2TP transport configuration."""
+    saved = ROOT / 'ikev2-sites.json'
+    if (RETIRED_SITE_ACTIVE.exists()
+            or (saved.exists() and json.loads(saved.read_text()).get('enabled'))
+            or (CONF.exists() and 'conn s2l-site-' in CONF.read_text())):
+        raise RuntimeError('Retired site configuration remains; disable it and reboot before using L2TP/IPsec')
+
+
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else ''
     if mode == 'status':
         print(json.dumps(status()))
     elif mode == 'firewall':
-        if SITE_ACTIVE.exists():
-            if read_state().get('enabled'):
-                raise RuntimeError('Conflicting IKEv2 and L2TP/IPsec configuration')
-            for chain in ('INPUT', 'OUTPUT', 'FORWARD'):
-                run('iptables', '-w', '5', '-C', chain, '-j', 'S2L-SITE-' + chain)
-            prepare_apparmor()
-            return
+        reject_retired_site_config()
         enabled = bool(read_state().get('enabled'))
-        if not enabled and ((SITE_STATE.exists() and json.loads(SITE_STATE.read_text()).get('enabled'))
-                            or (CONF.exists() and 'conn s2l-site-' in CONF.read_text())):
-            raise RuntimeError('IKEv2 restore must install the site guards before starting IPsec')
         firewall(enabled)
         if enabled:
             if not ready():
@@ -328,6 +325,8 @@ def main():
             prepare_apparmor()
             # Upgrade/restart refreshes generated transport settings, preserving PSK.
             write_atomic(CONF, render_conf())
+    elif mode == 'check-l2tp':
+        reject_retired_site_config()
     elif mode == 'apply':
         with open(ROOT / 'ipsec.lock', 'a') as lock:
             os.chmod(lock.name, 0o600)

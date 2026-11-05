@@ -191,6 +191,9 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) checkMappingConflicts(m model.TunnelMapping) error {
+	if err := validation.WANBindings(s.store.ListNodes(), []model.TunnelMapping{m}); err != nil {
+		return err
+	}
 	for _, other := range s.store.ListMappings() {
 		if other.ID == m.ID {
 			continue

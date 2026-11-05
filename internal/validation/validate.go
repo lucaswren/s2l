@@ -18,6 +18,19 @@ func Node(n model.SocksNode) error {
 	if n.ID != "" && (!idPattern.MatchString(n.ID) || n.ID == "." || n.ID == "..") {
 		return fmt.Errorf("node id must be 1-128 letters, digits, '.', '_' or '-'")
 	}
+	if n.IsWAN() {
+		dev := n.WANInterface
+		if !tunNamePattern.MatchString(dev) || dev == "." || dev == ".." || dev == "lo" || strings.HasPrefix(dev, "tun") || strings.HasPrefix(dev, "ppp") || strings.HasPrefix(dev, "xfrm") {
+			return fmt.Errorf("WAN requires an explicit uplink interface")
+		}
+		if n.Addr != "" || n.Username != "" || n.Password != "" {
+			return fmt.Errorf("WAN egress cannot contain SOCKS5 connection settings")
+		}
+		return nil
+	}
+	if (n.Egress != "" && n.Egress != "socks5") || n.WANInterface != "" {
+		return fmt.Errorf("invalid egress type or unexpected WAN interface")
+	}
 	host, portText, err := net.SplitHostPort(strings.TrimSpace(n.Addr))
 	if err != nil || host == "" {
 		return fmt.Errorf("addr must be host:port")

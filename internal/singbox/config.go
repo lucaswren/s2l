@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/validation"
 )
 
 const configDir = "/run/s2l"
@@ -46,20 +47,24 @@ func TunInet4Address(tableID int) string {
 	return fmt.Sprintf("172.19.%d.1/30", octet)
 }
 
-// GenerateConfig 根据 SOCKS5 节点与映射生成 sing-box JSON 配置内容。
-// Resolve intercepted DNS via the SOCKS5 upstream using DoH and TCP DNS.
-// This avoids depending on SOCKS5 UDP support for DNS resolution.
+// GenerateConfig pins application traffic and DNS to the selected egress.
+// SOCKS5 uses one proxy; WAN uses one explicitly bound interface. DNS uses
+// DoH/TCP without requiring the proxy's UDP relay support.
 func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverAddress ...string) ([]byte, error) {
 	if err := mapping.ValidateOptions(); err != nil {
 		return nil, err
 	}
-	host, portStr, err := net.SplitHostPort(strings.TrimSpace(node.Addr))
-	if err != nil {
-		return nil, fmt.Errorf("invalid socks addr %q: %w", node.Addr, err)
+	if err := validation.Node(node); err != nil {
+		return nil, err
 	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil || port <= 0 || port > 65535 {
-		return nil, fmt.Errorf("invalid socks port in %q", node.Addr)
+	if err := validation.WANBindings([]model.SocksNode{node}, []model.TunnelMapping{mapping}); err != nil {
+		return nil, err
+	}
+	host, port := "", 0
+	if !node.IsWAN() {
+		var portStr string
+		host, portStr, _ = net.SplitHostPort(strings.TrimSpace(node.Addr))
+		port, _ = strconv.Atoi(portStr)
 	}
 	if mapping.TunName == "" {
 		return nil, fmt.Errorf("tun_name is required")
@@ -133,6 +138,10 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 			},
 			"final": "proxy",
 		},
+	}
+	if node.IsWAN() {
+		cfg["outbounds"] = []map[string]any{{"type": "direct", "tag": "proxy", "bind_interface": node.WANInterface, "domain_strategy": "ipv4_only"}}
+		cfg["route"].(map[string]any)["auto_detect_interface"] = false
 	}
 	if dns.Mode == "tcp" {
 		cfg["dns"].(map[string]any)["final"] = "tcpdns"

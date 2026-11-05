@@ -146,6 +146,14 @@ func cloneState(in model.AppState) model.AppState {
 	return out
 }
 
+func (s *Store) saveEgressOrRestoreLocked(previous model.AppState) error {
+	if err := validation.WANBindings(s.state.Nodes, s.state.Mappings); err != nil {
+		s.state = previous
+		return err
+	}
+	return s.saveOrRestoreLocked(previous)
+}
+
 func (s *Store) saveOrRestoreLocked(previous model.AppState) error {
 	if configurationChanged(previous, s.state) {
 		if _, err := s.createBackupLocked(previous); err != nil {
@@ -199,7 +207,7 @@ func (s *Store) UpsertNode(n model.SocksNode) error {
 	previous := cloneState(s.state)
 	for i, existing := range s.state.Nodes {
 		if existing.ID == n.ID {
-			if existing.Addr != n.Addr || existing.Username != n.Username || existing.Password != n.Password {
+			if existing.Addr != n.Addr || existing.Username != n.Username || existing.Password != n.Password || existing.IsWAN() != n.IsWAN() || existing.WANInterface != n.WANInterface {
 				for _, m := range s.state.Mappings {
 					if m.NodeID == n.ID && m.Status != model.StatusStopped {
 						return ErrNodeInUse
@@ -207,11 +215,11 @@ func (s *Store) UpsertNode(n model.SocksNode) error {
 				}
 			}
 			s.state.Nodes[i] = n
-			return s.saveOrRestoreLocked(previous)
+			return s.saveEgressOrRestoreLocked(previous)
 		}
 	}
 	s.state.Nodes = append(s.state.Nodes, n)
-	return s.saveOrRestoreLocked(previous)
+	return s.saveEgressOrRestoreLocked(previous)
 }
 
 func (s *Store) DeleteNode(id string) error {
@@ -266,11 +274,11 @@ func (s *Store) UpsertMapping(m model.TunnelMapping) error {
 				return fmt.Errorf("mapping is not stopped; cleanly stop it before changing settings")
 			}
 			s.state.Mappings[i] = m
-			return s.saveOrRestoreLocked(previous)
+			return s.saveEgressOrRestoreLocked(previous)
 		}
 	}
 	s.state.Mappings = append(s.state.Mappings, m)
-	return s.saveOrRestoreLocked(previous)
+	return s.saveEgressOrRestoreLocked(previous)
 }
 
 func (s *Store) DeleteMapping(id string) error {

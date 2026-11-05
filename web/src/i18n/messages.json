@@ -1,18 +1,15 @@
 {
-  "站点出口": {"en": "Site egress", "tw": "站點出口"},
-  "本机 WAN": {"en": "Local WAN", "tw": "本機 WAN"},
-  "WAN 网卡": {"en": "WAN interface", "tw": "WAN 網卡"},
+  "重新拨号后核对分配地址、DNS 和路由；从客户端解析域名并访问 HTTPS，确认使用所选出口。面板测速不能替代客户端验证。": {"en": "After reconnecting, check the assigned address, DNS and routes. Resolve a domain and open HTTPS from the client to verify the selected egress. Panel speed tests do not replace client verification.", "tw": "重新撥號後核對分配位址、DNS 和路由；從用戶端解析網域並存取 HTTPS，確認使用所選出口。面板測速不能替代用戶端驗證。"},
+  "下发地址是隧道内 DNS 入口；实际解析经所选出口自动选择 DoH/TCP。SOCKS5 解析失败时不会自动转为本机 WAN。": {"en": "Advertised DNS addresses identify the tunnel DNS entry. Resolution automatically uses DoH/TCP through the selected egress. SOCKS5 DNS failures never trigger a Local WAN fallback.", "tw": "下發位址是隧道內 DNS 入口；實際解析經所選出口自動選擇 DoH/TCP。SOCKS5 解析失敗時不會自動轉為本機 WAN。"},
+  "网络参数自动管理：MTU 1400、MSS 1200、队列 1000，不限制 TCP 连接数。非 DNS UDP 主动拒绝；DNS 经所选出口自动选择 DoH/TCP，不切换出口。": {"en": "Network settings are managed automatically: MTU 1400, MSS 1200, queue 1000, and no TCP connection limit. Non-DNS UDP is rejected. DNS uses DoH/TCP through the selected egress without switching exits.", "tw": "網路參數自動管理：MTU 1400、MSS 1200、佇列 1000，不限制 TCP 連線數。非 DNS UDP 主動拒絕；DNS 經所選出口自動選擇 DoH/TCP，不切換出口。"},
+  "测速通过所选出口访问 Cloudflare，分别显示下载、上传速度与连接延迟。测速会消耗流量，结果不代表完整 L2TP 客户端连接的性能；各方向的失败原因单独显示。": {"en": "Speed tests use the selected egress to reach Cloudflare and report download, upload and connection latency separately. Tests consume traffic and do not measure the complete L2TP client path. Each direction reports its own failure.", "tw": "測速透過所選出口存取 Cloudflare，分別顯示下載、上傳速度與連線延遲。測速會消耗流量，結果不代表完整 L2TP 用戶端連線的效能；各方向的失敗原因單獨顯示。"},
+  "先添加出口节点，选择 SOCKS5 或本机 WAN，再新建 L2TP 映射并选择节点。路由表编号自动选择未被占用的值。填写 L2TP 账号与密码后保存并启动。批量导入格式见对应窗口。": {"en": "Add a SOCKS5 or Local WAN egress node, then select it in a new L2TP mapping. An unused route-table number is suggested automatically. Enter the L2TP credentials, save and start. Import formats are shown in the import dialog.", "tw": "先新增出口節點，選擇 SOCKS5 或本機 WAN，再新增 L2TP 映射並選擇節點。路由表編號自動選用未被占用的值。填寫 L2TP 帳號與密碼後儲存並啟動。批次匯入格式見對應視窗。"},
+  "请先添加出口节点。": {"en":"Add an egress node first.","tw":"請先新增出口節點。"},
+  "检测流量绑定所选 WAN 网卡。": {"en":"Probe traffic is bound to the selected WAN interface.","tw":"檢測流量綁定所選 WAN 網卡。"},
+  "出口类型": {"en":"Egress type","tw":"出口類型"},
+  "本机 WAN": {"en":"Local WAN","tw":"本機 WAN"},
+  "WAN 网卡": {"en":"WAN interface","tw":"WAN 網卡"},
   "启用": {"en": "Enable", "tw": "啟用"},
-  "站点设置保存后，在服务器重启并恢复映射后生效。": {"en": "Saved site settings take effect after the server reboots and restores its mappings.", "tw": "站點設定儲存後，會在伺服器重新啟動並復原映射後生效。"},
-  "等待维护窗口重启": {"en": "Pending maintenance reboot", "tw": "等待維護時段重新啟動"},
-  "本端网关 IPv4": {"en": "Local gateway IPv4", "tw": "本端閘道 IPv4"},
-  "受保护的目标网段": {"en": "Protected destination subnet", "tw": "受保護的目的子網"},
-  "站点名称": {"en": "Site name", "tw": "站點名稱"},
-  "对端网关 IPv4": {"en": "Peer gateway IPv4", "tw": "對端閘道 IPv4"},
-  "对端子网": {"en": "Peer subnet", "tw": "對端子網"},
-  "SOCKS5 映射": {"en": "SOCKS5 mapping", "tw": "SOCKS5 映射"},
-  "已有站点留空保留密钥": {"en": "Leave blank to keep the existing key", "tw": "留空以保留現有金鑰"},
-  "新增站点": {"en": "Add site", "tw": "新增站點"},
   "分组、带宽与观测": {
     "en": "Groups, bandwidth and observation",
     "tw": "分組、頻寬與觀測"
@@ -3292,10 +3289,6 @@
     "en": "Windows/macOS: choose a supported VPN mode, enable the VPN default route and accept automatic DNS. Linux pppd: enable usepeerdns and apply received DNS through your network manager or dial-in scripts. Routers: configure the L2TP route and source NAT for the intended LAN traffic.",
     "tw": "Windows/macOS：選擇用戶端支援的接入模式，啟用 VPN 預設路由並接受自動 DNS。Linux pppd：啟用 usepeerdns，並讓網路管理員或撥號指令碼套用收到的 DNS。路由器：為需要代理的 LAN 流量設定 L2TP 出口和來源 NAT。"
   },
-  "下发地址是隧道内 DNS 请求的入口标识；实际解析器在映射高级选项配置。所有进入映射的 53 端口请求均经该映射的 SOCKS5，不会在解析失败时改为服务器直连。": {
-    "en": "Offered addresses identify DNS requests inside the tunnel; configure actual resolvers in the mapping advanced options. All port 53 requests entering the mapping use its SOCKS5 upstream, with no direct server fallback on DNS failure.",
-    "tw": "下發位址是隧道內 DNS 請求的入口識別；實際解析器在映射進階選項設定。所有進入映射的 53 連接埠請求均經該映射的 SOCKS5，不會在解析失敗時改為伺服器直連。"
-  },
   "如果客户端忽略 DNS 下发，请手动填写上方 DNS 地址并将它们路由进隧道。局域网 DNS、浏览器安全 DNS 和分流规则可能绕过 VPN，需分别核对。": {
     "en": "If the client ignores offered DNS, enter the addresses above manually and route them into the tunnel. Check LAN DNS, browser secure DNS and split-routing rules for VPN bypass.",
     "tw": "如果用戶端忽略 DNS 下發，請手動填寫上方 DNS 位址並將其路由進隧道。區域網路 DNS、瀏覽器安全 DNS 和分流規則可能繞過 VPN，需分別核對。"
@@ -3327,10 +3320,6 @@
   "自动模式仅在同一节点内切换 DoH/TCP，不切换节点或直连。自定义 DNS 不改变客户端收到的 DNS 地址；进入隧道的 53 端口请求会使用这里的解析器。": {
     "en": "Automatic mode switches DoH/TCP only within the same node, without switching nodes or connecting directly. Custom DNS does not change the addresses offered to clients; port 53 requests entering the tunnel use these resolvers.",
     "tw": "自動模式僅在同一節點內切換 DoH/TCP，不切換節點或直連。自訂 DNS 不改變用戶端收到的 DNS 位址；進入隧道的 53 連接埠請求會使用這裡的解析器。"
-  },
-  "重新拨号后核对分配地址、DNS 和路由；从客户端解析域名并访问 HTTPS，确认出口属于所选 SOCKS5。需要 UDP 的应用须允许 UDP 且上游支持；面板测速不能替代客户端验证。": {
-    "en": "After reconnecting, check the assigned address, DNS and routes. Resolve a name and access HTTPS from the client, then verify the selected SOCKS5 egress. UDP applications require an allowing policy and upstream UDP support; panel speed tests do not replace client validation.",
-    "tw": "重新撥號後核對分配位址、DNS 和路由；從用戶端解析網域並存取 HTTPS，確認出口屬於所選 SOCKS5。需要 UDP 的應用須允許 UDP 且上游支援；面板測速不能替代用戶端驗證。"
   },
   "允许 UDP 后，还需放行 SOCKS5 协商返回的 UDP 中继地址和端口，可能不同于代理 TCP 端口。协商成功不等于有回包；DNS 可继续经 DoH/TCP 使用固定出口。": {
     "en": "After allowing UDP, also permit the UDP relay address and port returned by SOCKS5; these may differ from its TCP endpoint. Association success does not prove replies work. DNS can still use DoH/TCP through the fixed exit.",

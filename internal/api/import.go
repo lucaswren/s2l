@@ -58,6 +58,9 @@ func (s *Server) handleImportNodes(w http.ResponseWriter, r *http.Request) {
 		}
 		if n.Name == "" {
 			n.Name = n.Addr
+			if n.IsWAN() {
+				n.Name = "WAN " + n.WANInterface
+			}
 		}
 		if !validGroup(n.Group) {
 			res.Skipped++
@@ -70,7 +73,7 @@ func (s *Server) handleImportNodes(w http.ResponseWriter, r *http.Request) {
 			for _, e := range existing {
 				// Shared proxy endpoints commonly use credentials to select the
 				// exit. An address or display name alone is not a node identity.
-				if e.Addr == n.Addr && e.Username == n.Username && e.Password == n.Password {
+				if e.Addr == n.Addr && e.Username == n.Username && e.Password == n.Password && e.IsWAN() == n.IsWAN() && e.WANInterface == n.WANInterface {
 					matches++
 					n.ID = e.ID
 					isNew = false

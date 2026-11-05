@@ -30,9 +30,9 @@ func Current() Info {
 		}
 	}
 	result.ReleaseNotes = map[string]string{
-		"en":    "Automatically retain bounded fault status history, process logs and short IPv4 header-only captures, with queued collection across mappings and ZIP export after service restarts. Detect conflicting routes and verify actual PPP outbound and return paths without deleting foreign configuration. Preserve fixed SOCKS5 exits and per-mapping bandwidth limits. Keep common network tests visible and move specialist tests under Advanced tests. Missing tcpdump retains snapshots and logs; client-side iWAN faults and unavailable upstream nodes still require investigation. Upgrades restart mappings and require clients to reconnect.",
-		"zh-TW": "新增故障自動取證，保存有限的狀態歷史、程序日誌與短時 IPv4 報文頭抓包，支援多映射排隊及服務重啟後匯出 ZIP。加強路由衝突檢查，驗證實際 PPP 出口與回程，不自動刪除外部設定。保留固定 SOCKS5 出口及每映射頻寬限制；常用網路測試直接顯示，專項測試收納至進階檢測。缺少 tcpdump 時仍保存快照與日誌；客戶端 iWAN 或上游節點故障仍需定位。升級會重建映射，客戶端須重新連線。",
-		"zh-CN": "新增故障自动取证，保存有限的状态历史、进程日志与短时 IPv4 报文头抓包，支持多映射排队及服务重启后导出 ZIP。加强路由冲突检查，验证实际 PPP 出口与回程，不自动删除外部配置。保留固定 SOCKS5 出口及每映射带宽限制；常用网络测试直接显示，专项测试收纳至高级检测。缺少 tcpdump 时仍保存快照与日志；客户端 iWAN 或上游节点故障仍需定位。升级会重建映射，客户端须重新连接。",
+		"en":    "Keep L2TP with optional L2TP/IPsec; remove IKEv2 site-to-site configuration. Add explicit local WAN egress for L2TP mappings, with application traffic, DNS and probes bound to the selected interface; SOCKS5 failures never fall back to WAN. Reject WAN/TUN name conflicts, isolate slow PPP return-route synchronization, and use TCP DNS for WAN hostname bootstrap. Upgrades restart mappings and require clients to reconnect. Existing IKEv2 site configurations must be removed before upgrading.",
+		"zh-TW": "保留 L2TP 與可選的 L2TP/IPsec，移除 IKEv2 站點間設定。L2TP 映射可明確選用本機 WAN，應用流量、DNS 與探測綁定指定網卡；SOCKS5 故障不會回落到 WAN。拒絕 WAN/TUN 名稱衝突，限制慢速 PPP 回程路由同步的影響，WAN 網域引導解析改用 TCP DNS。升級會重建映射，客戶端須重新連線；已有 IKEv2 站點設定須先移除。",
+		"zh-CN": "保留 L2TP 与可选的 L2TP/IPsec，移除 IKEv2 站点间配置。L2TP 映射可明确选用本机 WAN，应用流量、DNS 与探测绑定指定网卡；SOCKS5 故障不会回落到 WAN。拒绝 WAN/TUN 名称冲突，限制慢速 PPP 回程路由同步的影响，WAN 域名引导解析改用 TCP DNS。升级会重建映射，客户端须重新连接；已有 IKEv2 站点配置须先移除。",
 	}
 	if regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(result.Version) {
 		result.ReleaseURL = "https://github.com/lucaswren/s2l/releases/tag/" + result.Version

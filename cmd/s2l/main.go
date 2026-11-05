@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -101,15 +100,6 @@ func main() {
 			// 稍等 TUN/网络栈就绪
 			time.Sleep(500 * time.Millisecond)
 			svc.RestoreRunning()
-			if _, err := os.Stat("/opt/s2l/ikev2-sites.json"); err == nil {
-				svc.SynchronizeState(func() {
-					ctx, cancel := context.WithTimeout(monitorCtx, 2*time.Minute)
-					defer cancel()
-					if err := exec.CommandContext(ctx, "python3", "/opt/s2l/manage_ikev2_site.py", "restore", cfg.StatePath()).Run(); err != nil {
-						log.Printf("IKEv2 site restore failed: %v", err)
-					}
-				})
-			}
 			svc.SetStartupComplete()
 		}()
 	}

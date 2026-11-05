@@ -20,7 +20,7 @@ const formRef = ref();
 const required = { required: true, get message() { return tr("请填写此项"); }, trigger: "blur" };
 const testingId = ref("");
 const speedResults = reactive({});
-const form = reactive({ name: "", addr: "", username: "", password: "",group:"" });
+const form = reactive({ name: "", addr: "", username: "", password: "",group:"",egress:"socks5",wan_interface:"" });
 const importText = ref("");
 const importErrors = ref([]);
 const blockedMappings = ref([]);
@@ -45,7 +45,7 @@ function formatSpeed(result) {
 function resetForm() {
   blockedMappings.value = [];
   editingId.value = "";editRevision.value="";
-  Object.assign(form, { name: "", addr: "", username: "", password: "",group:"" });
+  Object.assign(form, { name: "", addr: "", username: "", password: "",group:"",egress:"socks5",wan_interface:"" });
 }
 
 function openCreate() {
@@ -63,7 +63,7 @@ async function openEdit(n) {
   editingId.value = n.id;editRevision.value=n._revision||"";
   blockedMappings.value = [];
   Object.assign(form, {
-    name: n.name || "",group:n.group||"",
+    name: n.name || "",group:n.group||"",egress:n.egress||"socks5",wan_interface:n.wan_interface||"",
     addr: n.addr || "",
     username: n.username || "",
     password: n.password || "",
@@ -87,11 +87,12 @@ async function save() {
   busy.value = true;
   try {
     const body = { ...form };
+    if (body.egress === "wan") { body.addr = ""; body.username = ""; body.password = ""; } else { body.wan_interface = ""; }
     if (editingId.value) body.id = editingId.value;
     const preview=await api.previewNode(body,editRevision.value);
     blockedMappings.value = preview.blocked || [];
     if (blockedMappings.value.length) return;
-    const labels={get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); }};
+    const labels={get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get egress() { return tr("出口类型"); },get wan_interface() { return tr("WAN 网卡"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); }};
     await ElMessageBox.confirm(tr("变更：{0}。影响 {1} 条映射。{2}", preview.fields.map(f=>labels[f]||f).join('、')||tr("无"), preview.affected.length, tr(preview.message)),tr("保存配置"),{get confirmButtonText() { return tr("保存"); },get cancelButtonText() { return tr("返回编辑"); }});
     await api.saveNode(body,editRevision.value);
     emit("toast", {
@@ -172,7 +173,7 @@ async function speedTest(n) {
   <section>
     <div class="section-head">
       <div>
-        <h2>{{ tr("SOCKS5 节点") }}</h2>
+        <h2>{{ tr("出口节点") }}</h2>
 
       </div>
       <div class="actions">
@@ -190,7 +191,7 @@ async function speedTest(n) {
         min-width="130" /><el-table-column
         prop="addr"
         :label='tr("地址")'
-        min-width="170" /><el-table-column
+        min-width="170"><template #default="{ row }">{{ row.egress === 'wan' ? `${tr('本机 WAN')} · ${row.wan_interface}` : row.addr }}</template></el-table-column><el-table-column
         prop="username"
         :label='tr("用户名")'
         min-width="100" /><el-table-column :label='tr("上下行速度")' min-width="210"
@@ -214,7 +215,7 @@ async function speedTest(n) {
         shadow="never"
         ><div class="item-title">{{ n.name }}</div>
         <div class="item-details">
-          <span>{{ tr("地址") }}</span><span class="mono">{{ n.addr }}</span
+          <span>{{ tr("地址") }}</span><span class="mono">{{ n.egress === "wan" ? `${tr("本机 WAN")} · ${n.wan_interface}` : n.addr }}</span
           ><span>{{ tr("用户名") }}</span><span>{{ n.username || "—" }}</span
           ><span>{{ tr("测速") }}</span><SpeedResult :result="speedResults[n.id]" />
         </div>
@@ -253,15 +254,17 @@ async function speedTest(n) {
             ><el-input
               v-model="form.name"
               :placeholder='tr("留空使用地址")' /></el-form-item
-          ><el-form-item :label='tr("SOCKS5 地址")' prop="addr" :rules="required"
+          ><el-form-item :label='tr("出口类型")'><el-select v-model="form.egress"><el-option label="SOCKS5" value="socks5"/><el-option :label='tr("本机 WAN")' value="wan"/></el-select></el-form-item>
+<el-form-item v-if="form.egress === 'wan'" :label='tr("WAN 网卡")' prop="wan_interface" :rules="required"><el-input v-model.trim="form.wan_interface" placeholder="eth0"/></el-form-item>
+<el-form-item v-if="form.egress !== 'wan'" :label='tr("SOCKS5 地址")' prop="addr" :rules="required"
             ><el-input
               v-model="form.addr"
               placeholder="host:port" /></el-form-item
-          ><el-form-item :label='tr("用户名")'
+          ><el-form-item v-if="form.egress !== 'wan'" :label='tr("用户名")'
             ><el-input
               v-model="form.username"
               autocomplete="off" /></el-form-item
-          ><el-form-item :label='tr("密码")'
+          ><el-form-item v-if="form.egress !== 'wan'" :label='tr("密码")'
             ><el-input
               v-model="form.password"
               type="password"

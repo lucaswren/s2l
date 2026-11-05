@@ -60,7 +60,7 @@ async function copy(){
   <el-alert class="section-gap" :title='tr("拨号下发的 DNS：{0}。升级后重新拨号获取。", clientDNS)' type="info" :closable="false" />
   <el-collapse class="section-gap">
     <el-collapse-item :title='tr("创建与导入")' name="create"
-      ><p> {{ tr("先添加 SOCKS5 节点，再新建映射并选择节点。路由表编号自动选择未被其他映射使用的值； 请确认所选路由表未被主机上的其他服务占用。填写 L2TP 账号与密码后保存并启动。批量导入格式见对应导入窗口。") }} </p></el-collapse-item
+      ><p> {{ tr("先添加出口节点，选择 SOCKS5 或本机 WAN，再新建 L2TP 映射并选择节点。路由表编号自动选择未被占用的值。填写 L2TP 账号与密码后保存并启动。批量导入格式见对应窗口。") }} </p></el-collapse-item
     >
     <el-collapse-item :title='tr("启动或拨号失败")' name="trouble"
       ><p> {{ tr("查看映射中的错误详情，核对 SOCKS5 地址和凭据。普通 L2TP 需放行 UDP 1701；IPsec 统一使用 NAT-T，需放行 UDP 500/4500。客户端预共享密钥须与服务器一致。SSH 中执行 s2l 可查看服务状态和日志。") }} </p></el-collapse-item
@@ -69,17 +69,17 @@ async function copy(){
       ><p> {{ tr("服务器地址填写部署 S2L 的服务器公网 IPv4 地址，用户名和密码填写对应映射的 L2TP 凭据。服务器启用 IPsec 时填写相同的预共享密钥，关闭时留空。若客户端同时配置其他 IPsec VPN，请检查预共享密钥冲突。具体兼容性需以客户端版本和实际协商结果为准。") }} </p></el-collapse-item
     >
     <el-collapse-item :title='tr("上下行测速")' name="speed"
-      ><p> {{ tr("测速由服务器经所选 SOCKS5 节点访问 Cloudflare，分别显示下载、上传速度及连接延迟。 测速会消耗流量，结果不代表完整 L2TP 客户端连接的性能；各方向的失败原因单独显示。") }} </p></el-collapse-item
+      ><p> {{ tr("测速通过所选出口访问 Cloudflare，分别显示下载、上传速度与连接延迟。测速会消耗流量，结果不代表完整 L2TP 客户端连接的性能；各方向的失败原因单独显示。") }} </p></el-collapse-item
     >
     <el-collapse-item :title='tr("DNS 与客户端路由")' name="dns-routing">
       <p>{{ tr("接受 VPN 分配的 DNS，并确保 DNS 与需要代理的 IPv4 流量经 L2TP；服务器地址保留原网络路由。") }}</p>
       <p>{{ tr("Windows/macOS：选择客户端支持的接入模式，启用 VPN 默认路由并接受自动 DNS。Linux pppd：启用 usepeerdns，并让网络管理器或拨号脚本应用收到的 DNS。路由器：为需要代理的 LAN 流量配置 L2TP 出口和源 NAT。") }}</p>
       <p>{{ tr("如果客户端忽略 DNS 下发，请手动填写上方 DNS 地址并将它们路由进隧道。局域网 DNS、浏览器安全 DNS 和分流规则可能绕过 VPN，需分别核对。") }}</p>
-      <p>{{ tr("下发地址是隧道内 DNS 请求的入口标识；实际解析器在映射高级选项配置。所有进入映射的 53 端口请求均经该映射的 SOCKS5，不会在解析失败时改为服务器直连。") }}</p>
+      <p>{{ tr("下发地址是隧道内 DNS 入口；实际解析经所选出口自动选择 DoH/TCP。SOCKS5 解析失败时不会自动转为本机 WAN。") }}</p>
       <p>{{ tr("客户端其他接口的 IPv6 和断线直连需在客户端阻止；服务器只能保护进入隧道的流量。") }}</p>
     </el-collapse-item>
     <el-collapse-item :title='tr("接入验收")' name="acceptance">
-      <p>{{ tr("重新拨号后核对分配地址、DNS 和路由；从客户端解析域名并访问 HTTPS，确认出口属于所选 SOCKS5。需要 UDP 的应用须允许 UDP 且上游支持；面板测速不能替代客户端验证。") }}</p>
+      <p>{{ tr("重新拨号后核对分配地址、DNS 和路由；从客户端解析域名并访问 HTTPS，确认使用所选出口。面板测速不能替代客户端验证。") }}</p>
       <p>{{ tr("同一账号仅允许一条拨号会话；多设备可共享网关。") }}</p>
       <p>{{ tr("同一 NAT 下多个 IPsec 客户端可使用 L2TP 源端口 1701，服务器按会话隔离回包。Linux 双客户端已实测；原生 Windows、macOS 和路由器仍需按版本验证。每台独立拨号设备使用自己的映射账号。") }}</p>
       <p>{{ tr("允许 UDP 后，还需放行 SOCKS5 协商返回的 UDP 中继地址和端口，可能不同于代理 TCP 端口。协商成功不等于有回包；DNS 可继续经 DoH/TCP 使用固定出口。") }}</p>

@@ -8,6 +8,45 @@ import (
 	"github.com/lucaswren/s2l/internal/model"
 )
 
+func TestExplicitWANEgressKeepsTunnelAndDNSGuards(t *testing.T) {
+	n := model.SocksNode{Egress: "wan", WANInterface: "eth0"}
+	data, err := GenerateConfig(n, model.TunnelMapping{TunName: "tun101", TableID: 101}, "127.0.0.1:1053")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	_ = json.Unmarshal(data, &cfg)
+	outs := cfg["outbounds"].([]any)
+	out := outs[0].(map[string]any)
+	if out["type"] != "direct" || out["bind_interface"] != "eth0" || len(outs) != 2 {
+		t.Fatal("WAN binding or resolver isolation missing", outs)
+	}
+	if cfg["route"].(map[string]any)["final"] != "proxy" {
+		t.Fatal("implicit fallback route")
+	}
+	if cfg["inbounds"].([]any)[0].(map[string]any)["auto_route"] != false {
+		t.Fatal("WAN mode changed host routing")
+	}
+	n.Egress = "socks5"
+	n.Addr = "127.0.0.1:1080"
+	n.WANInterface = ""
+	data, err = GenerateConfig(n, model.TunnelMapping{TunName: "tun102", TableID: 102})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = json.Unmarshal(data, &cfg)
+	out = cfg["outbounds"].([]any)[0].(map[string]any)
+	if out["type"] != "socks" || strings.Contains(string(data), "bind_interface") {
+		t.Fatal("SOCKS5 acquired a WAN fallback")
+	}
+}
+
+func TestWANEgressCannotGenerateASelfRoutingTUN(t *testing.T) {
+	if _, err := GenerateConfig(model.SocksNode{Egress: "wan", WANInterface: "eth0"}, model.TunnelMapping{TunName: "eth0", TableID: 101}); err == nil {
+		t.Fatal("self-routing WAN/TUN configuration accepted")
+	}
+}
+
 func TestGenerateConfig(t *testing.T) {
 	node := model.SocksNode{
 		ID:       "n1",

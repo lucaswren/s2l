@@ -17,6 +17,7 @@ import (
 	"github.com/lucaswren/s2l/internal/operations"
 	"github.com/lucaswren/s2l/internal/singbox"
 	"github.com/lucaswren/s2l/internal/store"
+	"github.com/lucaswren/s2l/internal/validation"
 )
 
 // MappingService 编排「sing-box + 网络规则 + L2TP」整条链路
@@ -170,6 +171,9 @@ func (s *MappingService) startLocked(id string) error {
 	if err := network.ValidateMapping(m); err != nil {
 		cause := fmt.Errorf("invalid mapping: %w", err)
 		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
+	}
+	if err := validation.WANBindings(s.store.ListNodes(), s.store.ListMappings()); err != nil {
+		return errors.Join(err, s.store.UpdateMappingStatus(id, model.StatusError, err.Error()))
 	}
 	node, ok := s.store.GetNode(m.NodeID)
 	if !ok {

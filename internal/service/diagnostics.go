@@ -82,6 +82,9 @@ func (s *MappingService) ProbeMapping(ctx context.Context, id string) (model.Map
 	}
 	node, nodeOK := s.store.GetNode(m.NodeID)
 	var wg sync.WaitGroup
+	if nodeOK && node.IsWAN() {
+		r.Scope = "PPP simulated ingress → policy routing and firewall → TUN → selected local WAN; excludes L2TP authentication"
+	}
 	wg.Add(1)
 	go func() { defer wg.Done(); r.Forwarding = network.ProbeForwarding(ctx, m) }()
 	if nodeOK {

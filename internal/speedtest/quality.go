@@ -69,7 +69,7 @@ func transferSample(ctx context.Context, node model.SocksNode, target string, si
 	first := 0.0
 	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GotFirstResponseByte: func() { mu.Lock(); first = float64(time.Since(start).Microseconds()) / 1000; mu.Unlock() }})
 	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, DisableCompression: true, MaxResponseHeaderBytes: 32768, DialContext: func(c context.Context, _, addr string) (net.Conn, error) {
-		return DialSOCKS5(c, node.Addr, node.Username, node.Password, addr)
+		return DialNode(c, node, addr)
 	}}
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

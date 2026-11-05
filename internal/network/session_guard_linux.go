@@ -36,6 +36,8 @@ func (c *Controller) EnableSessionGuard() error {
 // Reconcile from actual point-to-point PPP interfaces, independently of the
 // advisory datagram hooks. Keep the first live owner until it disappears.
 func (c *Controller) SyncSessionGuard(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
 	if err := lockutil.Lock(ctx, &c.mu); err != nil {
 		return err
 	}
@@ -80,20 +82,59 @@ func (c *Controller) syncSessionGuard(ctx context.Context) error {
 		return err
 	}
 	next := selectSessionPeers(mappings, rows, c.admitted)
+	pinErrors := pinSessionReturns(ctx, mappings, next, c.admitted, pinSessionReturn)
+	if err := replaceSessionGuard(ctx, next); err != nil {
+		return err
+	}
+	c.admitted = next
+	return pinErrors
+}
+
+// Share the remaining deadline with other new peers and the final nft commit.
+// A hung route command for one peer must not consume their entire admission window.
+func pinSessionReturns(ctx context.Context, mappings []model.TunnelMapping, next, previous map[string]model.PPPSession, pin func(context.Context, model.TunnelMapping, model.PPPSession) error) error {
+	reserve := 500 * time.Millisecond
+	if deadline, ok := ctx.Deadline(); ok {
+		if share := time.Until(deadline) / 3; share < reserve {
+			reserve = max(share, 0)
+		}
+	}
+	pending := 0
+	for _, m := range mappings {
+		if row, ok := next[m.ID]; ok && row.Index != previous[m.ID].Index {
+			pending++
+		}
+	}
 	var pinErrors error
 	for _, m := range mappings {
 		row, ok := next[m.ID]
-		if ok && row.Index != c.admitted[m.ID].Index {
-			if err := pinSessionReturn(ctx, m, row); err != nil {
+		if ok && row.Index != previous[m.ID].Index {
+			budget := time.Second
+			if deadline, ok := ctx.Deadline(); ok {
+				remaining := time.Until(deadline) - reserve
+				if remaining <= 0 {
+					delete(next, m.ID)
+					pending--
+					pinErrors = errors.Join(pinErrors, fmt.Errorf("defer return route for %s: %w", m.ID, context.DeadlineExceeded))
+					continue
+				}
+				// Do not divide a small cycle into unusably short deadlines when
+				// many peers reconnect together. Admit what fits and retry the rest.
+				share := remaining / time.Duration(min(pending, 4))
+				if share < budget {
+					budget = share
+				}
+			}
+			check, cancel := context.WithTimeout(ctx, budget)
+			err := pin(check, m, row)
+			cancel()
+			pending--
+			if err != nil {
 				delete(next, m.ID)
 				pinErrors = errors.Join(pinErrors, fmt.Errorf("pin return route for %s: %w", m.ID, err))
 			}
 		}
 	}
-	if err := replaceSessionGuard(ctx, next); err != nil {
-		return err
-	}
-	c.admitted = next
 	return pinErrors
 }
 

@@ -9,15 +9,19 @@ const (
 	StatusError   = "error"
 )
 
-// SocksNode 上游 SOCKS5 代理节点
+// SocksNode defines a mapping's SOCKS5 or explicitly selected local WAN egress.
 type SocksNode struct {
-	Group    string `json:"group,omitempty"`
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Addr     string `json:"addr"` // host:port
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Egress       string `json:"egress,omitempty"` // socks5 (default) | wan
+	WANInterface string `json:"wan_interface,omitempty"`
+	Group        string `json:"group,omitempty"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Addr         string `json:"addr"` // host:port
+	Username     string `json:"username"`
+	Password     string `json:"password"`
 }
+
+func (n SocksNode) IsWAN() bool { return n.Egress == "wan" }
 
 // TunnelMapping 一条「SOCKS5 → TUN → 路由表 → L2TP」完整映射
 type TunnelMapping struct {

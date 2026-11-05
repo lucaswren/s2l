@@ -47,9 +47,9 @@ type Result struct {
 	Error     string         `json:"error,omitempty"`
 }
 
-// Probe 经同一 SOCKS5 节点分别测量下载和上传，每个方向独立限时。
+// Probe measures both directions through the selected egress, with independent timeouts.
 func Probe(ctx context.Context, node model.SocksNode, wantBytes int64) Result {
-	if _, _, err := net.SplitHostPort(node.Addr); err != nil {
+	if _, _, err := net.SplitHostPort(node.Addr); err != nil && !node.IsWAN() {
 		message := "invalid addr: " + err.Error()
 		return Result{NodeID: node.ID, Name: node.Name, Addr: node.Addr, Error: message,
 			Download: TransferResult{Error: message}, Upload: TransferResult{Error: message}}
@@ -58,7 +58,7 @@ func Probe(ctx context.Context, node model.SocksNode, wantBytes int64) Result {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			start := time.Now()
-			conn, err := dialSOCKS5(ctx, node.Addr, node.Username, node.Password, addr)
+			conn, err := DialNode(ctx, node, addr)
 			if err == nil {
 				latency.CompareAndSwap(0, int64(time.Since(start)))
 			}

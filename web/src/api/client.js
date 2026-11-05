@@ -181,10 +181,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  ikev2Sites: () => request("/api/settings/ikev2-sites"),
-  saveIKEv2Sites: (body) => request("/api/settings/ikev2-sites", {
-    method: "POST", body: JSON.stringify(body),
-  }),
   settings: () => request("/api/settings"),
   saveAccount: (body) =>
     request("/api/settings/account", {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/store"
+	"github.com/lucaswren/s2l/internal/validation"
 )
 
 func (s *Server) handleNodes(w http.ResponseWriter, r *http.Request) {
@@ -70,12 +71,19 @@ func (s *Server) createOrUpdateNode(w http.ResponseWriter, r *http.Request) {
 	}
 	n.Name = strings.TrimSpace(n.Name)
 	n.Addr = strings.TrimSpace(n.Addr)
+	if err := validation.WANBindings([]model.SocksNode{n}, s.store.ListMappings()); err != nil {
+		writeError(w, 400, err.Error())
+		return
+	}
 	if err := validateSocksNode(n); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if n.Name == "" {
 		n.Name = n.Addr
+		if n.IsWAN() {
+			n.Name = "WAN " + n.WANInterface
+		}
 	}
 	if n.ID == "" {
 		n.ID = newID("node_")

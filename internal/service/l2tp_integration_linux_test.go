@@ -307,7 +307,18 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 		}
 	}
 	if proxyState["node1"].dohQueries.Load() == 0 {
-		t.Fatal("custom DoH resolver was not used")
+		// A cold TLS handshake can legitimately lose the TCP hedge on a slow
+		// emulator. Send uncached client queries through the same mapping until
+		// the configured DoH endpoint is actually used (including its 30s retry).
+		attempt := 0
+		integrationWait(t, 45*time.Second, func() bool {
+			if proxyState["node1"].dohQueries.Load() > 0 {
+				return true
+			}
+			attempt++
+			integrationClientDNS(t, "s2l-dial-1", fmt.Sprintf("doh-ready-%d.fixture.test", attempt), "1.1.1.1", true)
+			return proxyState["node1"].dohQueries.Load() > 0
+		})
 	}
 	// Slow TLS handshakes may legitimately hedge through TCP even while the
 	// DoH endpoint is online, especially during repeated IPsec rekeys. Measure

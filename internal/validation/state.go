@@ -31,5 +31,5 @@ func State(state model.AppState) error {
 			}
 		}
 	}
-	return nil
+	return WANBindings(state.Nodes, state.Mappings)
 }

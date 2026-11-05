@@ -65,7 +65,7 @@ func (s *Server) previewChange(w http.ResponseWriter, r *http.Request, old, next
 	connectionChanged := false
 	if node, ok := next.(model.SocksNode); ok {
 		if previous, ok := old.(model.SocksNode); ok {
-			connectionChanged = previous.Addr != node.Addr || previous.Username != node.Username || previous.Password != node.Password
+			connectionChanged = previous.Addr != node.Addr || previous.Username != node.Username || previous.Password != node.Password || previous.IsWAN() != node.IsWAN() || previous.WANInterface != node.WANInterface
 		}
 	}
 	if mapping, ok := next.(model.TunnelMapping); ok {

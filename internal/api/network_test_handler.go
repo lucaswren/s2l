@@ -241,12 +241,12 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		for i := 0; i < networkProbeAttempts && ctx.Err() == nil; i++ {
 			attempt, stop := context.WithTimeout(ctx, 6*time.Second)
 			started := time.Now()
-			conn, err := speedtest.DialSOCKS5(attempt, node.Addr, node.Username, node.Password, body.Target)
+			conn, err := speedtest.DialNode(attempt, node, body.Target)
 			elapsed := time.Since(started)
 			stop()
 			sample := tcpSample{Milliseconds: float64(elapsed.Microseconds()) / 1000}
 			if err != nil {
-				sample.Error = "SOCKS5 TCP 建连失败或超时"
+				sample.Error = "TCP 建连失败或超时"
 			} else {
 				successes++
 				conn.Close()
@@ -258,6 +258,10 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		result["attempts"] = len(samples)
 		result["ok"] = successes == networkProbeAttempts
 	} else {
+		if node.IsWAN() {
+			writeError(w, 400, "WAN egress supports TCP, HTTPS and protocol probes; there is no upstream proxy address to trace")
+			return
+		}
 		result["path"] = "S2L 服务器 → 节点地址（不经过 SOCKS5 转发）"
 		host, port, err := net.SplitHostPort(node.Addr)
 		if err != nil {
@@ -325,6 +329,9 @@ func (s *Server) handleNodeNetworkTest(w http.ResponseWriter, r *http.Request, i
 		} else if err != nil {
 			result["error"] = "测试执行失败，请检查输出及服务器探测权限"
 		}
+	}
+	if node.IsWAN() {
+		result["path"] = "S2L → WAN " + node.WANInterface + " → target"
 	}
 	result["finished_at"] = time.Now().UTC()
 	// Explicit results are returned only to this caller, never persisted or logged.

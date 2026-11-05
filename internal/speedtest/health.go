@@ -47,7 +47,7 @@ func probeHTTPSTargets(ctx context.Context, node model.SocksNode, targets []stri
 			break
 		}
 		r := probeHTTPS(ctx, target, func(c context.Context, addr string) (net.Conn, error) {
-			return DialSOCKS5(c, node.Addr, node.Username, node.Password, addr)
+			return DialNode(c, node, addr)
 		})
 		u, _ := url.Parse(target)
 		host := ""

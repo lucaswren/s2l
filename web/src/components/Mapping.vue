@@ -288,7 +288,7 @@ const editingActive = computed(() => {
     </el-table>
     <el-alert
       v-if="!nodes.length"
-      :title='tr("请先在下方添加或导入 SOCKS5 节点。")'
+      :title='tr("请先添加出口节点。")'
       type="info"
       show-icon
       :closable="false"
@@ -407,7 +407,7 @@ const editingActive = computed(() => {
         @submit.prevent="save"
         ><div class="form-grid">
           <el-form-item
-            :label='tr("SOCKS5 节点")'
+            :label='tr("出口节点")'
             prop="node_id"
             :rules="required"
             class="form-wide"
@@ -460,7 +460,7 @@ const editingActive = computed(() => {
  <el-form-item :label='tr("拨号保护")'><span>{{tr("同一账号仅允许一条拨号会话；多设备可共享网关。")}}</span></el-form-item>
  <el-form-item :label='tr("连接观测")'><el-switch v-model="form.observe_connections" :disabled="editingActive"/></el-form-item>
  <p class="muted form-wide">{{ tr("0 表示不限；限额按整条映射合计。下载超额采用丢弃控制速率，非平滑整形。") }}</p>
-          <p class="muted form-wide">{{ tr("网络参数自动管理：MTU 1400、MSS 1200、队列 1000，不限制 TCP 连接数。非 DNS UDP 主动拒绝；DNS 经当前节点自动选择 DoH/TCP，不直连或切换出口。") }}</p>
+          <p class="muted form-wide">{{ tr("网络参数自动管理：MTU 1400、MSS 1200、队列 1000，不限制 TCP 连接数。非 DNS UDP 主动拒绝；DNS 经所选出口自动选择 DoH/TCP，不切换出口。") }}</p>
           </div></details></div></el-form
       ><template #footer
         ><el-button v-if="!editingId" :disabled="busy" @click="applyPreset"

@@ -387,7 +387,7 @@ func probeTLS(ctx context.Context, node model.SocksNode, ip string, row *Target,
 	tr := &http.Transport{Proxy: nil, TLSClientConfig: config, ForceAttemptHTTP2: true, DisableKeepAlives: true, MaxResponseHeaderBytes: 32 << 10,
 		DialContext: func(c context.Context, _, _ string) (net.Conn, error) {
 			dialStart := time.Now()
-			conn, err := speedtest.DialSOCKS5(c, node.Addr, node.Username, node.Password, net.JoinHostPort(ip, "443"))
+			conn, err := speedtest.DialNode(c, node, net.JoinHostPort(ip, "443"))
 			mu.Lock()
 			defer mu.Unlock()
 			row.TCPMS = time.Since(dialStart).Milliseconds()

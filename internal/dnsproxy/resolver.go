@@ -1,4 +1,4 @@
-// Package dnsproxy provides per-mapping DNS failover entirely through SOCKS5.
+// Package dnsproxy provides DNS failover within each mapping's selected egress.
 package dnsproxy
 
 import (
@@ -57,10 +57,10 @@ func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolve
 	r.transport = &http.Transport{Proxy: nil, ForceAttemptHTTP2: true, MaxConnsPerHost: 8, MaxIdleConns: 4, MaxIdleConnsPerHost: 4, IdleConnTimeout: 30 * time.Second, MaxResponseHeaderBytes: 64 * 1024,
 		TLSHandshakeTimeout: 3 * time.Second, ResponseHeaderTimeout: 3 * time.Second,
 		DialContext: func(ctx context.Context, _, addr string) (net.Conn, error) {
-			return speedtest.DialSOCKS5(ctx, node.Addr, node.Username, node.Password, addr)
+			return speedtest.DialNode(ctx, node, addr)
 		}}
 	r.tcp = &tcpPool{slots: make(chan struct{}, 4), dial: func(ctx context.Context) (net.Conn, error) {
-		return speedtest.DialSOCKS5(ctx, node.Addr, node.Username, node.Password, tcpAddress)
+		return speedtest.DialNode(ctx, node, tcpAddress)
 	}}
 	r.exchange = func(ctx context.Context, method string, query []byte) ([]byte, error) {
 		if method == "doh" {

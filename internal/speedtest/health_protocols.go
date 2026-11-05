@@ -19,7 +19,7 @@ import (
 
 type HealthReport struct{ TCP, UDP, DNS model.ProtocolHealth }
 
-// All target traffic is carried by SOCKS5; UDP goes only to its negotiated relay.
+// Probes use the selected egress; SOCKS5 UDP uses only its negotiated relay.
 func ProbeHealth(ctx context.Context, node model.SocksNode, dnsMode ...string) HealthReport {
 	return probeHealth(ctx, node, true, dnsMode...)
 }
@@ -100,7 +100,7 @@ func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget,
 
 func exchangeDoH(ctx context.Context, node model.SocksNode, target string, query []byte) error {
 	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, DialContext: func(c context.Context, _, addr string) (net.Conn, error) {
-		return dialSOCKS5(c, node.Addr, node.Username, node.Password, addr)
+		return DialNode(c, node, addr)
 	}}
 	defer tr.CloseIdleConnections()
 	client := http.Client{Transport: tr, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
@@ -127,7 +127,7 @@ func exchangeDoH(ctx context.Context, node model.SocksNode, target string, query
 }
 
 func exchangeTCPDNS(ctx context.Context, node model.SocksNode, target string, query []byte) error {
-	conn, err := dialSOCKS5(ctx, node.Addr, node.Username, node.Password, target)
+	conn, err := DialNode(ctx, node, target)
 	if err != nil {
 		return err
 	}
@@ -159,6 +159,9 @@ func exchangeTCPDNS(ctx context.Context, node model.SocksNode, target string, qu
 }
 
 func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHealth {
+	if node.IsWAN() {
+		return checkWANUDP(ctx, node)
+	}
 	attempt, cancel := context.WithTimeout(ctx, 6*time.Second)
 	defer cancel()
 	control, relay, err := dialSOCKSCommand(attempt, node.Addr, node.Username, node.Password, 3, "0.0.0.0:0")

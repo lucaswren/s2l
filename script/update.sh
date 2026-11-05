@@ -3,9 +3,10 @@
 set -euo pipefail
 umask 077
 [[ "$(id -u)" -eq 0 ]] || { echo "[ERROR] 请使用 sudo bash script/update.sh" >&2; exit 1; }
-[[ ! -e /run/s2l-ikev2-active ]] || { echo "[ERROR] 请先关闭 IKEv2 站点模式并在维护窗口重启服务器。" >&2; exit 1; }
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="/usr/local/go/bin:$PATH"
+# Do not replace a deployment while retired site routes or profiles remain.
+python3 "$ROOT_DIR/script/manage_ipsec.py" check-l2tp
 for command in go python3 systemctl flock iptables iptables-restore ip6tables iptables-save ip6tables-save install cp conntrack nft; do
   command -v "$command" >/dev/null || { echo "[ERROR] 缺少 $command；现有服务未修改。" >&2; exit 1; }
 done
@@ -14,7 +15,7 @@ flock -n 9 || { echo "[ERROR] 另一个 S2L 升级正在运行。" >&2; exit 1; 
 python3 "$ROOT_DIR/script/dependencies.py" require
 python3 "$ROOT_DIR/script/verify_update.py" preflight /opt/s2l/config.json
 [[ -x /opt/s2l/s2l && -f "$ROOT_DIR/web/dist/index.html" ]] || { echo "[ERROR] 缺少已安装程序或内嵌前端。" >&2; exit 1; }
-for file in deploy/systemd/{s2l,s2l-guard,s2l-ipsec}.service deploy/systemd/xl2tpd-s2l.conf script/{s2l.sh,remote_update.sh,manage_config.py,manage_ssh.py,manage_ipsec.py,ikev2_site.py,manage_ikev2_site.py,ipsec_nat.py,manage_time.py,manage_kernel.py,installer_i18n.py,manage_update.py,verify_update.py,uninstall.py,dependencies.py}; do
+for file in deploy/systemd/{s2l,s2l-guard,s2l-ipsec}.service deploy/systemd/xl2tpd-s2l.conf script/{s2l.sh,remote_update.sh,manage_config.py,manage_ssh.py,manage_ipsec.py,ipsec_nat.py,manage_time.py,manage_kernel.py,installer_i18n.py,manage_update.py,verify_update.py,uninstall.py,dependencies.py}; do
   [[ -f "$ROOT_DIR/$file" ]] || { echo "[ERROR] 源码不完整：$file" >&2; exit 1; }
 done
 report_web_update() {
@@ -109,10 +110,12 @@ install -m 755 "$work/s2l" /opt/s2l/s2l
 install -m 755 "$ROOT_DIR/script/s2l.sh" /usr/local/bin/s2l
 install -m 700 "$ROOT_DIR/script/remote_update.sh" /opt/s2l/remote_update.sh
 for file in manage_config.py manage_ssh.py manage_ipsec.py ipsec_nat.py manage_time.py manage_kernel.py installer_i18n.py manage_update.py verify_update.py uninstall.py dependencies.py; do install -m 600 "$ROOT_DIR/script/$file" "/opt/s2l/$file"; done
-for file in ikev2_site.py manage_ikev2_site.py; do install -m 600 "$ROOT_DIR/script/$file" "/opt/s2l/$file"; done
 for unit in s2l s2l-guard s2l-ipsec; do install -m 644 "$ROOT_DIR/deploy/systemd/$unit.service" "/etc/systemd/system/$unit.service"; done
 mkdir -p /etc/systemd/system/xl2tpd.service.d
 install -m 644 "$ROOT_DIR/deploy/systemd/xl2tpd-s2l.conf" /etc/systemd/system/xl2tpd.service.d/s2l.conf
+# The full app backup above retains these obsolete files for rollback.
+rm -f /opt/s2l/ikev2_site.py /opt/s2l/manage_ikev2_site.py /opt/s2l/ikev2-sites.json
+rm -f /opt/s2l/__pycache__/ikev2_site.*.pyc /opt/s2l/__pycache__/manage_ikev2_site.*.pyc
 report_web_update restarting
 systemctl daemon-reload
 systemctl enable s2l-guard.service

@@ -13,6 +13,27 @@ if sys.platform == 'linux':
 
 @unittest.skipUnless(sys.platform == 'linux', 'IPsec manager requires Linux')
 class IPsecFirewallTests(unittest.TestCase):
+    def test_retired_site_state_cannot_be_reused_as_l2tp_ipsec(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            conf = root / 'ipsec.conf'
+            marker = root / 'active'
+            saved = root / 'ikev2-sites.json'
+            with patch.object(manage_ipsec, 'ROOT', root), \
+                    patch.object(manage_ipsec, 'CONF', conf), \
+                    patch.object(manage_ipsec, 'RETIRED_SITE_ACTIVE', marker):
+                manage_ipsec.reject_retired_site_config()
+                for path, content in ((marker, ''), (saved, '{"enabled": true}'),
+                                      (saved, 'invalid JSON'), (conf, 'conn s2l-site-user03\n')):
+                    path.write_text(content)
+                    with self.subTest(path=path.name, content=content), self.assertRaises((RuntimeError, ValueError)):
+                        manage_ipsec.reject_retired_site_config()
+                    self.assertEqual(path.read_text(), content)
+                    path.unlink()
+                saved.write_text('{"enabled": false}')
+                conf.write_bytes(manage_ipsec.render_conf())
+                manage_ipsec.reject_retired_site_config()
+
     def setUp(self):
         self.chain = '-N S2L-IPSEC\n' + '\n'.join(
             shlex.join(['-A', 'S2L-IPSEC', *r]) for r in manage_ipsec.firewall_rules()) + '\n'

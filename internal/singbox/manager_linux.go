@@ -8,6 +8,7 @@ import (
 	"github.com/lucaswren/s2l/internal/dnsproxy"
 	"github.com/lucaswren/s2l/internal/lockutil"
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/speedtest"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -72,6 +73,9 @@ func (m *Manager) Start(node model.SocksNode, mapping model.TunnelMapping) error
 	return m.start(node, mapping)
 }
 func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error {
+	if err := speedtest.CheckWANEgress(node); err != nil {
+		return err
+	}
 	if mapping.TunName == "" {
 		return fmt.Errorf("tun_name is required")
 	}

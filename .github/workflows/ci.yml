@@ -62,6 +62,10 @@ jobs:
           sudo modprobe ppp_generic
           sudo modprobe l2tp_ppp
           sudo modprobe xfrm_user
+      - name: Verify explicit WAN egress cannot use another default exit
+        run: |
+          go test -c -o /tmp/s2l-wan.test ./internal/singbox
+          sudo env S2L_WAN_INTEGRATION=1 S2L_SINGBOX_CHECK_BIN="$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" unshare --mount --net --propagation private /tmp/s2l-wan.test -test.run '^TestLiveWANInterfaceIsolation$' -test.v
       - name: Verify real L2TP, IPsec, NAT, DNS and UDP policies
         timeout-minutes: 18
         run: |

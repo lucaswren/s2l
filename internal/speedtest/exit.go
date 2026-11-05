@@ -21,8 +21,11 @@ func probeExitTarget(ctx context.Context, node model.SocksNode, target string) m
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	result := model.ProtocolHealth{State: "unavailable", Method: "socks-https-exit"}
+	if node.IsWAN() {
+		result.Method = "wan-https-exit"
+	}
 	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, MaxResponseHeaderBytes: 32 << 10, DialContext: func(c context.Context, _, addr string) (net.Conn, error) {
-		return DialSOCKS5(c, node.Addr, node.Username, node.Password, addr)
+		return DialNode(c, node, addr)
 	}}
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

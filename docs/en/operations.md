@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.1 on a clean, dedicated server.**
+**Install S2L 1.0.2 on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
@@ -70,6 +70,8 @@ S2L owns its PPP/TUN forwarding guards, not the host's complete public firewall.
 
 Health checks detect S2L entry hooks shadowed by earlier rules and restore their priority without flushing foreign rules. Each address family's filter change is committed together and PPP management exceptions remain first. This is periodic repair, not protection against a continuously competing firewall manager or separate native nftables base chains. Keep one consistent iptables backend and avoid concurrent rule replacement. Generated PPP options omit proxy ARP because client subnets are routed through TUNs, not bridged onto the host LAN; existing sessions adopt option changes only after reconnecting.
 
+Local WAN is also available as an egress node: choose **Local WAN**, enter the server uplink interface (for example `eth0`), then select that node in the L2TP mapping. Application traffic, DNS and probes bind to that interface; an unavailable WAN stays blocked. A SOCKS5 node never falls back to WAN. Changing the egress type or interface requires stopping associated mappings first.
+
 ## Importing SOCKS5 nodes and mappings
 
 Text imports reuse a node only when its address, username and password all match exactly. The same address with different credentials creates separate nodes, because providers can select different exits by account. Reimporting an unnamed node preserves its saved name and group. To replace existing credentials, use Edit or a JSON import with its explicit ID; stop linked mappings first. Ambiguous duplicate nodes are rejected instead of choosing one arbitrarily.
@@ -101,12 +103,6 @@ Healthy checks run every 45–55 seconds plus probe duration and scheduling, wit
 L2TP remains connected during upstream outages. Failed application connections need to reconnect. A missing sing-box process or TUN triggers bounded-rate recovery without stopping L2TP. Recovery failures appear in health status and service logs. No automatic switch to another node is performed; change a mapping's node after stopping it. Connection settings of nodes used by running mappings cannot be edited.
 
 S2L requires a dedicated host: its persistent guard covers **all `ppp+` interfaces**. IPv4 forwarding from PPP is permitted only for a configured source subnet toward its assigned TUN; other forwarding and PPP access to the host are dropped, except explicitly configured local management access. PPP IPv6 is blocked. A terminal unreachable route prevents main-table fallback when the TUN disappears. Guards remain after stopping S2L or a mapping so existing PPP sessions cannot escape via the host uplink. `s2l-guard.service` installs them before xl2tpd starts; failure prevents xl2tpd/S2L startup. Do not flush these rules or run another firewall manager that replaces them. Client-side split routing and other network adapters remain outside this server's control.
-
-## IKEv2 site-to-site IPsec
-
-In System Settings, configure each site's peer gateway, IPv4 subnet, PSK and egress. Select an existing SOCKS5 mapping or a local WAN interface with one IPv4 default gateway. A SOCKS5 site stays blocked if its mapping is unavailable. WAN source NAT applies only to sites configured to use WAN.
-
-Enable mapping auto-restore and turn off L2TP/IPsec before enabling site mode. Saved settings take effect at the next server reboot, after the mappings and forwarding guards are restored. Site mode covers explicitly configured IPv4 destination subnets.
 
 ## Kernel preparation and manual upgrade
 

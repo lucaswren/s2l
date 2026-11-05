@@ -230,7 +230,6 @@ install -m 700 "${SCRIPT_DIR}/remote_update.sh" "${INSTALL_DIR}/remote_update.sh
 install -m 600 "${SCRIPT_DIR}/manage_config.py" "${INSTALL_DIR}/manage_config.py"
 install -m 600 "${SCRIPT_DIR}/manage_ssh.py" "${INSTALL_DIR}/manage_ssh.py"
 install -m 600 "${SCRIPT_DIR}/manage_ipsec.py" "${INSTALL_DIR}/manage_ipsec.py"
-for file in ikev2_site.py manage_ikev2_site.py; do install -m 600 "${SCRIPT_DIR}/$file" "${INSTALL_DIR}/$file"; done
 install -m 600 "${SCRIPT_DIR}/ipsec_nat.py" "${INSTALL_DIR}/ipsec_nat.py"
 install -m 600 "${SCRIPT_DIR}/manage_time.py" "${INSTALL_DIR}/manage_time.py"
 install -m 600 "${SCRIPT_DIR}/manage_kernel.py" "${INSTALL_DIR}/manage_kernel.py"

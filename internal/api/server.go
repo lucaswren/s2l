@@ -1,12 +1,10 @@
 package api
 
 import (
-	"encoding/json"
 	"io/fs"
 	"mime"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 
@@ -88,7 +86,6 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/settings/web-port", s.handleWebPort)
 	mux.HandleFunc("/api/settings/ssh-password", s.handleSSHPassword)
 	mux.HandleFunc("/api/settings/ipsec", s.handleIPsec)
-	mux.HandleFunc("/api/settings/ikev2-sites", s.handleIKEv2Sites)
 
 	if s.webFS != nil {
 		fileServer := http.FileServer(http.FS(s.webFS))
@@ -135,16 +132,6 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) withMutations(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		path := strings.TrimRight(r.URL.Path, "/")
-		if (r.Method == http.MethodPost || r.Method == http.MethodDelete) &&
-			(path == "/api/backups/restore" || path == "/api/mappings" ||
-				(strings.HasPrefix(path, "/api/mappings/") && !strings.HasSuffix(path, "/action") &&
-					!strings.HasSuffix(path, "/network-test") && !strings.HasSuffix(path, "/speedtest") &&
-					!strings.HasSuffix(path, "/connections"))) {
-			if ikev2BindingsLocked() {
-				writeError(w, http.StatusConflict, "Disable IKEv2 and reboot before changing mapping definitions")
-				return
-			}
-		}
 		resource := r.URL.Path == "/api/nodes" || strings.HasPrefix(r.URL.Path, "/api/nodes/") ||
 			r.URL.Path == "/api/mappings" || strings.HasPrefix(r.URL.Path, "/api/mappings/")
 		if !resource || (r.Method != http.MethodPost && r.Method != http.MethodDelete) || (strings.HasSuffix(path, "/speedtest") || strings.HasSuffix(path, "/network-test") || strings.HasSuffix(path, "/connections")) {
@@ -165,20 +152,6 @@ func (s *Server) withMutations(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func ikev2BindingsLocked() bool {
-	if _, err := os.Stat("/run/s2l-ikev2-active"); !os.IsNotExist(err) {
-		return true
-	}
-	data, err := os.ReadFile("/opt/s2l/ikev2-sites.json")
-	if os.IsNotExist(err) {
-		return false
-	}
-	var state struct {
-		Enabled bool `json:"enabled"`
-	}
-	return err != nil || json.Unmarshal(data, &state) != nil || state.Enabled
 }
 
 func (s *Server) withAuth(next http.Handler) http.Handler {
