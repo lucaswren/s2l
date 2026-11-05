@@ -240,7 +240,9 @@ exit 1""")
             live_identity = 'cat /proc/sys/kernel/random/boot_id; systemctl show -p MainPID --value s2l xl2tpd nginx'
             before_kernel = guest(live_identity).stdout
             prepared = guest('s2l kernel-upgrade', check=not debian, timeout=3800)
-            if debian and (prepared.returncode == 0 or '没有受支持' not in prepared.stderr):
+            # No Web preference has been saved in this fixture, so CLI defaults
+            # to English even when the installer used another message language.
+            if debian and (prepared.returncode != 1 or 'No supported automatic kernel upgrade path' not in prepared.stderr):
                 raise RuntimeError('Debian kernel upgrade did not refuse before mutation: ' + prepared.stdout + prepared.stderr)
             print(prepared.stdout[-3000:], flush=True)
             if guest(live_identity).stdout != before_kernel or guest('sha256sum /opt/s2l/config.json').stdout != original:
