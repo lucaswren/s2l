@@ -1,4 +1,20 @@
 {
+  "DNS 代理拒绝 DoH {0} / TCP {1}": {
+    "en": "DNS proxy rejections: DoH {0} / TCP {1}",
+    "tw": "DNS 代理拒絕 DoH {0} / TCP {1}"
+  },
+  "最近探测拒绝码 {0}": {
+    "en": "Latest probe reply codes: {0}",
+    "tw": "最近探測拒絕碼 {0}"
+  },
+  "转发进程代理拒绝（未归类）{0}": {
+    "en": "Forwarding process rejections (unclassified): {0}",
+    "tw": "轉發程序代理拒絕（未分類）{0}"
+  },
+  "SOCKS5 拒绝码 {0}": {
+    "en": "SOCKS5 reply code {0}",
+    "tw": "SOCKS5 拒絕碼 {0}"
+  },
   "L2TP 出口网关": {"en":"L2TP egress gateway","tw":"L2TP 出口閘道"},
   "状态刷新超时，保留上次结果": {"en": "Status refresh timed out; showing the previous result", "tw": "狀態重新整理逾時，保留上次結果"},
   "监控采集已超过 30 秒未更新，以下为上次结果": {"en": "Monitoring has not updated for over 30 seconds; showing the previous result", "tw": "監控採集已超過 30 秒未更新，以下為上次結果"},

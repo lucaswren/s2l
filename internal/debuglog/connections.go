@@ -36,6 +36,7 @@ var replyPattern = regexp.MustCompile(`code[= ](\d+)`)
 type ProxyRejection struct {
 	LogTime   string `json:"log_time,omitempty"`
 	Target    string `json:"target,omitempty"`
+	Source    string `json:"source"`
 	ReplyCode string `json:"reply_code,omitempty"`
 }
 
@@ -61,7 +62,7 @@ func ProxyRejections(tail string) []ProxyRejection {
 		if !strings.Contains(line, "socks5: request rejected") {
 			continue
 		}
-		entry := ProxyRejection{Target: target}
+		entry := ProxyRejection{Target: target, Source: "sing-box-unclassified"}
 		if fields := strings.Fields(line); len(fields) >= 3 && strings.HasPrefix(fields[0], "+") {
 			entry.LogTime = strings.Join(fields[:3], " ")
 		}

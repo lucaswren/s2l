@@ -80,14 +80,16 @@ func (m TunnelMapping) EffectiveDNSMode() string {
 }
 
 type ResolverStatus struct {
-	Mode           string             `json:"mode"`
-	Active         string             `json:"active"`
-	Queries        uint64             `json:"queries"`
-	Failures       uint64             `json:"failures"`
-	Fallbacks      uint64             `json:"fallbacks"`
-	Switches       uint64             `json:"switches"`
-	LastDoHFailure *DNSAttemptFailure `json:"last_doh_failure,omitempty"`
-	LastTCPFailure *DNSAttemptFailure `json:"last_tcp_failure,omitempty"`
+	Mode               string             `json:"mode"`
+	Active             string             `json:"active"`
+	Queries            uint64             `json:"queries"`
+	Failures           uint64             `json:"failures"`
+	Fallbacks          uint64             `json:"fallbacks"`
+	Switches           uint64             `json:"switches"`
+	DoHProxyRejections uint64             `json:"doh_proxy_rejections"`
+	TCPProxyRejections uint64             `json:"tcp_proxy_rejections"`
+	LastDoHFailure     *DNSAttemptFailure `json:"last_doh_failure,omitempty"`
+	LastTCPFailure     *DNSAttemptFailure `json:"last_tcp_failure,omitempty"`
 }
 
 // DNSAttemptFailure describes a failed transport attempt, even when fallback succeeds.
@@ -136,12 +138,15 @@ type ProtocolHealth struct {
 	CheckedAt     time.Time      `json:"checked_at"`
 	Stage         string         `json:"stage,omitempty"`
 	StatusCode    int            `json:"status_code,omitempty"`
+	SOCKSReply    byte           `json:"socks_reply,omitempty"`
 	DurationMS    int64          `json:"duration_ms,omitempty"`
 	Attempts      []ProbeAttempt `json:"attempts,omitempty"`
 }
 
 type ProbeAttempt struct {
 	Target     string `json:"target"`
+	Method     string `json:"method,omitempty"`
+	SOCKSReply byte   `json:"socks_reply,omitempty"`
 	Stage      string `json:"stage"`
 	StatusCode int    `json:"status_code,omitempty"`
 	DurationMS int64  `json:"duration_ms"`

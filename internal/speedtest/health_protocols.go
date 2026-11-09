@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"sync"
 	"time"
@@ -72,30 +73,51 @@ func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget,
 	if err != nil {
 		return protocolResult("doh", fmt.Errorf("DNS probe could not be initialized"))
 	}
-	if mode == "tcp" {
-		attempt, cancel := context.WithTimeout(ctx, 3*time.Second)
+	var attempts []model.ProbeAttempt
+	run := func(method, target string, exchange func(context.Context, model.SocksNode, string, []byte) error) error {
+		start := time.Now()
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
-		if err := exchangeTCPDNS(attempt, node, tcpTarget, query); err != nil {
-			return protocolResult("tcp", fmt.Errorf("TCP DNS forwarding or response validation failed"))
+		err := exchange(ctx, node, target, query)
+		stage := "dns-response"
+		var staged *StageError
+		switch {
+		case errors.As(err, &staged):
+			stage = staged.Stage
+		case ctx.Err() != nil:
+			stage = "timeout-or-cancelled"
+		case err != nil:
+			stage = "exchange-or-response"
 		}
-		return protocolResult("tcp", nil)
+		if method == "doh" {
+			if endpoint, err := url.Parse(target); err == nil {
+				target = endpoint.Host
+			}
+		}
+		attempts = append(attempts, model.ProbeAttempt{Target: target, Method: method, Stage: stage, SOCKSReply: SOCKSReplyCode(err), DurationMS: time.Since(start).Milliseconds()})
+		return err
 	}
-	attempt, cancel := context.WithTimeout(ctx, 3*time.Second)
-	err = exchangeDoH(attempt, node, dohTarget, query)
-	cancel()
-	if err == nil {
-		return protocolResult("doh", nil)
+	finish := func(method string, err error) model.ProtocolHealth {
+		result := protocolResult(method, err)
+		result.Attempts = attempts
+		return result
+	}
+	if mode == "tcp" {
+		if err := run("tcp", tcpTarget, exchangeTCPDNS); err != nil {
+			return finish("tcp", fmt.Errorf("TCP DNS forwarding or response validation failed"))
+		}
+		return finish("tcp", nil)
+	}
+	if err := run("doh", dohTarget, exchangeDoH); err == nil {
+		return finish("doh", nil)
 	}
 	if mode == "doh" {
-		return protocolResult("doh", fmt.Errorf("DoH forwarding or response validation failed"))
+		return finish("doh", fmt.Errorf("DoH forwarding or response validation failed"))
 	}
-	attempt, cancel = context.WithTimeout(ctx, 3*time.Second)
-	err = exchangeTCPDNS(attempt, node, tcpTarget, query)
-	cancel()
-	if err == nil {
-		return model.ProtocolHealth{State: "degraded", Method: "tcp-fallback", Error: "Primary DoH failed; TCP DNS probe succeeded; inspect the mapping's live resolver status", CheckedAt: time.Now()}
+	if err := run("tcp", tcpTarget, exchangeTCPDNS); err == nil {
+		return model.ProtocolHealth{State: "degraded", Method: "tcp-fallback", Error: "Primary DoH failed; TCP DNS probe succeeded; inspect the mapping's live resolver status", CheckedAt: time.Now(), Attempts: attempts}
 	}
-	return protocolResult("doh/tcp", fmt.Errorf("DoH and TCP DNS forwarding or response validation failed"))
+	return finish("doh/tcp", fmt.Errorf("DoH and TCP DNS forwarding or response validation failed"))
 }
 
 func exchangeDoH(ctx context.Context, node model.SocksNode, target string, query []byte) error {
@@ -168,10 +190,12 @@ func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHea
 	if err != nil {
 		var reply *socksReplyError
 		if errors.As(err, &reply) && reply.code == 7 {
-			return model.ProtocolHealth{State: "unsupported", Method: "udp-associate", Error: "Proxy explicitly rejects UDP ASSOCIATE as unsupported", CheckedAt: time.Now()}
+			return model.ProtocolHealth{State: "unsupported", Method: "udp-associate", SOCKSReply: reply.code, Error: "Proxy explicitly rejects UDP ASSOCIATE as unsupported", CheckedAt: time.Now()}
 		}
 		if errors.As(err, &reply) {
-			return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association rejected: code=%d (proxy reply; inspect upstream policy)", reply.code))
+			result := protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association rejected: code=%d (proxy reply; inspect upstream policy)", reply.code))
+			result.SOCKSReply = reply.code
+			return result
 		}
 		return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association failed"))
 	}

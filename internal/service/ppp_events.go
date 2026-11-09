@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/lucaswren/s2l/internal/debuglog"
+	"github.com/lucaswren/s2l/internal/evidence"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/network"
 	"net"
@@ -98,10 +99,11 @@ func (s *MappingService) acceptPPP(e PPPEvent) error {
 			detail += " / 未提供可确认的断线原因"
 		}
 	}
+	detail += fmt.Sprintf(" / pppd PID %d", e.PID)
 	s.operations.Audit("ppp-"+e.Kind, mapping, detail)
-	if e.Kind == "down" && old.Requested == "" {
+	if e.Kind == "down" && old.Requested == "" && s.evidence != nil {
 		if m, ok := s.store.GetMapping(mapping); ok && m.Status == model.StatusRunning {
-			s.recordFault(m, "ppp-disconnected", detail)
+			s.evidence.Trigger(evidence.Request{Mapping: m, Reason: "ppp-disconnected", Detail: detail, PPP: &evidence.PPPDisconnect{PID: e.PID, ConnectedAt: old.At, At: e.At}}, time.Now())
 		}
 	}
 	s.peerMu.Lock()

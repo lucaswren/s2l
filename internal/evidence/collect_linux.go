@@ -41,6 +41,18 @@ func CollectSystem(ctx context.Context, req Request) Collected {
 	for _, command := range commands {
 		result.Snapshots[command.name] = commandText(ctx, command.args)
 	}
+	if ppp := req.PPP; ppp != nil {
+		pid := strconv.Itoa(ppp.PID)
+		result.Snapshots["ppp-disconnect-journal"] = commandText(ctx, []string{
+			"journalctl", "-b", "_COMM=pppd", "_PID=" + pid, "--since", journalTime(ppp.At.Add(-time.Minute)),
+			"--until", journalTime(ppp.At.Add(15 * time.Second)), "-n", "40", "--no-pager", "-o", "short-iso",
+		})
+		result.Snapshots["l2tp-session-journal"] = commandText(ctx, []string{
+			"journalctl", "-b", "-u", "xl2tpd", "--since", journalTime(ppp.ConnectedAt.Add(-30 * time.Second)),
+			"--until", journalTime(ppp.At.Add(15 * time.Second)), "--grep", "(PID: |to pid )" + pid + "([^0-9]|$)",
+			"-n", "30", "--no-pager", "-o", "short-iso",
+		})
+	}
 	for _, path := range []string{"/proc/net/snmp", "/proc/net/netstat", "/proc/net/dev", "/proc/loadavg", "/proc/meminfo", "/proc/sys/net/netfilter/nf_conntrack_count", "/proc/sys/net/netfilter/nf_conntrack_max"} {
 		f, err := os.Open(path)
 		if err != nil {
@@ -57,6 +69,8 @@ func CollectSystem(ctx context.Context, req Request) Collected {
 	result.Snapshots["tcp-after"] = commandText(ctx, []string{"ss", "-tin"})
 	return result
 }
+
+func journalTime(at time.Time) string { return at.UTC().Format("2006-01-02 15:04:05 UTC") }
 
 type cappedText struct {
 	data      []byte

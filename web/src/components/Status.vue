@@ -59,10 +59,24 @@ function protocolLabel(result) {
  if (result?.state === "degraded" && result?.method === "tcp-fallback") return tr("仅备用可用");
  return healthLabels[result?.state] || tr("检测中");
 }
+function rejectionSummary(row) {
+ const resolver = row.resolver;
+ const probeReplies = [row.tcp, row.dns, row.udp].flatMap(result =>
+  result?.attempts?.length ? result.attempts.map(attempt => attempt.socks_reply) : [result?.socks_reply]
+ ).filter(Boolean);
+ return [
+  tr('DNS 代理拒绝 DoH {0} / TCP {1}', resolver?.doh_proxy_rejections ?? '—', resolver?.tcp_proxy_rejections ?? '—'),
+  tr('最近探测拒绝码 {0}', probeReplies.join(', ') || '—'),
+  tr('转发进程代理拒绝（未归类）{0}', row.process?.proxy_rejections ?? '—')
+ ].join(' · ');
+}
 function protocolDetail(result) {
  if(result?.state==='blocked')return tr("未发起 UDP 探测");
  const methods = {get https() { return tr("HTTPS 转发"); }, get "dns-udp"() { return tr("UDP 中继实测"); }, get "udp-associate"() { return tr("UDP 协商"); }, doh: "DoH", tcp: "TCP DNS", get "tcp-fallback"() { return tr("TCP DNS 备用"); }, "doh/tcp": "DoH / TCP DNS"};
- return [methods[result?.method],protocolSummary(result), result?.error, result?.checked_at && !result.checked_at.startsWith('0001') ? tr("检测于 {0}", dateTime(result.checked_at)) : ""].filter(Boolean).join(" · ") || tr("等待检测");
+ const attempts = (result?.attempts || []).map(attempt =>
+  [attempt.method, attempt.target, protocolSummary(attempt)].filter(Boolean).join(' ')
+ );
+ return [methods[result?.method],protocolSummary(result), ...attempts, result?.error, result?.checked_at && !result.checked_at.startsWith('0001') ? tr("检测于 {0}", dateTime(result.checked_at)) : ""].filter(Boolean).join(" · ") || tr("等待检测");
 }
 function formatBytes(n) {
   if (!n) return "0 B";
@@ -91,7 +105,7 @@ function formatBytes(n) {
       </el-table-column>
       <el-table-column :label='tr("本地链路")' min-width="100"><template #default="{row}"><el-tooltip :content="row.recovery_error || tr(&quot;独立检查进程和 TUN，不受上游探测退避影响&quot;)"><span>{{ healthLabels[row.local_state] || tr("检测中") }}</span></el-tooltip></template></el-table-column>
       <el-table-column :label='tr("实际 DNS")' min-width="145"><template #default="{row}"><div>{{ row.resolver?.active === 'tcp' ? 'TCP DNS' : row.resolver?.active === 'doh' ? 'DoH':tr("等待启动") }}</div><div class="muted">{{ tr("备用成功") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</div></template></el-table-column>
-      <el-table-column :label='tr("连接错误记录")' min-width="220"><template #default="{row}"><p>{{tr('最近采样新增')}} {{freshErrors(row)}} · {{tr('累计分类错误')}} {{row.process?.error_lines ?? '—'}}</p><el-tooltip :content="tr(&quot;当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 &quot;) + (row.process?.network_errors || 0) + tr(&quot;，本次服务累计退出 &quot;) + (row.process?.exits || 0)"><span>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }}</span></el-tooltip><p class="muted">{{tr('最近错误')}} {{date(row.process?.last_error_at)}}</p></template></el-table-column>
+      <el-table-column :label='tr("连接错误记录")' min-width="220"><template #default="{row}"><p>{{tr('最近采样新增')}} {{freshErrors(row)}} · {{tr('累计分类错误')}} {{row.process?.error_lines ?? '—'}}</p><el-tooltip :content="tr(&quot;当前进程累计日志计数；DNS 报文表示请求解析错误，不等于上游 DNS 不可用；网络不可达 &quot;) + (row.process?.network_errors || 0) + tr(&quot;，本次服务累计退出 &quot;) + (row.process?.exits || 0)"><span>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }}</span></el-tooltip><p class="muted">{{tr('最近错误')}} {{date(row.process?.last_error_at)}}</p><p>{{rejectionSummary(row)}}</p></template></el-table-column>
       <el-table-column min-width="130" :label='tr("最近检测")'><template #default="{ row }">{{ row.checked_at && !row.checked_at.startsWith('0001') ? dateTime(row.checked_at) : tr("等待检测") }}</template></el-table-column>
       <el-table-column :label='tr("说明 / 实测")' min-width="220"><template #default="{row}"><p>{{row.error}}</p><p v-if="row.udp_policy === 'reject'" class="muted">{{ tr("策略：拒绝非 DNS UDP") }}</p><el-button :disabled="!!diagnosing" @click="diagnose(row.id)">{{ tr("映射转发实测") }}</el-button></template></el-table-column>
       <el-table-column :label='tr("自动恢复")' min-width="230"><template #default="{row}">
@@ -107,7 +121,7 @@ function formatBytes(n) {
       <div class="monitor-protocols"><details v-for="protocol in ['tcp','udp','dns']" :key="protocol"><summary><strong>{{ protocol.toUpperCase() }}</strong><span>{{ protocolLabel(row[protocol]) }}</span></summary><p>{{ protocolDetail(row[protocol]) }}</p></details></div>
       <p v-if="row.error || row.recovery_error" class="error-text">{{ row.recovery_error || row.error }}</p>
       <p>{{tr('最近采样新增')}} {{freshErrors(row)}} · {{tr('累计分类错误')}} {{row.process?.error_lines ?? '—'}}</p>
-      <details><summary>{{ tr("解析器与错误计数") }}</summary><p>{{ tr("实际 DNS：") }}{{ row.resolver?.active || tr("等待启动") }} {{ tr("· 备用") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</p><p>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} {{ tr("· 网络不可达") }} {{ row.process?.network_errors || 0 }}</p><p>{{tr('最近错误')}} {{date(row.process?.last_error_at)}}</p></details>
+      <details><summary>{{ tr("解析器与错误计数") }}</summary><p>{{ tr("实际 DNS：") }}{{ row.resolver?.active || tr("等待启动") }} {{ tr("· 备用") }} {{ row.resolver?.fallbacks || 0 }} {{ tr("· 失败") }} {{ row.resolver?.failures || 0 }}</p><p>{{ tr("超时") }} {{ row.process?.timeouts || 0 }} {{ tr("· 代理拒绝") }} {{ row.process?.proxy_rejections || 0 }} {{ tr("· DNS 报文") }} {{ row.process?.dns_parse_errors || 0 }} · TLS {{ row.process?.tls_failures || 0 }} {{ tr("· 拒绝") }} {{ row.process?.refused || 0 }} {{ tr("· 网络不可达") }} {{ row.process?.network_errors || 0 }}</p><p>{{tr('最近错误')}} {{date(row.process?.last_error_at)}}</p><p>{{rejectionSummary(row)}}</p></details>
       <p class="muted">{{healthLabels[row.state] || row.state}} {{ tr("· 最近检测") }} {{ date(row.checked_at) }}</p><p v-if="row.udp_policy === 'reject'" class="muted">{{ tr("策略：拒绝非 DNS UDP") }}</p><el-button :disabled="!!diagnosing" @click="diagnose(row.id)">{{ tr("映射转发实测") }}</el-button>
       <template v-if="row.local_state !== 'healthy'"><p class="muted">{{ tr("恢复尝试") }} {{ row.recovery?.attempts || 0 }} {{ tr("· 失败") }} {{ row.recovery?.failures || 0 }} {{ tr("· 下次") }} {{ date(row.recovery?.next_retry) }}</p><el-button :disabled="!!retrying" :loading="retrying === row.id" @click="retry(row.id)">{{ tr("重试恢复") }}</el-button></template>
      </article>

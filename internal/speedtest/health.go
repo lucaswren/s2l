@@ -54,7 +54,7 @@ func probeHTTPSTargets(ctx context.Context, node model.SocksNode, targets []stri
 		if u != nil {
 			host = u.Hostname()
 		}
-		report.Attempts = append(report.Attempts, model.ProbeAttempt{Target: host, Stage: r.Stage, StatusCode: r.StatusCode, DurationMS: r.DurationMS})
+		report.Attempts = append(report.Attempts, model.ProbeAttempt{Target: host, Stage: r.Stage, StatusCode: r.StatusCode, DurationMS: r.DurationMS, SOCKSReply: r.SOCKSReply})
 		if r.State == "healthy" {
 			r.Attempts = report.Attempts
 			r.DurationMS = time.Since(started).Milliseconds()
@@ -64,7 +64,7 @@ func probeHTTPSTargets(ctx context.Context, node model.SocksNode, targets []stri
 			copy := r
 			response = &copy
 		}
-		report.Stage, report.Error, report.DurationMS = r.Stage, r.Error, r.DurationMS
+		report.Stage, report.Error, report.DurationMS, report.SOCKSReply = r.Stage, r.Error, r.DurationMS, r.SOCKSReply
 	}
 	if response != nil {
 		response.Attempts = report.Attempts
@@ -121,6 +121,7 @@ func probeHTTPS(ctx context.Context, target string, dial func(context.Context, s
 	}
 	stage := phase.Load().(string)
 	if err != nil {
+		r.SOCKSReply = SOCKSReplyCode(err)
 		var se *StageError
 		if errors.As(err, &se) {
 			stage = se.Stage

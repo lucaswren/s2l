@@ -30,9 +30,9 @@ func Current() Info {
 		}
 	}
 	result.ReleaseNotes = map[string]string{
-		"en":    "1.0.3: Dedicated Monitoring tab with client upload/download rates, new versus cumulative classified errors, last-error time and stale-snapshot warnings. Preserve host statistics and collection timestamps; bound refresh requests and show UDP rejection as policy rather than a pending probe. Refresh multilingual documentation and remove the old monitoring disclosure. Upgrade during a maintenance window: mappings restart and clients must reconnect.",
-		"zh-TW": "1.0.3：運行監控獨立分頁，顯示用戶端上下行速率、新增與累計分類錯誤、最近錯誤時間及過期快照提示。修復全機統計與採集時間遺失，為狀態更新設定逾時，按策略拒絕 UDP 不再顯示為等待檢測。更新三語文件並移除舊監控摺疊入口。請於維護時段升級：映射會重啟，用戶端須重新連線。",
-		"zh-CN": "1.0.3：运行监控独立标签页，显示客户端上下行速率、新增与累计分类错误、最近错误时间及过期快照提示。修复全机统计与采集时间丢失，为状态刷新设置超时，按策略拒绝 UDP 不再显示为等待检测。更新三语文档并移除旧监控折叠入口。请在维护窗口升级：映射会重启，客户端须重新连接。",
+		"en":    "1.0.4: Keep fast DNS fallback while requiring confirmed primary failures for switching. Export PPP traffic deltas and correlate disconnects with daemon logs. Show DNS and health-probe SOCKS5 replies separately from unclassified forwarding errors. Upgrade during a maintenance window because mappings restart.",
+		"zh-TW": "1.0.4：保留快速 DNS 備援，確認主通道故障後再切換。取證新增 PPP 流量增量與斷線日誌關聯。分開顯示 DNS、健康探測和未分類的轉發代理拒絕。升級會重啟映射，請安排維護時段。",
+		"zh-CN": "1.0.4：保留快速 DNS 兜底，确认主通道故障后再切换。取证新增 PPP 流量增量与断线日志关联。分开显示 DNS、健康探测和未归类的转发代理拒绝。升级会重启映射，请安排维护窗口。",
 	}
 	if regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(result.Version) {
 		result.ReleaseURL = "https://github.com/lucaswren/s2l/releases/tag/" + result.Version

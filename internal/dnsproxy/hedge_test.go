@@ -98,10 +98,12 @@ func TestAutoDNSBothFailCountOneQueryFailure(t *testing.T) {
 		return nil, errors.New("upstream unavailable")
 	}
 	q, _ := QueryA("example.com")
-	if _, err := r.Resolve(context.Background(), q); err == nil {
-		t.Fatal("both failures hidden")
+	for i := 0; i < 3; i++ {
+		if _, err := r.Resolve(context.Background(), q); err == nil {
+			t.Fatal("both failures hidden")
+		}
 	}
-	if s := r.Status(); s.Queries != 1 || s.Failures != 1 || s.Fallbacks != 0 {
+	if s := r.Status(); s.Queries != 3 || s.Failures != 3 || s.Fallbacks != 0 || s.Switches != 0 || s.Active != "doh" {
 		t.Fatal(s)
 	}
 }
@@ -136,5 +138,26 @@ func TestAutoDNSShutdownCancelsHedgedRequests(t *testing.T) {
 	}
 	if s := r.Status(); s.Failures != 0 || s.Switches != 0 {
 		t.Fatal("shutdown counted as upstream failure", s)
+	}
+}
+func TestRepeatedFastBackupDoesNotSwitchPrimary(t *testing.T) {
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
+	defer r.Close()
+	r.nextProbe = time.Now().Add(time.Hour)
+	r.exchange = func(ctx context.Context, method string, q []byte) ([]byte, error) {
+		if method == "doh" {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return response(q, 0), nil
+	}
+	q, _ := QueryA("example.com")
+	for i := 0; i < 3; i++ {
+		if _, err := r.Resolve(context.Background(), q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if s := r.Status(); s.Active != "doh" || s.Switches != 0 || s.Fallbacks != 3 || s.LastDoHFailure != nil {
+		t.Fatalf("backup speed was treated as confirmed DoH failure: %+v", s)
 	}
 }

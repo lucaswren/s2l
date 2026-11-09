@@ -178,9 +178,15 @@ func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]
 		r.mu.Lock()
 		failure := &model.DNSAttemptFailure{At: time.Now(), Stage: stage, SOCKSReply: speedtest.SOCKSReplyCode(err)}
 		if method == "doh" {
+			if failure.SOCKSReply != 0 {
+				r.status.DoHProxyRejections++
+			}
 			failure.Endpoint = r.dohEndpoint
 			r.status.LastDoHFailure = failure
 		} else {
+			if failure.SOCKSReply != 0 {
+				r.status.TCPProxyRejections++
+			}
 			failure.Endpoint = r.tcpEndpoint
 			r.status.LastTCPFailure = failure
 		}
@@ -194,7 +200,7 @@ func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]
 // context let the first valid answer win without leaving a blocked sender.
 const fallbackDelay = 300 * time.Millisecond
 
-func (r *Resolver) autoAttempt(ctx context.Context, preferred string, query []byte) ([]byte, string, error) {
+func (r *Resolver) autoAttempt(ctx context.Context, preferred string, query []byte) ([]byte, string, bool, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	type result struct {
@@ -227,6 +233,7 @@ func (r *Resolver) autoAttempt(ctx context.Context, preferred string, query []by
 	timer := time.NewTimer(fallbackDelay)
 	defer timer.Stop()
 	pending, startedBackup := 1, false
+	preferredFailed := false
 	startBackup := func() {
 		if !startedBackup {
 			startedBackup = true
@@ -237,17 +244,20 @@ func (r *Resolver) autoAttempt(ctx context.Context, preferred string, query []by
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, "", ctx.Err()
+			return nil, "", false, ctx.Err()
 		case <-timer.C:
 			startBackup()
 		case v := <-results:
 			pending--
 			if v.err == nil {
-				return v.answer, v.method, nil
+				return v.answer, v.method, preferredFailed, nil
+			}
+			if v.method == preferred {
+				preferredFailed = true
 			}
 			startBackup()
 			if pending == 0 {
-				return nil, "", v.err
+				return nil, "", preferredFailed, v.err
 			}
 		}
 	}
@@ -269,7 +279,7 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 		return nil, errors.New("DNS resolver closed")
 	}
 	r.status.Queries++
-	mode, active := r.status.Mode, r.status.Active
+	mode, active, generation := r.status.Mode, r.status.Active, r.status.Switches
 	probe := mode == "auto" && active == "tcp" && !r.probing && !time.Now().Before(r.nextProbe)
 	if probe {
 		r.probing = true
@@ -277,7 +287,7 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	}
 	r.mu.Unlock()
 	if probe {
-		go r.probePrimary(append([]byte(nil), query...))
+		go r.probePrimary(append([]byte(nil), query...), generation)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -290,8 +300,9 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	var response []byte
 	var err error
 	used := method
+	var preferredFailed bool
 	if mode == "auto" {
-		response, used, err = r.autoAttempt(ctx, method, query)
+		response, used, preferredFailed, err = r.autoAttempt(ctx, method, query)
 	} else {
 		response, err = r.attempt(ctx, method, query)
 	}
@@ -303,17 +314,21 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 		return nil, r.ctx.Err()
 	}
 	r.mu.Lock()
-	if method == "doh" && mode == "auto" {
-		if err != nil || used != "doh" {
-			r.successes = 0
-			r.failures++
-			if r.failures >= 2 && r.status.Active != "tcp" {
-				r.status.Active = "tcp"
-				r.status.Switches++
-				r.nextProbe = time.Now().Add(30 * time.Second)
-			}
-		} else {
+	if !r.closed && method == "doh" && mode == "auto" && generation == r.status.Switches {
+		switch {
+		case err != nil:
+			// Neither transport answered, so there is no usable backup to prefer.
 			r.failures = 0
+		case preferredFailed:
+			r.notePrimaryFailure()
+		case used == "doh" && err == nil:
+			r.failures = 0
+		case used == "tcp" && err == nil && !r.probing && !time.Now().Before(r.nextProbe):
+			// A faster backup leaves the primary result unknown. Confirm it
+			// independently at a bounded rate without delaying the client.
+			r.probing = true
+			r.wg.Add(1)
+			go r.probePrimary(append([]byte(nil), query...), generation)
 		}
 	}
 	r.mu.Unlock()
@@ -334,15 +349,34 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	return response, nil
 }
 
+// notePrimaryFailure is called with mu held.
+func (r *Resolver) notePrimaryFailure() {
+	r.failures++
+	if r.failures >= 2 {
+		r.status.Active = "tcp"
+		r.status.Switches++
+		r.successes = 0
+		r.nextProbe = time.Now().Add(60 * time.Second)
+	}
+}
+
 // Recheck the primary in the background; an available backup must not wait for it.
-func (r *Resolver) probePrimary(query []byte) {
+func (r *Resolver) probePrimary(query []byte, generation uint64) {
 	defer r.wg.Done()
 	_, err := r.attempt(r.ctx, "doh", query)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.probing = false
+	if r.closed || r.ctx.Err() != nil || generation != r.status.Switches {
+		return
+	}
 	r.nextProbe = time.Now().Add(30 * time.Second)
-	if r.closed || r.ctx.Err() != nil {
+	if r.status.Active == "doh" {
+		if err != nil {
+			r.notePrimaryFailure()
+		} else {
+			r.failures = 0
+		}
 		return
 	}
 	if err != nil {

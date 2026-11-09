@@ -41,6 +41,7 @@ type Report struct {
 	After     []Sample          `json:"after"`
 	Snapshots map[string]string `json:"snapshots"`
 	Notice    string            `json:"notice"`
+	Timeline  []mappingSample   `json:"mapping_timeline,omitempty"`
 }
 type Request struct {
 	Mapping    model.TunnelMapping
@@ -48,11 +49,18 @@ type Request struct {
 	Reason     string
 	LogTail    string
 	Detail     string
+	PPP        *PPPDisconnect
 	before     []Sample
 	triggered  time.Time
 	generation uint64
 	observed   bool
 }
+type PPPDisconnect struct {
+	PID         int
+	ConnectedAt time.Time
+	At          time.Time
+}
+
 type Collected struct {
 	Snapshots map[string]string
 	PCAP      []byte
@@ -376,6 +384,7 @@ func (r *Recorder) capture(ctx context.Context, req Request) {
 	report := Report{Summary: Summary{ID: now.Format("20060102T150405.000000000Z"), MappingID: req.Mapping.ID, Reason: req.Reason, Started: now, Triggered: req.triggered, Capture: "collecting"}, Before: req.before, Snapshots: map[string]string{}, Notice: "Header-only IPv4 capture; application payload and L2TP/PPP authentication are excluded. Contains network addresses. Captures start after detection and may queue; downstream iWAN is not observed. No restart or route changes are performed."}
 	report.Snapshots["singbox-before"] = req.LogTail
 	report.Snapshots["trigger-details"] = req.Detail
+	report.Timeline = mappingTimeline(report.Before, nil, req.Mapping.ID, req.Mapping.TunName)
 	if err := r.save(report, nil, req.Node.Password, req.Mapping.L2TPPass); err != nil {
 		r.setWarning("故障取证无法写入：" + err.Error())
 		return
@@ -393,6 +402,7 @@ func (r *Recorder) capture(ctx context.Context, req Request) {
 		}
 	}
 	r.mu.Unlock()
+	report.Timeline = mappingTimeline(report.Before, report.After, req.Mapping.ID, req.Mapping.TunName)
 	if err := r.save(report, data.PCAP, req.Node.Password, req.Mapping.L2TPPass); err != nil {
 		r.setWarning("故障取证保存失败：" + err.Error())
 	} else {
