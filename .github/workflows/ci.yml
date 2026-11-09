@@ -43,8 +43,10 @@ jobs:
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y iproute2 iptables nftables iputils-ping tcpdump fonts-noto-cjk
           go test -c -o /tmp/s2l-network.test ./internal/network
-          sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run 'Test(LeakGuards|PPPManagement)Integration' -test.v
-          sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run '^TestEffectiveForwardedRouteIntegration$' -test.v
+          # Each fixture installs persistent guards in its disposable namespace.
+          for test in TestLeakGuardsIntegration TestLeakGuardsIntegrationReturnTraffic TestPPPManagementIntegration TestEffectiveForwardedRouteIntegration; do
+            sudo env S2L_NETNS_TEST=1 unshare --net --mount --propagation private /tmp/s2l-network.test -test.run "^${test}$" -test.v
+          done
       - name: Verify payload-free outage capture in isolated Linux networking
         run: |
           go test -c -o /tmp/s2l-evidence.test ./internal/evidence
