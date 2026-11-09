@@ -100,7 +100,7 @@ func (s *MappingService) Monitor(ctx context.Context) {
 	defer wg.Wait()
 	localSlots, probeSlots := make(chan struct{}, 4), make(chan struct{}, 4)
 	localBusy := make(map[string]bool)
-	launch := func(m model.TunnelMapping, local bool) {
+	launch := func(m model.TunnelMapping, local bool) bool {
 		s.mu.Lock()
 		busy := s.inflight
 		if local {
@@ -108,12 +108,12 @@ func (s *MappingService) Monitor(ctx context.Context) {
 		}
 		if busy[m.ID] || s.health[m.ID] == nil {
 			s.mu.Unlock()
-			return
+			return false
 		}
 		h := s.health[m.ID]
 		if !local && time.Now().Before(h.next) {
 			s.mu.Unlock()
-			return
+			return false
 		}
 		slots := probeSlots
 		if local {
@@ -123,7 +123,7 @@ func (s *MappingService) Monitor(ctx context.Context) {
 		case slots <- struct{}{}:
 		default:
 			s.mu.Unlock()
-			return
+			return false
 		}
 		busy[m.ID] = true
 		s.mu.Unlock()
@@ -140,8 +140,9 @@ func (s *MappingService) Monitor(ctx context.Context) {
 				s.checkMapping(ctx, m)
 			}
 		}()
+		return true
 	}
-	cursor := 0
+	var localCursor, probeCursor int
 	for {
 		select {
 		case <-ctx.Done():
@@ -149,17 +150,21 @@ func (s *MappingService) Monitor(ctx context.Context) {
 		case <-ticker.C:
 		}
 		mappings := s.store.ListMappings()
-		for i := range mappings {
-			m := mappings[(i+cursor)%len(mappings)]
-			if m.Status == model.StatusRunning {
-				launch(m, true)
-				launch(m, false)
-			}
-		}
-		if len(mappings) > 0 {
-			cursor = (cursor + 4) % len(mappings)
+		localCursor = dispatchChecks(mappings, localCursor, func(m model.TunnelMapping) bool { return launch(m, true) })
+		probeCursor = dispatchChecks(mappings, probeCursor, func(m model.TunnelMapping) bool { return launch(m, false) })
+	}
+}
+
+// Resume after the last admitted mapping, even when only one worker is free.
+func dispatchChecks(mappings []model.TunnelMapping, cursor int, launch func(model.TunnelMapping) bool) int {
+	next := cursor
+	for offset := range mappings {
+		i := (cursor + offset) % len(mappings)
+		if m := mappings[i]; m.Status == model.StatusRunning && launch(m) {
+			next = (i + 1) % len(mappings)
 		}
 	}
+	return next
 }
 
 func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMapping) {

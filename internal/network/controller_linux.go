@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"sync"
 	"time"
@@ -15,11 +16,13 @@ import (
 
 // Controller 编排单条映射的策略路由 + iptables 生命周期
 type Controller struct {
-	management   model.ManagementAccess
-	mu           sync.Mutex
-	active       map[string]model.TunnelMapping // key: mapping.ID 或 tun_name
-	sessionGuard bool
-	admitted     map[string]model.PPPSession
+	management       model.ManagementAccess
+	mu               sync.Mutex
+	active           map[string]model.TunnelMapping // key: mapping.ID 或 tun_name
+	sessionGuard     bool
+	admitted         map[string]model.PPPSession
+	guardSnapshot    string
+	sessionSyncError error
 }
 
 func NewController() *Controller {
@@ -40,7 +43,7 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if err := validateMapping(m); err != nil {
+	if err := ValidateMapping(m); err != nil {
 		return err
 	}
 	if err := ensureGuard(c.management); err != nil {
@@ -58,7 +61,9 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 	if owner, ok := c.admitted[m.ID]; ok {
 		iface, err := net.InterfaceByName(owner.Interface)
 		if err != nil || iface.Index != owner.Index {
-			delete(c.admitted, m.ID)
+			if err := c.revokeSessionAdmission(m.ID); err != nil {
+				return errors.Join(fmt.Errorf("revoke stale PPP admission: %w", err), DelPolicyRoute(m))
+			}
 		} else {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			err := pinSessionReturn(ctx, m, owner)
@@ -86,12 +91,20 @@ func (c *Controller) Teardown(m model.TunnelMapping) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	firewallErr := DelFirewall(m)
-	routeErr := DelPolicyRoute(m)
+	_, active := c.active[mappingKey(m)]
 	delete(c.active, mappingKey(m))
-	delete(c.admitted, m.ID)
+	var revokeErr error
+	if _, admitted := c.admitted[m.ID]; c.sessionGuard && (active || admitted) {
+		revokeErr = c.revokeSessionAdmission(m.ID)
+	}
+	return errors.Join(revokeErr, DelFirewall(m), DelPolicyRoute(m))
+}
 
-	return errors.Join(firewallErr, routeErr)
+// Caller holds the controller lock.
+func (c *Controller) revokeSessionAdmission(id string) error {
+	next := maps.Clone(c.admitted)
+	delete(next, id)
+	return c.commitSessionGuard(context.Background(), next)
 }
 
 // TeardownAll 进程退出时清理全部规则
@@ -104,8 +117,7 @@ func (c *Controller) TeardownAll() error {
 	}
 	c.active = make(map[string]model.TunnelMapping)
 	if c.sessionGuard {
-		errs = append(errs, replaceSessionGuard(context.Background(), nil))
-		c.admitted = nil
+		errs = append(errs, c.commitSessionGuard(context.Background(), nil))
 	}
 	return errors.Join(errs...)
 }

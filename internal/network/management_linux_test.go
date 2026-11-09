@@ -117,6 +117,33 @@ func TestPPPManagementIntegration(t *testing.T) {
 		t.Fatal(e)
 	}
 	dial("198.18.10.1", port, "", true)
+	if err := c.EnableSessionGuard(); err != nil {
+		t.Fatal(err)
+	}
+	iface, err := net.InterfaceByName("ppp99")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := model.TunnelMapping{ID: "stop", TunName: "tun199", TableID: 199, Subnet: "10.20.30.0/24"}
+	c.active[m.ID] = m
+	if err := c.commitSessionGuard(context.Background(), map[string]model.PPPSession{
+		m.ID:   {Interface: "ppp99", PeerIP: "10.20.30.2", Index: iface.Index},
+		"keep": {Interface: "ppp99", PeerIP: "10.20.31.2", Index: iface.Index},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	a.SourceCIDRs = append(a.SourceCIDRs, "10.20.31.0/24")
+	if err := c.SetManagementAccess(a); err != nil {
+		t.Fatal(err)
+	}
+	dial("198.18.10.1", port, "10.20.30.2", true)
+	dial("198.18.10.1", port, "10.20.31.2", true)
+	if err := c.Teardown(m); err != nil {
+		t.Fatal(err)
+	}
+	// No background guard reconciler runs in this fixture.
+	dial("198.18.10.1", port, "10.20.30.2", false)
+	dial("198.18.10.1", port, "10.20.31.2", true)
 	if e := c.SetManagementAccess(model.ManagementAccess{}); e != nil {
 		t.Fatal(e)
 	}

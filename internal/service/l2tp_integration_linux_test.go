@@ -137,8 +137,10 @@ exec "$S2L_TEST_REAL_SB" "$@"
 	defer svc.Shutdown()
 	eventCtx, eventCancel := context.WithCancel(context.Background())
 	eventDone := make(chan struct{})
+	sessionCtx, stopSessionGuard := context.WithCancel(eventCtx)
+	defer stopSessionGuard()
 	sessionDone := make(chan struct{})
-	go func() { defer close(sessionDone); svc.runSessionGuard(eventCtx) }()
+	go func() { defer close(sessionDone); svc.runSessionGuard(sessionCtx) }()
 	go func() { defer close(eventDone); svc.listenPPP(eventCtx) }()
 	defer func() { eventCancel(); <-eventDone; <-sessionDone }()
 	integrationWait(t, 3*time.Second, func() bool { _, e := os.Stat(pppSocket); return e == nil })
@@ -545,6 +547,54 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 		if strings.TrimSpace(got) != fmt.Sprintf("node%d", i) {
 			t.Fatal("exit changed after recovery", got)
 		}
+	}
+	if strings.HasPrefix(transport, "ipsec-shared-nat") {
+		const managementIP = "198.19.0.7"
+		run("ip", "addr", "add", managementIP+"/32", "dev", "lo")
+		listener, err := net.Listen("tcp4", managementIP+":0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { listener.Close() })
+		go http.Serve(listener, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			io.WriteString(w, "management fixture")
+		}))
+		if err := svc.SetManagementAccess(model.ManagementAccess{
+			Enabled: true, DestinationIP: managementIP, SourceCIDRs: []string{first.Subnet, second.Subnet},
+			TCPPorts: []int{listener.Addr().(*net.TCPAddr).Port},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		managementRequest := func(client string) *exec.Cmd {
+			return exec.Command("ip", "netns", "exec", client, "curl", "--noproxy", "*", "--silent", "--fail", "--max-time", "2", "http://"+listener.Addr().String())
+		}
+		for _, client := range []string{"s2l-dial-0", "s2l-dial-1"} {
+			if out, err := managementRequest(client).CombinedOutput(); err != nil || string(out) != "management fixture" {
+				t.Fatalf("management positive control for %s: %s (%v)", client, out, err)
+			}
+		}
+		// Stop must revoke admission synchronously, even with a live PPP link and
+		// no background reconciliation. A separate PPP disconnect follows below.
+		stopSessionGuard()
+		<-sessionDone
+		if err := svc.Stop(first.ID); err != nil {
+			t.Fatal(err)
+		}
+		peers, err := network.ReadPeers(st.ListMappings())
+		if err != nil || len(peers) != 2 {
+			t.Fatal("stop did not leave both PPP links available for the test", peers, err)
+		}
+		if out, err := managementRequest("s2l-dial-0").CombinedOutput(); err == nil {
+			t.Fatalf("stopped mapping retained management admission: %s", out)
+		}
+		if out, err := managementRequest("s2l-dial-1").CombinedOutput(); err != nil || string(out) != "management fixture" {
+			t.Fatalf("stop disrupted the other client's management admission: %s (%v)", out, err)
+		}
+		if got := run("ip", "netns", "exec", "s2l-dial-1", "curl", "--noproxy", "*", "--silent", "--fail", "--max-time", "5", "--cacert", caPath, "https://198.18.0.9/"); strings.TrimSpace(got) != "node1" {
+			t.Fatal("stop changed the other client's fixed exit", got)
+		}
+		assertNoDirectEgress()
+		t.Log("stop revoked admission before the PPP link disconnected, with reconciliation disabled; other shared-NAT client remained online and WAN direct count stayed zero")
 	}
 	rows, _ := network.ReadPeers(st.ListMappings())
 	for _, peer := range rows {

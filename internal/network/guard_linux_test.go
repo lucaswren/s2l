@@ -58,7 +58,29 @@ func TestLeakGuardsIntegration(t *testing.T) {
 			t.Fatalf("ping %s success=%v: %v %s", target, success, err, out)
 		}
 	}
+	must("iptables", "-t", "mangle", "-A", "POSTROUTING", "-s", "10.0.101.2", "-o", "wan0")
+	wanPackets := func() int {
+		t.Helper()
+		counters, err := output("iptables", "-t", "mangle", "-nvxL", "POSTROUTING")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(counters, "\n") {
+			if strings.Contains(line, "10.0.101.2") && strings.Contains(line, "wan0") {
+				n, err := strconv.Atoi(strings.Fields(line)[0])
+				if err != nil {
+					t.Fatal(err)
+				}
+				return n
+			}
+		}
+		t.Fatal("WAN counter rule absent")
+		return -1
+	}
 	ping("198.18.0.2", true)
+	if wanPackets() == 0 {
+		t.Fatal("WAN counter positive control saw no traffic")
+	}
 	ping("fd00:2::2", true)
 	must("ip", "netns", "exec", client, "ip", "addr", "add", "10.0.102.2/32", "dev", "client0")
 	must("ip", "route", "add", "10.0.102.2/32", "dev", "ppp0")
@@ -150,6 +172,98 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	}
 	if err := controller.Verify(m); err != nil {
 		t.Fatal("complete forwarding path rejected", err)
+	}
+	// Check that kernel drift is visible and repaired from the configured policy.
+	for _, change := range [][]string{
+		{"-D", "INPUT", "-i", "ppp+", "-j", managementChain},
+		{"-I", managementChain, "1", "-j", "ACCEPT"},
+	} {
+		must("iptables", change...)
+		if err := controller.Verify(m); !IsMissingState(err) {
+			t.Fatal("PPP management drift not detected", err)
+		}
+		if err := controller.RepairContext(context.Background(), m); err != nil {
+			t.Fatal("repair PPP management exceptions", err)
+		}
+		ping("198.18.0.1", false)
+	}
+	must("ip", "link", "set", "dev", m.TunName, "mtu", "1300", "txqueuelen", "10")
+	if err := controller.Verify(m); !IsMissingState(err) {
+		t.Fatal("TUN parameter drift not detected", err)
+	}
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("repair TUN parameters", err)
+	}
+	// Detect and repair rule order even when every individual rule exists.
+	udpRule := mappingUDPRejectArgs(m)
+	must("iptables", append([]string{"-D", "S2L_FORWARD"}, udpRule...)...)
+	must("iptables", append([]string{"-A", "S2L_FORWARD"}, udpRule...)...)
+	must("iptables", "-I", "S2L_RETURN", "1", "-j", "DROP")
+	if err := controller.Verify(m); !IsMissingState(err) {
+		t.Fatal("shadowed mapping rules not detected", err)
+	}
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("repair mapping chain order", err)
+	}
+	if err := controller.EnableSessionGuard(); err != nil {
+		t.Fatal(err)
+	}
+	// Setup can encounter an admitted interface that no longer has its old
+	// name. Revocation must reach the kernel before a no-op sync can skip writes.
+	if err := controller.commitSessionGuard(context.Background(), map[string]model.PPPSession{
+		m.ID: {Interface: "ppp-missing", PeerIP: "10.0.101.2", Index: iface.Index},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.Setup(m); err != nil {
+		t.Fatal(err)
+	}
+	admitted, err := output("nft", "-j", "list", "set", "ip", sessionTable, "peers")
+	if err != nil || strings.Contains(admitted, "10.0.101.2") {
+		t.Fatalf("setup left stale PPP admission in the kernel: %s %v", admitted, err)
+	}
+	// An idle reconciliation still checks for drift before skipping a write.
+	must("nft", "flush", "chain", "ip", sessionTable, "input")
+	if err := controller.SyncSessionGuard(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := controller.verifySessionGuard(context.Background()); err != nil {
+		t.Fatal("idle sync did not repair admission drift", err)
+	}
+	if err := controller.commitSessionGuard(context.Background(), map[string]model.PPPSession{
+		"fixture": {Interface: "ppp0", PeerIP: "10.0.101.2", Index: iface.Index},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, chain := range []string{"input", "forward"} {
+		must("nft", "flush", "chain", "ip", sessionTable, chain)
+		if err := controller.Verify(m); !IsMissingState(err) {
+			t.Fatalf("empty %s admission chain not detected: %v", chain, err)
+		}
+		if err := controller.RepairContext(context.Background(), m); err != nil {
+			t.Fatalf("repair %s admission chain: %v", chain, err)
+		}
+	}
+	must("nft", "flush", "set", "ip", sessionTable, "peers")
+	if err := controller.Verify(m); !IsMissingState(err) {
+		t.Fatal("missing peer admission not detected", err)
+	}
+	if err := controller.RepairContext(context.Background(), m); err != nil {
+		t.Fatal("repair admission set", err)
+	}
+	// This fixture uses veth PPP substitutes and does not pin real PPP returns.
+	controller.admitted = nil
+	controller.sessionGuard = false
+	if err := removeSessionGuard(); err != nil {
+		t.Fatal(err)
+	}
+	for _, rule := range sessionFirewallRules() {
+		for i, arg := range rule {
+			if arg == "-C" {
+				rule[i] = "-D"
+			}
+		}
+		must("iptables", rule...)
 	}
 	// A firewall reload can insert broad accepts above still-existing hooks.
 	// Presence-only checks used to report this leaking state as healthy.
@@ -271,6 +385,7 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	}
 	must("ip", "addr", "del", "10.66.2.1/24", "dev", "wan0")
 	// Kill the interface: terminal unreachable must prevent main-table fallback.
+	must("iptables", "-t", "mangle", "-Z", "POSTROUTING")
 	must("ip", "link", "del", "tun101")
 	if _, err := output("ip", "route", "get", "198.18.0.2", "from", "10.0.101.2", "iif", "ppp0"); err == nil {
 		t.Fatal("TUN deletion allowed route fallback")
@@ -293,6 +408,9 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	must("ip", "netns", "exec", client, "ip", "addr", "add", "10.99.0.2/24", "dev", "client0")
 	if err := run("ip", "netns", "exec", client, "ping", "-I", "10.99.0.2", "-c", "1", "-W", "1", "198.18.0.2"); err == nil {
 		t.Fatal("spoofed source bypassed guard")
+	}
+	if leaked := wanPackets(); leaked != 0 {
+		t.Fatalf("WAN leak: %d packets", leaked)
 	}
 	// Host upstream access is unaffected.
 	must("ping", "-c", "1", "-W", "1", "198.18.0.2")

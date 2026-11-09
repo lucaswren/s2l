@@ -70,7 +70,6 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 		{"-C", "FORWARD", "-i", "ppp+", "-j", "S2L_FORWARD"},
 		{"-C", "INPUT", "-i", "ppp+", "-j", "DROP"},
 		{"-C", "S2L_FORWARD", "-j", "DROP"},
-		{"-C", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)},
 		{"-t", "nat", "-C", "POSTROUTING", "-o", m.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", mappingComment(m)},
 		append([]string{"-C", "S2L_RETURN"}, mappingReturnArgs(m)...),
 	}
@@ -80,24 +79,49 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 	if args := mappingUDPRejectArgs(m); len(args) > 0 {
 		checks = append(checks, append([]string{"-C", "S2L_FORWARD"}, args...))
 	}
+	checks = append(checks, append([]string{"-C", "S2L_FORWARD"}, mappingForwardArgs(m)...))
 	if c.sessionGuard {
 		checks = append(checks, sessionFirewallRules()...)
 	}
+	// Read each filter table once. Use its rules for presence and order checks.
+	ipv4, err := output("iptables", "-S")
+	if err != nil {
+		return err
+	}
+	ipv6, err := output("ip6tables", "-S")
+	if err != nil {
+		return err
+	}
+	rules4, rules6 := filterRuleKeys(ipv4), filterRuleKeys(ipv6)
 	for _, args := range checks {
+		if args[0] == "-C" && rules4[mappingGuardRuleKey("-A "+strings.Join(args[1:], " "))] {
+			continue
+		}
+		// Keep the exact kernel check for other tables and ambiguous/absent
+		// snapshot matches. Failed inspections must never authorize repair.
 		if err := run("iptables", args...); err != nil {
 			return missingFirewall(err, "iptables", args)
 		}
 	}
 	for _, chain := range []string{"INPUT", "FORWARD"} {
-		if err := run("ip6tables", "-C", chain, "-i", "ppp+", "-j", "DROP"); err != nil {
-			return missingFirewall(err, "ip6tables", []string{"-C", chain, "-i", "ppp+", "-j", "DROP"})
+		args := []string{"-C", chain, "-i", "ppp+", "-j", "DROP"}
+		if !rules6["-A "+chain+" -i ppp+ -j DROP"] {
+			if err := run("ip6tables", args...); err != nil {
+				return missingFirewall(err, "ip6tables", args)
+			}
 		}
 	}
-	if err := checkGuardOrder(ctx, false); err != nil {
+	if guardOrderPlan(ipv4, false) != "" || guardOrderPlan(ipv6, true) != "" {
+		return missingState("PPP guard hooks are shadowed or duplicated", "guard-order")
+	}
+	if !managementMatches(ipv4, c.management) {
+		return missingState("PPP management exceptions differ from configuration", "management-guard")
+	}
+	if err := c.checkMappingGuardOrder(ctx, m, ipv4, false); err != nil {
 		return err
 	}
 	if c.sessionGuard {
-		if _, err := output("nft", "list", "chain", "ip", sessionTable, "forward"); err != nil {
+		if err := c.verifySessionGuard(ctx); err != nil {
 			return err
 		}
 		if owner, ok := c.admitted[m.ID]; ok {
@@ -124,7 +148,44 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 			return missingState("reverse path filtering enabled on "+name, "sysctl", "-w", "net/ipv4/conf/"+name+"/rp_filter=0")
 		}
 	}
+	link, err := output("ip", "-j", "link", "show", "dev", m.TunName)
+	if err != nil {
+		return err
+	}
+	if err := verifyTUNParameters(m, []byte(link)); err != nil {
+		return err
+	}
 	return verifyBandwidth(ctx, m)
+}
+
+func filterRuleKeys(snapshot string) map[string]bool {
+	rules := make(map[string]bool)
+	for _, line := range strings.Split(snapshot, "\n") {
+		if line = strings.TrimSpace(line); strings.HasPrefix(line, "-A ") {
+			rules[mappingGuardRuleKey(line)] = true
+		}
+	}
+	return rules
+}
+
+func verifyTUNParameters(m model.TunnelMapping, data []byte) error {
+	var links []struct {
+		Name  string `json:"ifname"`
+		MTU   int    `json:"mtu"`
+		Queue int    `json:"txqlen"`
+	}
+	if err := json.Unmarshal(data, &links); err != nil {
+		return err
+	}
+	if len(links) != 1 || links[0].Name != m.TunName || links[0].MTU <= 0 {
+		return fmt.Errorf("invalid TUN link snapshot")
+	}
+	if links[0].MTU != m.EffectiveMTU() || links[0].Queue != m.EffectiveQueueLength() {
+		return missingState("TUN MTU or transmit queue length differs from configuration",
+			"ip", "link", "set", "dev", m.TunName, "mtu", strconv.Itoa(m.EffectiveMTU()),
+			"txqueuelen", strconv.Itoa(m.EffectiveQueueLength()))
+	}
+	return nil
 }
 
 func verifyRouteJSON(m model.TunnelMapping, rules, routes []byte) error {
@@ -216,6 +277,18 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 			return err
 		}
 		switch missing.command {
+		case "mapping-guard-order":
+			if e := c.checkMappingGuardOrder(ctx, m, "", true); e != nil {
+				return e
+			}
+		case "management-guard":
+			if e := ensureManagementAccessContext(ctx, c.management); e != nil {
+				return e
+			}
+		case "session-guard":
+			if e := c.commitSessionGuard(ctx, c.admitted); e != nil {
+				return e
+			}
 		case "guard-order":
 			if e := checkGuardOrder(ctx, true); e != nil {
 				return e
@@ -252,7 +325,7 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 				args[check] = "-I"
 				args = append(args[:check+2], append([]string{strconv.Itoa(position)}, args[check+2:]...)...)
 			} else if guardChain && len(args) == 4 {
-				args[check] = "-A" // Restore only the terminal guard, after existing rules.
+				args[check] = "-I" // Close the chain until the order check restores owned allowances.
 			} else {
 				position := 1
 				target := args[len(args)-1]

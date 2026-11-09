@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/store"
 )
 
 type importNodesReq struct {
@@ -39,6 +41,10 @@ func (s *Server) handleImportNodes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+	s.commitImport(w, func(st *store.Store) importResult { return importNodes(st, req) })
+}
+
+func importNodes(st *store.Store, req importNodesReq) importResult {
 	nodes := req.Nodes
 	textImport := len(nodes) == 0 && strings.TrimSpace(req.Text) != ""
 	var parseErrs []string
@@ -47,7 +53,7 @@ func (s *Server) handleImportNodes(w http.ResponseWriter, r *http.Request) {
 	}
 	res := importResult{Skipped: len(parseErrs), Errors: append([]string{}, parseErrs...)}
 	out := make([]model.SocksNode, 0, len(nodes))
-	existing := s.store.ListNodes()
+	existing := st.ListNodes()
 	for i, n := range nodes {
 		n.Name = strings.TrimSpace(n.Name)
 		n.Addr = strings.TrimSpace(n.Addr)
@@ -91,13 +97,13 @@ func (s *Server) handleImportNodes(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		} else {
-			_, exists := s.store.GetNode(n.ID)
+			_, exists := st.GetNode(n.ID)
 			isNew = !exists
 		}
 		if n.ID == "" {
 			n.ID = newID("node_")
 		}
-		if err := s.store.UpsertNode(n); err != nil {
+		if err := st.UpsertNode(n); err != nil {
 			res.Skipped++
 			res.Errors = append(res.Errors, fmt.Sprintf("row %d: %v", i+1, err))
 			continue
@@ -118,7 +124,7 @@ func (s *Server) handleImportNodes(w http.ResponseWriter, r *http.Request) {
 		out = append(out, n)
 	}
 	res.Items = redactNodes(out)
-	writeJSON(w, http.StatusOK, res)
+	return res
 }
 
 func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
@@ -131,11 +137,15 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+	s.commitImport(w, func(st *store.Store) importResult { return importMappings(st, req) })
+}
+
+func importMappings(st *store.Store, req importMappingsReq) importResult {
 	maps := req.Mappings
 	textImport := len(maps) == 0 && strings.TrimSpace(req.Text) != ""
 	parseErrs := []string{}
 	if textImport {
-		maps, parseErrs = parseMappingText(req.Text, s)
+		maps, parseErrs = parseMappingText(req.Text, st)
 	}
 	res := importResult{Skipped: len(parseErrs), Errors: append([]string{}, parseErrs...)}
 	out := make([]model.TunnelMapping, 0, len(maps))
@@ -154,14 +164,14 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 			res.Errors = append(res.Errors, fmt.Sprintf("row %d: invalid group", i+1))
 			continue
 		}
-		if _, ok := s.store.GetNode(m.NodeID); !ok {
+		if _, ok := st.GetNode(m.NodeID); !ok {
 			res.Skipped++
 			res.Errors = append(res.Errors, fmt.Sprintf("row %d: node not found", i+1))
 			continue
 		}
 		isNew := m.ID == ""
 		if isNew {
-			for _, existing := range s.store.ListMappings() {
+			for _, existing := range st.ListMappings() {
 				if existing.TableID == m.TableID || existing.TunName == m.TunName {
 					m.ID = existing.ID
 					isNew = false
@@ -169,7 +179,7 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-		if err := s.checkMappingConflicts(m); err != nil {
+		if err := checkMappingConflicts(st, m); err != nil {
 			res.Skipped++
 			res.Errors = append(res.Errors, fmt.Sprintf("row %d: %v", i+1, err))
 			continue
@@ -177,7 +187,7 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 		if isNew {
 			m.ID = newID("map_")
 			m.Status = model.StatusStopped
-		} else if existing, ok := s.store.GetMapping(m.ID); ok {
+		} else if existing, ok := st.GetMapping(m.ID); ok {
 			if existing.Status != model.StatusStopped {
 				res.Skipped++
 				res.Errors = append(res.Errors, fmt.Sprintf("row %d: mapping %s is not stopped, clean up and stop first", i+1, m.ID))
@@ -199,7 +209,7 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 			m.Status = model.StatusStopped
 		}
 		m = m.ManagedLineSettings()
-		if err := s.store.UpsertMapping(m); err != nil {
+		if err := st.UpsertMapping(m); err != nil {
 			res.Skipped++
 			res.Errors = append(res.Errors, fmt.Sprintf("row %d: %v", i+1, err))
 			continue
@@ -212,7 +222,20 @@ func (s *Server) handleImportMappings(w http.ResponseWriter, r *http.Request) {
 		out = append(out, m)
 	}
 	res.Items = redactMappings(out)
-	writeJSON(w, http.StatusOK, res)
+	return res
+}
+
+func (s *Server) commitImport(w http.ResponseWriter, apply func(*store.Store) importResult) {
+	var result importResult
+	err := s.store.ApplyImport(func(st *store.Store) { result = apply(st) })
+	if err != nil {
+		if !store.WasCommitted(err) {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		log.Printf("import committed with a durability warning: %v", err)
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // parseNodeText accepts the documented SOCKS5 import formats, one node per line:
@@ -425,7 +448,7 @@ func looksLikePort(s string) bool {
 // 或完整：
 //
 //	table_id,node_name_or_id,tun_name,subnet,l2tp_user,l2tp_pass
-func parseMappingText(text string, s *Server) ([]model.TunnelMapping, []string) {
+func parseMappingText(text string, st *store.Store) ([]model.TunnelMapping, []string) {
 	var out []model.TunnelMapping
 	var errs []string
 	nodeByName := map[string]string{}
@@ -436,7 +459,7 @@ func parseMappingText(text string, s *Server) ([]model.TunnelMapping, []string) 
 			nodeByName[alias] = id
 		}
 	}
-	for _, n := range s.store.ListNodes() {
+	for _, n := range st.ListNodes() {
 		addAlias(n.Name, n.ID)
 		addAlias(n.Addr, n.ID)
 	}
@@ -461,7 +484,7 @@ func parseMappingText(text string, s *Server) ([]model.TunnelMapping, []string) 
 		}
 		nodeRef := parts[1]
 		nodeID, ok := nodeByName[nodeRef]
-		if node, byID := s.store.GetNode(nodeRef); byID {
+		if node, byID := st.GetNode(nodeRef); byID {
 			nodeID, ok = node.ID, true
 		}
 		if !ok {

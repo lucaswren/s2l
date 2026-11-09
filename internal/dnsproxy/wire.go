@@ -69,55 +69,76 @@ func skipName(packet []byte, pos int) (int, error) {
 	return 0, errors.New("invalid DNS name")
 }
 
-func validateRecords(packet []byte) error {
+func responseCode(packet []byte) (int, error) {
 	pos, err := skipName(packet, 12)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	pos += 4
-	count := int(binary.BigEndian.Uint16(packet[6:8])) + int(binary.BigEndian.Uint16(packet[8:10])) + int(binary.BigEndian.Uint16(packet[10:12]))
+	additionalStart := int(binary.BigEndian.Uint16(packet[6:8])) + int(binary.BigEndian.Uint16(packet[8:10]))
+	count := additionalStart + int(binary.BigEndian.Uint16(packet[10:12]))
+	code := int(packet[3] & 15)
+	seenOPT := false
 	for i := 0; i < count; i++ {
+		nameStart := pos
 		pos, err = skipName(packet, pos)
 		if err != nil || pos+10 > len(packet) {
-			return errors.New("invalid DNS record")
+			return 0, errors.New("invalid DNS record")
 		}
 		kind := binary.BigEndian.Uint16(packet[pos:])
 		size := int(binary.BigEndian.Uint16(packet[pos+8:]))
+		extendedCode := int(packet[pos+4])
 		pos += 10
 		end := pos + size
 		if end > len(packet) {
-			return errors.New("truncated DNS record")
+			return 0, errors.New("truncated DNS record")
 		}
 		switch kind {
+		case 41:
+			if i < additionalStart || seenOPT || packet[nameStart] != 0 {
+				return 0, errors.New("invalid DNS OPT record")
+			}
+			for option := pos; option < end; {
+				if end-option < 4 {
+					return 0, errors.New("truncated DNS OPT option")
+				}
+				size := int(binary.BigEndian.Uint16(packet[option+2:]))
+				option += 4 + size
+				if option > end {
+					return 0, errors.New("truncated DNS OPT option data")
+				}
+			}
+			seenOPT = true
+			code |= extendedCode << 4
 		case 1:
 			if size != 4 {
-				return errors.New("invalid A record")
+				return 0, errors.New("invalid A record")
 			}
 		case 28:
 			if size != 16 {
-				return errors.New("invalid AAAA record")
+				return 0, errors.New("invalid AAAA record")
 			}
 		case 2, 5, 12, 39:
 			nameEnd, e := skipName(packet, pos)
 			if e != nil || nameEnd != end {
-				return errors.New("invalid DNS name record")
+				return 0, errors.New("invalid DNS name record")
 			}
 		case 6:
 			next, e := skipName(packet, pos)
 			if e != nil || next > end {
-				return errors.New("invalid SOA record")
+				return 0, errors.New("invalid SOA record")
 			}
 			next, e = skipName(packet, next)
 			if e != nil || next+20 != end {
-				return errors.New("invalid SOA record")
+				return 0, errors.New("invalid SOA record")
 			}
 		}
 		pos = end
 	}
 	if pos != len(packet) {
-		return errors.New("unexpected trailing DNS data")
+		return 0, errors.New("unexpected trailing DNS data")
 	}
-	return nil
+	return code, nil
 }
 func IPv4Answers(query, response []byte) ([]net.IP, error) {
 	if err := ValidateResponse(query, response); err != nil {

@@ -30,9 +30,9 @@ func Current() Info {
 		}
 	}
 	result.ReleaseNotes = map[string]string{
-		"en":    "1.0.4: Keep fast DNS fallback while requiring confirmed primary failures for switching. Export PPP traffic deltas and correlate disconnects with daemon logs. Show DNS and health-probe SOCKS5 replies separately from unclassified forwarding errors. Upgrade during a maintenance window because mappings restart.",
-		"zh-TW": "1.0.4：保留快速 DNS 備援，確認主通道故障後再切換。取證新增 PPP 流量增量與斷線日誌關聯。分開顯示 DNS、健康探測和未分類的轉發代理拒絕。升級會重啟映射，請安排維護時段。",
-		"zh-CN": "1.0.4：保留快速 DNS 兜底，确认主通道故障后再切换。取证新增 PPP 流量增量与断线日志关联。分开显示 DNS、健康探测和未归类的转发代理拒绝。升级会重启映射，请安排维护窗口。",
+		"en":    "1.0.5: Repair PPP admission and firewall drift, revoke access immediately on stop, and handle shared-NAT IPsec endpoint reuse on newer Linux kernels. Fix EDNS fallback and serialize configuration writes. Upgrade during a maintenance window because mappings restart.",
+		"zh-TW": "1.0.5：修復 PPP 准入及防火牆規則偏移，停止時立即撤銷存取權限，並修正較新 Linux 核心上的共享 NAT IPsec 端點回收。修復 EDNS 備援和並行設定寫入。升級會重啟映射，請安排維護時段。",
+		"zh-CN": "1.0.5：修复 PPP 准入和防火墙规则漂移，停止时立即撤销访问权限，并修复新版 Linux 上的共享 NAT IPsec 端点回收。修复 EDNS 备用切换和并发配置写入。升级会重启映射，请安排维护窗口。",
 	}
 	if regexp.MustCompile(`^v?[0-9]+\.[0-9]+\.[0-9]+$`).MatchString(result.Version) {
 		result.ReleaseURL = "https://github.com/lucaswren/s2l/releases/tag/" + result.Version

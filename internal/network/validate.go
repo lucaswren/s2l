@@ -10,6 +10,13 @@ import (
 var interfaceNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,15}$`)
 
 func ValidateMapping(m model.TunnelMapping) error {
+	if err := validateMapping(m); err != nil {
+		return err
+	}
+	return model.ValidateTUNNamespace(m.TunName)
+}
+
+func validateMapping(m model.TunnelMapping) error {
 	if err := m.ValidateOptions(); err != nil {
 		return err
 	}
@@ -30,5 +37,3 @@ func ValidateMapping(m model.TunnelMapping) error {
 	}
 	return nil
 }
-
-func validateMapping(m model.TunnelMapping) error { return ValidateMapping(m) }

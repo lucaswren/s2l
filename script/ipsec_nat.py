@@ -148,10 +148,8 @@ def l2tp_peers():
 
 
 def sa_identity(block):
-    if re.search(r'(?m)^\s+dir (?:in|out|fwd)\b', block):
-        return None  # A policy template with an SPI is still not an SA.
     address = re.search(r'^src (\S+) dst (\S+)', block)
-    spi = re.search(r'\bproto esp spi (0x[0-9a-f]+)\b', block)
+    spi = re.search(r'(?m)^\s+proto esp spi (0x[0-9a-f]+)\b', block)
     if not address or not spi:
         return None
     return '|'.join((str(ipaddress.ip_address(address[1])),
@@ -176,7 +174,7 @@ def capture_unmarked(a):
     return identities
 
 
-def xfrm_in_use(a, text):
+def xfrm_in_use(a, text, *, policies=False):
     # strongSwan can reuse a reqid on a later IKE association. Its unique
     # inbound/outbound marks distinguish the old generation from the new one.
     marks = [int(a[k].split('/')[0]) for k in ('incoming', 'outgoing')]
@@ -185,7 +183,9 @@ def xfrm_in_use(a, text):
             continue
         found = re.search(r'(?m)^\s+mark (0x[0-9a-f]+)(?:/(0x[0-9a-f]+))?\s*$', block)
         if not found:
-            identity = sa_identity(block)
+            # New kernels print dir on SAs too. Only the command that
+            # produced this dump can distinguish an SA from a policy template.
+            identity = None if policies else sa_identity(block)
             if (re.search(r'(?m)^\s+mark ', block) or identity is None
                     or 'unmarked_spis' not in a or identity in a['unmarked_spis']):
                 return True  # Unknown policy/format or a retiring inbound SA.
@@ -197,7 +197,7 @@ def xfrm_in_use(a, text):
     return False
 
 
-def unused_endpoint(a, peers, sockets, xfrm):
+def unused_endpoint(a, peers, sockets, states, policies):
     def busy(reason):
         a['blocked_by'] = reason
         return False
@@ -214,7 +214,7 @@ def unused_endpoint(a, peers, sockets, xfrm):
         if int(fields[1]) or int(fields[2]):
             return busy('L2TP packet queue')
     # Never print XFRM dumps: they contain key material.
-    if xfrm_in_use(a, xfrm):
+    if xfrm_in_use(a, states) or xfrm_in_use(a, policies, policies=True):
         return busy('XFRM generation')
     result = run('conntrack', '-L', '-w', str(a['slot']))
     if result.stdout.strip():
@@ -239,18 +239,19 @@ def reclaim(state):
     state['reclaim_cursor'] = candidates[-1]['slot']
     try:
         sockets = run('ss', '-H', '-n', '-u', '-a', 'sport = :1701').stdout
-        xfrm = run('ip', 'xfrm', 'state').stdout + run('ip', 'xfrm', 'policy').stdout
+        states = run('ip', 'xfrm', 'state').stdout
+        policies = run('ip', 'xfrm', 'policy').stdout
         peers = l2tp_peers()
         state.pop('reclaim_error', None)
         for a in candidates:
-            if not unused_endpoint(a, peers, sockets, xfrm):
+            if not unused_endpoint(a, peers, sockets, states, policies):
                 a.pop('quiet_since', None)
                 continue
             if now - a.setdefault('quiet_since', now) < QUIET:
                 continue
             # Recheck the receive queues AFTER the xl2tpd round trip. The
             # admission rule has remained closed throughout quarantine.
-            if unused_endpoint(a, peers, run('ss', '-H', '-n', '-u', '-a', 'sport = :1701').stdout, xfrm):
+            if unused_endpoint(a, peers, run('ss', '-H', '-n', '-u', '-a', 'sport = :1701').stdout, states, policies):
                 del retired[str(a['slot'])]
                 state['free'].append(a['slot'])
             else:

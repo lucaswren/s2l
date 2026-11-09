@@ -161,3 +161,45 @@ func TestRepeatedFastBackupDoesNotSwitchPrimary(t *testing.T) {
 		t.Fatalf("backup speed was treated as confirmed DoH failure: %+v", s)
 	}
 }
+
+func TestAutoDNSExtendedErrorFallsBack(t *testing.T) {
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
+	defer r.Close()
+	r.exchange = func(_ context.Context, method string, query []byte) ([]byte, error) {
+		answer := response(query, 0)
+		if method == "doh" {
+			answer[11] = 1
+			// OPT with extended RCODE 1 and header RCODE 0 gives BADVERS (16).
+			return append(answer, 0, 0, 41, 4, 208, 1, 0, 0, 0, 0, 0), nil
+		}
+		return answer, nil
+	}
+	query, err := QueryA("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.Resolve(context.Background(), query); err != nil {
+		t.Fatal(err)
+	}
+	if status := r.Status(); status.Fallbacks != 1 || status.LastDoHFailure == nil {
+		t.Fatalf("BADVERS did not trigger fallback: %+v", status)
+	}
+}
+
+func TestDNSOPTOptionLength(t *testing.T) {
+	query, err := QueryA("example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer := response(query, 0)
+	answer[11] = 1
+	// An unknown, well-formed option is allowed. Its length must fit the OPT record.
+	answer = append(answer, 0, 0, 41, 4, 208, 0, 0, 0, 0, 0, 5, 0xff, 0xfe, 0, 1, 0)
+	if err := ValidateResponse(query, answer); err != nil {
+		t.Fatal("valid OPT rejected", err)
+	}
+	answer[len(answer)-2] = 2
+	if err := ValidateResponse(query, answer); err == nil {
+		t.Fatal("accepted OPT option extending past the end of the record")
+	}
+}

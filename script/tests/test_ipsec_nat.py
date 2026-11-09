@@ -184,7 +184,7 @@ class IPsecNATTests(unittest.TestCase):
         a = self.retired()
         with patch.object(ipsec_nat, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')):
             self.assertTrue(ipsec_nat.unused_endpoint(a, {('192.0.2.2', 20001)},
-                'ESTAB 0 0 198.18.99.1:1701 192.0.2.2:20001', 'reqid 10 mode transport'))
+                'ESTAB 0 0 198.18.99.1:1701 192.0.2.2:20001', 'reqid 10 mode transport', ''))
 
     def test_full_pool_completes_second_observation_in_first_up_hook(self):
         self.retired()
@@ -328,9 +328,25 @@ class IPsecNATTests(unittest.TestCase):
         self.assertNotIn('fixture-key', json.dumps(a))
         self.assertTrue(ipsec_nat.xfrm_in_use(a, old))
         self.assertFalse(ipsec_nat.xfrm_in_use(a, new + marked))
-        self.assertTrue(ipsec_nat.xfrm_in_use(a, new + ' dir in priority 1\n'))
+        self.assertTrue(ipsec_nat.xfrm_in_use(a, new + ' dir in priority 1\n', policies=True))
         del a['unmarked_spis']
         self.assertTrue(ipsec_nat.xfrm_in_use(a, new))
+
+    def test_directional_inbound_state_allows_retirement_and_distinguishes_generations(self):
+        old = ('src 192.0.2.2 dst 198.18.99.1\n'
+               ' proto esp spi 0x100 reqid 1 mode transport\n dir in\n')
+        new = old.replace('0x100', '0x200')
+        with patch.object(ipsec_nat, 'save'), patch.object(ipsec_nat, 'edit_rules'):
+            ipsec_nat.update(self.state, self.env)
+            with patch.object(ipsec_nat, 'capture_unmarked', self.original_capture), \
+                    patch.object(ipsec_nat, 'run', return_value=subprocess.CompletedProcess([], 0, old, '')):
+                ipsec_nat.update(self.state, dict(self.env, PLUTO_VERB='down-host'))
+        self.assertFalse(self.state['active'])
+        a = self.state['retired']['20000']
+        self.assertEqual(a['unmarked_spis'], ['192.0.2.2|198.18.99.1|256'])
+        self.assertTrue(ipsec_nat.xfrm_in_use(a, old))
+        self.assertFalse(ipsec_nat.xfrm_in_use(a, new))
+        self.assertTrue(ipsec_nat.xfrm_in_use(a, new, policies=True))
 
     def test_sa_snapshot_failure_keeps_active_journal_for_retry(self):
         with patch.object(ipsec_nat, 'save'), patch.object(ipsec_nat, 'edit_rules'):

@@ -37,6 +37,12 @@ func (e *committedError) Error() string {
 }
 func (e *committedError) Unwrap() error { return e.error }
 
+// WasCommitted reports that the state file was replaced before durability confirmation failed.
+func WasCommitted(err error) bool {
+	var committed *committedError
+	return errors.As(err, &committed)
+}
+
 type Backup struct {
 	Version   int            `json:"version"`
 	CreatedAt time.Time      `json:"created_at"`

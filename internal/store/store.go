@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -20,6 +21,7 @@ type Store struct {
 	path           string
 	mu             sync.RWMutex
 	state          model.AppState
+	staging        bool
 	recoveryNotice string
 	now            func() time.Time   // optional deterministic clock for persistence tests
 	syncDir        func(string) error // optional I/O fault injection; nil uses OS fsync
@@ -146,10 +148,30 @@ func cloneState(in model.AppState) model.AppState {
 	return out
 }
 
+// ApplyImport stages node and mapping upserts on a private copy. It publishes
+// accepted rows together after one backup and write. The callback may read the
+// staged state and upsert rows, and must not retain the staged store.
+func (s *Store) ApplyImport(apply func(*Store)) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	staged := &Store{state: cloneState(s.state), staging: true}
+	apply(staged)
+	if slices.Equal(s.state.Nodes, staged.state.Nodes) && slices.Equal(s.state.Mappings, staged.state.Mappings) {
+		return nil
+	}
+	previous := s.state
+	s.state = staged.state
+	return s.saveOrRestoreLocked(previous)
+}
+
 func (s *Store) saveEgressOrRestoreLocked(previous model.AppState) error {
 	if err := validation.WANBindings(s.state.Nodes, s.state.Mappings); err != nil {
 		s.state = previous
 		return err
+	}
+	if s.staging {
+		return nil
 	}
 	return s.saveOrRestoreLocked(previous)
 }
@@ -162,8 +184,7 @@ func (s *Store) saveOrRestoreLocked(previous model.AppState) error {
 		}
 	}
 	if err := s.saveLocked(); err != nil {
-		var committed *committedError
-		if !errors.As(err, &committed) {
+		if !WasCommitted(err) {
 			s.state = previous
 		}
 		return err
@@ -187,7 +208,9 @@ func (s *Store) Snapshot() model.AppState {
 var ErrNodeInUse = errors.New("节点连接参数正在被映射使用；请先停止关联映射，再修改地址、账号或密码。名称和分组可直接修改。")
 
 func (s *Store) ListNodes() []model.SocksNode {
-	return s.Snapshot().Nodes
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append(make([]model.SocksNode, 0, len(s.state.Nodes)), s.state.Nodes...)
 }
 
 func (s *Store) GetNode(id string) (model.SocksNode, bool) {
@@ -250,7 +273,9 @@ func (s *Store) DeleteNode(id string) error {
 // --- Mappings ---
 
 func (s *Store) ListMappings() []model.TunnelMapping {
-	return s.Snapshot().Mappings
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append(make([]model.TunnelMapping, 0, len(s.state.Mappings)), s.state.Mappings...)
 }
 
 func (s *Store) GetMapping(id string) (model.TunnelMapping, bool) {

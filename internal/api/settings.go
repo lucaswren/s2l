@@ -232,6 +232,12 @@ func (s *Server) handleAccount(w http.ResponseWriter, r *http.Request) {
 		}
 		password = body.Password
 	}
+	unlock, lockErr := lockSettingsFile(r.Context(), s.configPath)
+	if lockErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "无法锁定配置文件，请重试")
+		return
+	}
+	defer unlock()
 	data, err := os.ReadFile(s.configPath)
 	if err != nil {
 		writeError(w, 500, "无法读取配置文件")

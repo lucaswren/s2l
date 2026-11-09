@@ -4,9 +4,12 @@ package network
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,11 +28,10 @@ func (c *Controller) EnableSessionGuard() error {
 	if err := ensureSessionFirewall(); err != nil {
 		return err
 	}
-	if err := replaceSessionGuard(context.Background(), nil); err != nil {
+	if err := c.commitSessionGuard(context.Background(), nil); err != nil {
 		return err
 	}
 	c.sessionGuard = true
-	c.admitted = nil
 	return nil
 }
 
@@ -42,7 +44,8 @@ func (c *Controller) SyncSessionGuard(ctx context.Context) error {
 		return err
 	}
 	defer c.mu.Unlock()
-	return c.syncSessionGuard(ctx)
+	c.sessionSyncError = c.syncSessionGuard(ctx)
+	return c.sessionSyncError
 }
 
 func (c *Controller) VerifyAdmittedPeerRoutes(ctx context.Context, m model.TunnelMapping, peers []model.PPPSession) error {
@@ -83,11 +86,13 @@ func (c *Controller) syncSessionGuard(ctx context.Context) error {
 	}
 	next := selectSessionPeers(mappings, rows, c.admitted)
 	pinErrors := pinSessionReturns(ctx, mappings, next, c.admitted, pinSessionReturn)
-	if err := replaceSessionGuard(ctx, next); err != nil {
-		return err
+	if maps.Equal(next, c.admitted) && c.guardSnapshot != "" {
+		err := c.inspectSessionGuard(ctx)
+		if !IsMissingState(err) {
+			return errors.Join(err, pinErrors)
+		}
 	}
-	c.admitted = next
-	return pinErrors
+	return errors.Join(c.commitSessionGuard(ctx, next), pinErrors)
 }
 
 // Share the remaining deadline with other new peers and the final nft commit.
@@ -157,6 +162,97 @@ func selectSessionPeers(mappings []model.TunnelMapping, rows []model.PPPSession,
 		}
 	}
 	return next
+}
+
+// Capture the kernel's normalized representation after an atomic replacement.
+// Verification compares both base chains, rule expressions and admitted peers.
+func (c *Controller) commitSessionGuard(ctx context.Context, peers map[string]model.PPPSession) error {
+	if err := replaceSessionGuard(ctx, peers); err != nil {
+		return err
+	}
+	c.admitted = peers
+	c.guardSnapshot = ""
+	snapshot, err := readSessionGuard(ctx)
+	if err != nil {
+		return fmt.Errorf("inspect committed PPP session guard: %w", err)
+	}
+	c.guardSnapshot = snapshot
+	return nil
+}
+
+func readSessionGuard(ctx context.Context) (string, error) {
+	raw, err := outputContext(ctx, "nft", "-j", "list", "table", "ip", sessionTable)
+	if err != nil {
+		return "", err
+	}
+	return normalizeSessionGuard(raw)
+}
+
+func normalizeSessionGuard(raw string) (string, error) {
+	var snapshot struct {
+		NFT []map[string]json.RawMessage `json:"nftables"`
+	}
+	if err := json.Unmarshal([]byte(raw), &snapshot); err != nil {
+		return "", err
+	}
+	if len(snapshot.NFT) == 0 {
+		return "", fmt.Errorf("empty nftables session guard snapshot")
+	}
+	var objects []json.RawMessage
+	for _, item := range snapshot.NFT {
+		for kind, raw := range item {
+			if kind == "metainfo" {
+				continue
+			}
+			var object map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &object); err != nil {
+				return "", err
+			}
+			delete(object, "handle")
+			if kind == "set" || kind == "element" {
+				if raw, ok := object["elem"]; ok {
+					var peers []json.RawMessage
+					if err := json.Unmarshal(raw, &peers); err != nil {
+						return "", err
+					}
+					sort.Slice(peers, func(i, j int) bool { return string(peers[i]) < string(peers[j]) })
+					ordered, err := json.Marshal(peers)
+					if err != nil {
+						return "", err
+					}
+					object["elem"] = ordered
+				}
+			}
+			encoded, err := json.Marshal(map[string]map[string]json.RawMessage{kind: object})
+			if err != nil {
+				return "", err
+			}
+			objects = append(objects, encoded)
+		}
+	}
+	canonical, err := json.Marshal(objects)
+	return string(canonical), err
+}
+
+func (c *Controller) verifySessionGuard(ctx context.Context) error {
+	if err := c.inspectSessionGuard(ctx); err != nil {
+		return err
+	}
+	return c.sessionSyncError
+}
+
+func (c *Controller) inspectSessionGuard(ctx context.Context) error {
+	snapshot, err := readSessionGuard(ctx)
+	if err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || !strings.Contains(err.Error(), "No such file or directory") {
+			return err
+		}
+	}
+	if err != nil || snapshot != c.guardSnapshot {
+		return missingState("PPP admission table differs from the committed rules", "session-guard")
+	}
+	return nil
 }
 
 func replaceSessionGuard(parent context.Context, peers map[string]model.PPPSession) error {

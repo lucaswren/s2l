@@ -21,6 +21,12 @@ func (s *Server) handleLanguage(w http.ResponseWriter, r *http.Request) {
 	}
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
+	unlock, lockErr := lockSettingsFile(r.Context(), s.configPath)
+	if lockErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "无法锁定配置文件，请重试")
+		return
+	}
+	defer unlock()
 	data, err := os.ReadFile(s.configPath)
 	var fields map[string]json.RawMessage
 	if err != nil || json.Unmarshal(data, &fields) != nil || fields == nil {

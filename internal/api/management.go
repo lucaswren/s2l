@@ -51,6 +51,14 @@ func (s *Server) handlePPPManagement(w http.ResponseWriter, r *http.Request) {
 	}
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
+	if r.Method == http.MethodPost {
+		unlock, lockErr := lockSettingsFile(r.Context(), s.configPath)
+		if lockErr != nil {
+			writeError(w, http.StatusServiceUnavailable, "无法锁定配置文件，请重试")
+			return
+		}
+		defer unlock()
+	}
 	data, err := os.ReadFile(s.configPath)
 	if err != nil {
 		writeError(w, 409, "无法读取受管配置文件")

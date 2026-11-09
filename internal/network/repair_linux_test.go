@@ -70,7 +70,7 @@ esac
 	log := filepath.Join(dir, "mutations")
 	t.Setenv("S2L_REPAIR_TEST_LOG", log)
 	for _, failure := range []string{"Permission denied", "Another app is currently holding the xtables lock"} {
-		script := "#!/bin/sh\ncase \"$*\" in *-C*) echo '" + failure + "' >&2; exit 1;; *) echo mutation >> \"$S2L_REPAIR_TEST_LOG\"; exit 99;; esac\n"
+		script := "#!/bin/sh\ncase \"$*\" in *-S*) echo '" + failure + "' >&2; exit 1;; *) echo mutation >> \"$S2L_REPAIR_TEST_LOG\"; exit 99;; esac\n"
 		// Build shell text directly, without interpolating paths or command arguments.
 		if e := os.WriteFile(filepath.Join(dir, "iptables"), []byte(script), 0700); e != nil {
 			t.Fatal(e)

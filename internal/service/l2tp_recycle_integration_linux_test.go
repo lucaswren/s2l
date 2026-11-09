@@ -38,7 +38,7 @@ peers=n.l2tp_peers()
 assert len(peers)>=2,peers
 for a in s['active'].values():
  assert (a['peer'],a['slot']) in peers,'live LNS endpoint absent from status'
- assert not n.unused_endpoint(a,peers,'',''),'live LNS was reclaimable'
+ assert not n.unused_endpoint(a,peers,'','',''),'live LNS was reclaimable'
 # Simulate reaching the old cumulative limit; only proven retired slots can
 # satisfy subsequent connections. Never modify kernel state to manufacture proof.
 s['next']=n.LAST+1;n.save(s)
@@ -142,8 +142,8 @@ assert recent<=set(s['retired']),'quarantine bypassed'`)
 		for {
 			status := python(`s=json.loads((n.ROOT/'state.json').read_text())
 peers=n.l2tp_peers();sockets=n.run('ss','-H','-n','-u','-a','sport = :1701').stdout
-xfrm=n.run('ip','xfrm','state').stdout+n.run('ip','xfrm','policy').stdout
-print(sum(n.time.monotonic()-a['retired_at']>=n.QUARANTINE and n.unused_endpoint(a,peers,sockets,xfrm) for a in s['retired'].values())+len(s['free'])>=int(sys.argv[2]))`, fmt.Sprint(len(clients)))
+states=n.run('ip','xfrm','state').stdout;policies=n.run('ip','xfrm','policy').stdout
+print(sum(n.time.monotonic()-a['retired_at']>=n.QUARANTINE and n.unused_endpoint(a,peers,sockets,states,policies) for a in s['retired'].values())+len(s['free'])>=int(sys.argv[2]))`, fmt.Sprint(len(clients)))
 			if strings.TrimSpace(status) == "True" {
 				break
 			}
@@ -162,7 +162,7 @@ def drops():
  rows=n.run('iptables','-nvxL','S2L-IPSEC-OUT').stdout.splitlines()
  return sum(int(p[0]) for r in rows if len(p:=r.split())>2 and p[2]=='DROP')
 before=drops()
-assert not n.unused_endpoint(a,n.l2tp_peers(),n.run('ss','-H','-n','-u','-a','sport = :1701').stdout,'')
+assert not n.unused_endpoint(a,n.l2tp_peers(),n.run('ss','-H','-n','-u','-a','sport = :1701').stdout,'','')
 assert a['blocked_by']=='UDP socket','retained socket was not identified independently of quarantine'
 n.reclaim(s)
 assert str(a['slot']) in s['retired'] and a['slot'] not in s['free'],'live UDP socket was reclaimed'

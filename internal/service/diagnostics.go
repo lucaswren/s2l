@@ -21,21 +21,20 @@ func (s *MappingService) ProbeGoogleMapping(ctx context.Context, id, nodeID stri
 	if err := lockutil.RLock(ctx, &s.stateGate); err != nil {
 		return diagnostics.Report{}, err
 	}
-	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
-	mu := value.(*sync.Mutex)
-	if err := lockutil.Lock(ctx, mu); err != nil {
+	unlock, err := s.acquireMappingLock(ctx, id)
+	if err != nil {
 		s.stateGate.RUnlock()
 		return diagnostics.Report{}, err
 	}
 	m, ok := s.store.GetMapping(id)
 	node, nodeOK := s.store.GetNode(m.NodeID)
 	if !ok || !nodeOK || m.NodeID != nodeID || m.Status != model.StatusRunning || s.singbox == nil {
-		mu.Unlock()
+		unlock()
 		s.stateGate.RUnlock()
 		return diagnostics.Report{}, fmt.Errorf("mapping runtime unavailable")
 	}
 	probe, valid, err := s.singbox.DNSProbe(m.TunName)
-	mu.Unlock()
+	unlock()
 	s.stateGate.RUnlock()
 	if err != nil {
 		return diagnostics.Report{}, err
@@ -56,12 +55,11 @@ func (s *MappingService) ProbeMapping(ctx context.Context, id string) (model.Map
 		return model.MappingDiagnostic{}, err
 	}
 	defer s.stateGate.RUnlock()
-	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
-	mu := value.(*sync.Mutex)
-	if err := lockutil.Lock(ctx, mu); err != nil {
+	unlock, err := s.acquireMappingLock(ctx, id)
+	if err != nil {
 		return model.MappingDiagnostic{}, err
 	}
-	defer mu.Unlock()
+	defer unlock()
 	m, ok := s.store.GetMapping(id)
 	if !ok || m.Status != model.StatusRunning {
 		return model.MappingDiagnostic{}, fmt.Errorf("映射未运行")

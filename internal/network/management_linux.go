@@ -46,32 +46,76 @@ func (c *Controller) SetManagementAccess(a model.ManagementAccess) error {
 	c.management = a
 	return nil
 }
-func managementRules(a model.ManagementAccess, hasJump bool) string {
-	var b strings.Builder
-	b.WriteString("*filter\n:" + managementChain + " - [0:0]\n-F " + managementChain + "\n")
+
+const managementJump = "-A INPUT -i ppp+ -j " + managementChain
+
+func managementEntries(a model.ManagementAccess) []string {
+	var entries []string
 	if a.Enabled {
 		for _, source := range a.SourceCIDRs {
-			for _, p := range a.TCPPorts {
-				fmt.Fprintf(&b, "-A %s -s %s -d %s -p tcp --dport %d -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT\n", managementChain, source, a.DestinationIP, p)
+			for _, port := range a.TCPPorts {
+				entries = append(entries, fmt.Sprintf("-A %s -s %s -d %s -p tcp --dport %d -m conntrack --ctstate NEW,ESTABLISHED -j ACCEPT", managementChain, source, a.DestinationIP, port))
 			}
 		}
 	}
-	b.WriteString("-A " + managementChain + " -j DROP\n")
+	return append(entries, "-A "+managementChain+" -j DROP")
+}
+
+func managementRules(a model.ManagementAccess, hasJump bool) string {
+	var b strings.Builder
+	b.WriteString("*filter\n:" + managementChain + " - [0:0]\n-F " + managementChain + "\n")
+	for _, rule := range managementEntries(a) {
+		b.WriteString(rule + "\n")
+	}
 	if hasJump {
-		b.WriteString("-D INPUT -i ppp+ -j " + managementChain + "\n")
+		b.WriteString("-D" + managementJump[2:] + "\n")
 	}
 	b.WriteString("-I INPUT 1 -i ppp+ -j " + managementChain + "\nCOMMIT\n")
 	return b.String()
 }
+
+func managementMatches(snapshot string, a model.ManagementAccess) bool {
+	expected := managementEntries(a)
+	jumps, index := 0, 0
+	for _, line := range strings.Split(snapshot, "\n") {
+		line = strings.TrimSpace(line)
+		if line == managementJump {
+			jumps++
+		}
+		if strings.HasPrefix(line, "-A "+managementChain+" ") {
+			if index == len(expected) || mappingGuardRuleKey(line) != mappingGuardRuleKey(expected[index]) {
+				return false
+			}
+			index++
+		}
+	}
+	return jumps == 1 && index == len(expected)
+}
+
 func ensureManagementAccess(a model.ManagementAccess) error {
+	return ensureManagementAccessContext(context.Background(), a)
+}
+
+func ensureManagementAccessContext(ctx context.Context, a model.ManagementAccess) error {
 	if err := a.Validate(); err != nil {
 		return err
 	}
-	hasJump := run("iptables", "-C", "INPUT", "-i", "ppp+", "-j", managementChain) == nil
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	snapshot, err := outputContext(ctx, "iptables", "-S")
+	if err != nil {
+		return err
+	}
+	jumps := 0
+	for _, line := range strings.Split(snapshot, "\n") {
+		if strings.TrimSpace(line) == managementJump {
+			jumps++
+		}
+	}
+	plan := managementRules(a, false)
+	plan = strings.Replace(plan, "-I INPUT", strings.Repeat("-D"+managementJump[2:]+"\n", jumps)+"-I INPUT", 1)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "iptables-restore", "-w", "5", "--noflush")
-	cmd.Stdin = strings.NewReader(managementRules(a, hasJump))
+	cmd.Stdin = strings.NewReader(plan)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

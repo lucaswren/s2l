@@ -31,3 +31,15 @@ func TestValidateMapping(t *testing.T) {
 		}
 	}
 }
+
+func TestReservedPPPNamesRejectActivationButAllowLegacyCleanup(t *testing.T) {
+	for _, name := range []string{"ppp900", "ppp-custom", "pppst-test"} {
+		m := model.TunnelMapping{TunName: name, TableID: 101, Subnet: "10.0.101.0/24"}
+		if err := ValidateMapping(m); err == nil {
+			t.Errorf("accepted reserved TUN name %q", name)
+		}
+		if err := validateMapping(m); err != nil {
+			t.Errorf("legacy cleanup rejected %q: %v", name, err)
+		}
+	}
+}

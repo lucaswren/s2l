@@ -1,6 +1,9 @@
 package service
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/singbox"
 	"github.com/lucaswren/s2l/internal/store"
@@ -63,5 +66,38 @@ func TestIndependentMappingLockAndStatusRemainResponsive(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("one mapping's operation blocked unrelated locks or status")
+	}
+}
+
+func TestUnknownMappingOperationsReleaseLocks(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &MappingService{store: st}
+	for i := range 1000 {
+		if err := s.Stop(fmt.Sprintf("missing-%d", i)); err == nil {
+			t.Fatal("stop accepted an unknown mapping")
+		}
+	}
+	if len(s.operationLocks) != 0 {
+		t.Fatalf("retained %d locks", len(s.operationLocks))
+	}
+}
+
+func TestMappingLockCancellationPreservesOwner(t *testing.T) {
+	s := &MappingService{}
+	unlock := s.lockMapping("m")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.acquireMappingLock(ctx, "m"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("lock cancellation: %v", err)
+	}
+	if entry := s.operationLocks["m"]; entry == nil || entry.users != 1 {
+		t.Fatal("cancellation discarded the active owner's lock")
+	}
+	unlock()
+	if len(s.operationLocks) != 0 {
+		t.Fatal("released lock remained registered")
 	}
 }

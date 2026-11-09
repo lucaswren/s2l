@@ -9,7 +9,7 @@ import (
 // A running mapping records the operator's desired state. Startup failures are
 // represented by local health, and retain that intent for bounded retries.
 func (s *MappingService) scheduleStartupRetry(m model.TunnelMapping, cause error) error {
-	if err := s.store.UpdateMappingStatus(m.ID, model.StatusRunning, "启动恢复失败，等待自动重试"); err != nil {
+	if err := s.updateMappingStatus(m.ID, model.StatusRunning, "启动恢复失败，等待自动重试"); err != nil {
 		return err
 	}
 	now := time.Now()
@@ -40,7 +40,7 @@ func (s *MappingService) retryStartup(m model.TunnelMapping, h *healthRecord) {
 	s.mu.Unlock()
 	err := s.startLocked(m.ID)
 	if err != nil {
-		err = errors.Join(err, s.store.UpdateMappingStatus(m.ID, model.StatusRunning, "启动恢复失败，等待自动重试"))
+		err = errors.Join(err, s.updateMappingStatus(m.ID, model.StatusRunning, "启动恢复失败，等待自动重试"))
 		s.mu.Lock()
 		h.finishRecovery(err, time.Now())
 		h.startupPending = true

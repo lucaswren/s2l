@@ -24,7 +24,9 @@ import { ElMessage } from "element-plus";
 const nodes = ref([]);
 const mappings = ref([]);
 const status = ref({ uptime_sec: 0, tun_traffic: [], singbox_pids: {} });
-const error = ref("");
+const statusError = ref("");
+const nodesError = ref("");
+const error = computed(() => statusError.value || nodesError.value);
 const activeTab = ref("lines");
 const helpVisible = ref(false);
 const signingOut = ref(false);
@@ -35,11 +37,9 @@ async function signOut() {
  finally { signingOut.value=false; }
 }
 const q = ref("");
-let timer;
-const refreshing = ref(false);
-let refreshPending = false;
+let statusTimer;
+let nodesTimer;
 let disposed = false;
-let refreshController;
 
 const runningCount = computed(
   () => mappings.value.filter((m) => m.status === "running").length,
@@ -85,38 +85,52 @@ function pushToast({ type = "info", message }) {
   });
 }
 
-async function refresh() {
-  if (refreshing.value) {
-    refreshPending = true;
-    return;
-  }
-  if (disposed) return;
-  refreshing.value = true;
-  const controller=new AbortController();refreshController=controller;
-  const timeout=setTimeout(()=>controller.abort(),12000);
-  try {
-    const [n, m, st] = await Promise.all([
-      api.listNodes(controller.signal),
-      api.listMappings(controller.signal),
-      api.status(controller.signal),
-    ]);
+function createRefresh(load, apply, error) {
+  let controller;
+  let pending = false;
+
+  async function run(queue = false) {
     if (disposed) return;
-    nodes.value = Array.isArray(n) ? n : [];
-    mappings.value = Array.isArray(m) ? m : [];
-    status.value = normalizeStatus(st,mappings.value);
-    error.value = "";
-  } catch (e) {
-    if(!disposed)error.value = e.name==='AbortError'?tr('状态刷新超时，保留上次结果'):e.message;
-  } finally {
-    clearTimeout(timeout);
-    controller.abort();
-    if(refreshController===controller)refreshController=undefined;
-    refreshing.value = false;
-    if (refreshPending && !disposed) {
-      refreshPending = false;
-      void refresh();
+    if (controller) {
+      pending ||= queue;
+      return;
+    }
+    controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const value = await load(controller.signal);
+      if (!disposed) {
+        apply(value);
+        error.value = "";
+      }
+    } catch (e) {
+      if (!disposed) {
+        error.value = e.name === "AbortError" ? tr("状态刷新超时，保留上次结果") : e.message;
+      }
+    } finally {
+      clearTimeout(timeout);
+      controller = undefined;
+      if (pending) {
+        pending = false;
+        void run();
+      }
     }
   }
+
+  return { run, abort: () => controller?.abort() };
+}
+
+const statusRefresh = createRefresh(api.status, (value) => {
+  status.value = normalizeStatus(value, mappings.value);
+  mappings.value = status.value.mappings;
+}, statusError);
+const nodesRefresh = createRefresh(api.listNodes, (value) => {
+  nodes.value = Array.isArray(value) ? value : [];
+}, nodesError);
+
+function refresh() {
+  void statusRefresh.run(true);
+  void nodesRefresh.run(true);
 }
 
 function formatUptime(sec) {
@@ -131,9 +145,16 @@ function formatUptime(sec) {
 
 onMounted(() => {
   refresh();
-  timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+  statusTimer = setInterval(() => { if (!document.hidden) void statusRefresh.run(); }, 5000);
+  nodesTimer = setInterval(() => { if (!document.hidden) void nodesRefresh.run(); }, 30000);
 });
-onUnmounted(() => { disposed = true; clearInterval(timer);refreshController?.abort(); });
+onUnmounted(() => {
+  disposed = true;
+  clearInterval(statusTimer);
+  clearInterval(nodesTimer);
+  statusRefresh.abort();
+  nodesRefresh.abort();
+});
 </script>
 <template>
   <el-config-provider size="default">

@@ -75,5 +75,4 @@ try {
   }
   if(errors.length)throw Error(errors.join('\n'));
   console.log(JSON.stringify({results,consoleErrors:errors}));
-  await send('Browser.close');
 } finally {socket?.close();await disposeFixture(cwd,dir,[backend,chrome])}

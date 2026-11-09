@@ -67,14 +67,14 @@ func AddFirewall(m model.TunnelMapping) (result error) {
 		acceptPosition++
 	}
 	// Keep this mapping's UDP restriction ahead of its allowance.
-	return run("iptables", "-I", "S2L_FORWARD", strconv.Itoa(acceptPosition), "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt)
+	return run("iptables", append([]string{"-I", "S2L_FORWARD", strconv.Itoa(acceptPosition)}, mappingForwardArgs(m)...)...)
 }
 
 // DelFirewall 按 comment 删除该映射相关的 iptables 规则
 func DelFirewall(m model.TunnelMapping) error {
 	cmt := mappingComment(m)
 	// Close ingress before removing NAT, MSS or restrictions, including on rollback.
-	if err := deleteFirewallRule("-D", "S2L_FORWARD", "-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", cmt); err != nil {
+	if err := deleteFirewallRule(append([]string{"-D", "S2L_FORWARD"}, mappingForwardArgs(m)...)...); err != nil {
 		return err
 	}
 	var udpErrors []error
@@ -90,6 +90,10 @@ func DelFirewall(m model.TunnelMapping) error {
 		deleteFirewallRule(mappingMSSDeleteArgs(m, "-o")...),
 		deleteFirewallRule("-t", "nat", "-D", "POSTROUTING", "-o", m.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", cmt),
 	)
+}
+
+func mappingForwardArgs(m model.TunnelMapping) []string {
+	return []string{"-i", "ppp+", "-s", m.Subnet, "-o", m.TunName, "-j", "ACCEPT", "-m", "comment", "--comment", mappingComment(m)}
 }
 
 func mappingReturnArgs(m model.TunnelMapping) []string {

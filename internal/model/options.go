@@ -1,6 +1,9 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ManagedLineSettings applies the fixed forwarding policy.
 // Bandwidth, node identity, credentials and connection observation are preserved.
@@ -34,4 +37,13 @@ func (m TunnelMapping) ValidateOptions() error {
 		return fmt.Errorf("invalid udp_policy")
 	}
 	return m.EffectiveDNSOptions().Validate()
+}
+
+// ValidateTUNNamespace applies to new configuration and activation. Legacy
+// names must remain readable so the mapping can be stopped, renamed or removed.
+func ValidateTUNNamespace(name string) error {
+	if strings.HasPrefix(name, "ppp") {
+		return fmt.Errorf("tun_name prefix ppp is reserved for PPP interfaces and diagnostic probes")
+	}
+	return nil
 }

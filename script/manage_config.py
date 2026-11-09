@@ -4,6 +4,7 @@
 from installer_i18n import tr
 import json
 import errno
+import fcntl
 import os
 from pathlib import Path
 import re
@@ -243,11 +244,20 @@ def main():
     if sys.argv[1] == "random_port":
         print(random_port())
         return
-    original = CONFIG_FILE.read_bytes()
     value = sys.stdin.read()
     if sys.argv[1] == 'ui_language':
-        change_language(json.loads(original), value)
+        change_language(json.loads(CONFIG_FILE.read_bytes()), value)
         return
+    # Lock a separate inode because config.json is replaced atomically.
+    lock_path = CONFIG_FILE.with_name(CONFIG_FILE.name + ".lock")
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(fd, "rb") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        change_config(value)
+
+
+def change_config(value):
+    original = CONFIG_FILE.read_bytes()
     if sys.argv[1] == "listen_port" and str(json.loads(original).get("public_url", "")).startswith("https://"):
         print(change_https_port(original, value))
         return

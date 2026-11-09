@@ -252,3 +252,29 @@ func TestHealthyProbeCadenceAndFastConfirmation(t *testing.T) {
 		t.Fatal("policy rejection reported as node capability", h.UDP)
 	}
 }
+
+func TestDispatchChecksAdvancesWithOneAvailableWorker(t *testing.T) {
+	mappings := []model.TunnelMapping{
+		{ID: "busy", Status: model.StatusRunning},
+		{ID: "a", Status: model.StatusRunning},
+		{ID: "stopped", Status: model.StatusStopped},
+		{ID: "b", Status: model.StatusRunning},
+		{ID: "c", Status: model.StatusRunning},
+	}
+	var admitted []string
+	cursor := 0
+	for range 4 {
+		available := true
+		cursor = dispatchChecks(mappings, cursor, func(m model.TunnelMapping) bool {
+			if !available || m.ID == "busy" {
+				return false
+			}
+			available = false
+			admitted = append(admitted, m.ID)
+			return true
+		})
+	}
+	if want := []string{"a", "b", "c", "a"}; !reflect.DeepEqual(admitted, want) {
+		t.Fatalf("admitted %v, want %v", admitted, want)
+	}
+}

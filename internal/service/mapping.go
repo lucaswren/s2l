@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"path/filepath"
 	"sync"
@@ -12,6 +14,7 @@ import (
 	"github.com/lucaswren/s2l/internal/evidence"
 	"github.com/lucaswren/s2l/internal/history"
 	"github.com/lucaswren/s2l/internal/l2tp"
+	"github.com/lucaswren/s2l/internal/lockutil"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/network"
 	"github.com/lucaswren/s2l/internal/operations"
@@ -44,7 +47,8 @@ type MappingService struct {
 
 	mu              sync.Mutex
 	stateGate       sync.RWMutex // state edits exclude lifecycle work; independent mappings share read access
-	operationLocks  sync.Map
+	operationMu     sync.Mutex
+	operationLocks  map[string]*mappingLock
 	lifecycleMu     sync.Mutex // xl2tpd configuration and persisted active set form one transaction
 	inflight        map[string]bool
 	health          map[string]*healthRecord
@@ -170,19 +174,19 @@ func (s *MappingService) startLocked(id string) error {
 	}
 	if err := network.ValidateMapping(m); err != nil {
 		cause := fmt.Errorf("invalid mapping: %w", err)
-		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
+		return errors.Join(cause, s.updateMappingStatus(id, model.StatusError, cause.Error()))
 	}
 	if err := validation.WANBindings(s.store.ListNodes(), s.store.ListMappings()); err != nil {
-		return errors.Join(err, s.store.UpdateMappingStatus(id, model.StatusError, err.Error()))
+		return errors.Join(err, s.updateMappingStatus(id, model.StatusError, err.Error()))
 	}
 	node, ok := s.store.GetNode(m.NodeID)
 	if !ok {
 		cause := fmt.Errorf("node %s not found", m.NodeID)
-		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
+		return errors.Join(cause, s.updateMappingStatus(id, model.StatusError, cause.Error()))
 	}
 	if m.L2TPUser == "" || m.L2TPPass == "" {
 		cause := fmt.Errorf("l2tp_user/l2tp_pass required")
-		return errors.Join(cause, s.store.UpdateMappingStatus(id, model.StatusError, cause.Error()))
+		return errors.Join(cause, s.updateMappingStatus(id, model.StatusError, cause.Error()))
 	}
 	if err := network.CheckResources(m, s.singbox.IsRunning(m.TunName)); err != nil {
 		return fmt.Errorf("network resource conflict: %w", err)
@@ -205,7 +209,7 @@ func (s *MappingService) startLocked(id string) error {
 
 	// 幂等：先清残留（适配开机恢复 / 重复 start）
 	if err := s.cleanupRuntime(m); err != nil {
-		_ = s.store.UpdateMappingStatus(id, model.StatusError, "pre-start cleanup failed; enable Debug, reproduce and export logs")
+		_ = s.updateMappingStatus(id, model.StatusError, "pre-start cleanup failed; enable Debug, reproduce and export logs")
 		return fmt.Errorf("pre-start cleanup: %w", err)
 	}
 
@@ -233,7 +237,7 @@ func (s *MappingService) startLocked(id string) error {
 	} else if reloadErr != nil {
 		return s.failStart(m, previousActive, fmt.Errorf("xl2tpd reload: %w", reloadErr))
 	}
-	if err := s.store.UpdateMappingStatus(id, model.StatusRunning, ""); err != nil {
+	if err := s.updateMappingStatus(id, model.StatusRunning, ""); err != nil {
 		cleanupErr := s.cleanupRuntime(m)
 		rollbackErr := s.l2tp.ApplyStop(m.ID, previousActive)
 		return errors.Join(fmt.Errorf("persist running status: %w", err), cleanupErr, rollbackErr)
@@ -253,11 +257,56 @@ func (s *MappingService) Stop(id string) error {
 	return s.stopLocked(id)
 }
 
+type mappingLock struct {
+	mu    sync.Mutex
+	users int
+}
+
 func (s *MappingService) lockMapping(id string) func() {
-	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
-	mu := value.(*sync.Mutex)
-	mu.Lock()
-	return mu.Unlock
+	unlock, _ := s.acquireMappingLock(nil, id)
+	return unlock
+}
+
+func (s *MappingService) acquireMappingLock(ctx context.Context, id string) (func(), error) {
+	s.operationMu.Lock()
+	if s.operationLocks == nil {
+		s.operationLocks = make(map[string]*mappingLock)
+	}
+	entry := s.operationLocks[id]
+	if entry == nil {
+		entry = &mappingLock{}
+		s.operationLocks[id] = entry
+	}
+	entry.users++
+	s.operationMu.Unlock()
+
+	release := func() {
+		s.operationMu.Lock()
+		entry.users--
+		if entry.users == 0 {
+			delete(s.operationLocks, id)
+		}
+		s.operationMu.Unlock()
+	}
+	if ctx == nil {
+		entry.mu.Lock()
+	} else if err := lockutil.Lock(ctx, &entry.mu); err != nil {
+		release()
+		return nil, err
+	}
+	return func() {
+		entry.mu.Unlock()
+		release()
+	}, nil
+}
+
+func (s *MappingService) updateMappingStatus(id, status, message string) error {
+	err := s.store.UpdateMappingStatus(id, status, message)
+	if store.WasCommitted(err) {
+		log.Printf("mapping %s status %s committed with a durability warning: %v", id, status, err)
+		return nil
+	}
+	return err
 }
 
 func (s *MappingService) DeleteMapping(id string) error {
@@ -291,11 +340,11 @@ func (s *MappingService) stopLocked(id string) error {
 	l2tpErr := s.l2tp.ApplyStop(m.ID, active)
 	if cleanupErr != nil || l2tpErr != nil {
 		msg := errors.Join(cleanupErr, l2tpErr).Error()
-		_ = s.store.UpdateMappingStatus(id, model.StatusError, msg)
+		_ = s.updateMappingStatus(id, model.StatusError, msg)
 		return fmt.Errorf("stop mapping: %s", msg)
 	}
 
-	return s.store.UpdateMappingStatus(id, model.StatusStopped, "")
+	return s.updateMappingStatus(id, model.StatusStopped, "")
 }
 
 // Shutdown 优雅退出：拆掉运行时资源，但保留 status=running，以便下次开机恢复
@@ -377,7 +426,7 @@ func (s *MappingService) failStart(m model.TunnelMapping, previous []model.Tunne
 	if rollbackErr != nil {
 		cause = errors.Join(cause, fmt.Errorf("L2TP rollback: %w", rollbackErr))
 	}
-	_ = s.store.UpdateMappingStatus(m.ID, model.StatusError, cause.Error())
+	_ = s.updateMappingStatus(m.ID, model.StatusError, cause.Error())
 	return cause
 }
 

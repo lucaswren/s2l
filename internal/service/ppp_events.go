@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
-	"github.com/lucaswren/s2l/internal/debuglog"
 	"github.com/lucaswren/s2l/internal/evidence"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/network"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -153,6 +153,7 @@ func (s *MappingService) requestSessionRefresh() {
 func (s *MappingService) runSessionGuard(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+	failed := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -163,9 +164,15 @@ func (s *MappingService) runSessionGuard(ctx context.Context) {
 		check, cancel := context.WithTimeout(ctx, 3*time.Second)
 		err := s.net.SyncSessionGuard(check)
 		cancel()
-		if err != nil && ctx.Err() == nil {
-			debuglog.Default.Printf("PPP session guard refresh failed: %v", err)
+		if ctx.Err() != nil {
+			return
 		}
+		if err != nil && !failed {
+			log.Printf("PPP session guard refresh failed: %v", err)
+		} else if err == nil && failed {
+			log.Print("PPP session guard refresh recovered")
+		}
+		failed = err != nil
 	}
 }
 func (s *MappingService) enrichSessions(rows []model.PPPSession) {

@@ -135,8 +135,7 @@ func TestDirectorySyncFailureAfterCommitKeepsMemoryConsistent(t *testing.T) {
 	}
 	n.Name = "committed"
 	err := s.UpsertNode(n)
-	var committed *committedError
-	if !errors.As(err, &committed) {
+	if !WasCommitted(err) {
 		t.Fatal("durability failure hidden", err)
 	}
 	reloaded, err := New(s.path)
@@ -221,5 +220,51 @@ func TestBackupSyncFailureDoesNotPublishOrMutate(t *testing.T) {
 	paths, _ := filepath.Glob(filepath.Join(s.DataDir(), "backups", ".backup-*"))
 	if len(paths) != 0 {
 		t.Fatal("failed backup leaked temporary files")
+	}
+}
+
+func TestImportCommitsAcceptedRowsOnceAndRestoresOnWriteFailure(t *testing.T) {
+	st, err := New(filepath.Join(t.TempDir(), "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writes := 0
+	st.syncDir = func(path string) error {
+		if path == st.DataDir() {
+			writes++
+		}
+		return nil
+	}
+	err = st.ApplyImport(func(staged *Store) {
+		for _, id := range []string{"a", "b"} {
+			if err := staged.UpsertNode(model.SocksNode{ID: id, Name: id, Addr: "127.0.0.1:1080"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	})
+	if err != nil || writes != 1 {
+		t.Fatalf("writes=%d, error=%v", writes, err)
+	}
+	backups, err := st.ListBackups()
+	if err != nil || len(backups) != 1 {
+		t.Fatalf("backups=%v, error=%v", backups, err)
+	}
+	disk, err := New(st.path)
+	if err != nil || len(disk.ListNodes()) != 2 {
+		t.Fatalf("import did not persist both nodes: %v", err)
+	}
+	originalPath := st.path
+	st.path = filepath.Join(st.DataDir(), "state-is-a-directory")
+	if err := os.Mkdir(st.path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	err = st.ApplyImport(func(staged *Store) {
+		if err := staged.UpsertNode(model.SocksNode{ID: "c", Name: "c", Addr: "127.0.0.1:1080"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	st.path = originalPath
+	if err == nil || WasCommitted(err) || len(st.ListNodes()) != 2 {
+		t.Fatalf("failed import left changes in memory: %v", err)
 	}
 }

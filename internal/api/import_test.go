@@ -148,10 +148,10 @@ func TestSharedProxyImportPreservesAccountsAndMetadata(t *testing.T) {
 		t.Fatal("invalid import lost row diagnostics", result)
 	}
 	s := NewServer(st, nil, nil)
-	if _, errs := parseMappingText("101,proxy.example:1080,user,password", s); len(errs) != 1 || !strings.Contains(errs[0], "ambiguous") {
+	if _, errs := parseMappingText("101,proxy.example:1080,user,password", s.store); len(errs) != 1 || !strings.Contains(errs[0], "ambiguous") {
 		t.Fatal("ambiguous proxy address picked an arbitrary exit", errs)
 	}
-	if maps, errs := parseMappingText("101,n,user,password", s); len(errs) != 0 || len(maps) != 1 || maps[0].NodeID != "n" {
+	if maps, errs := parseMappingText("101,n,user,password", s.store); len(errs) != 0 || len(maps) != 1 || maps[0].NodeID != "n" {
 		t.Fatal("explicit node ID did not resolve", errs)
 	}
 }

@@ -2,12 +2,13 @@ package api
 
 import (
 	"fmt"
-	"github.com/lucaswren/s2l/internal/network"
 	"net/http"
 	"runtime"
 	"strings"
 
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/network"
+	"github.com/lucaswren/s2l/internal/store"
 	"github.com/lucaswren/s2l/internal/validation"
 )
 
@@ -136,7 +137,7 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "node not found")
 		return
 	}
-	if err := s.checkMappingConflicts(m); err != nil {
+	if err := checkMappingConflicts(s.store, m); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -190,11 +191,11 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, redactMapping(m))
 }
 
-func (s *Server) checkMappingConflicts(m model.TunnelMapping) error {
-	if err := validation.WANBindings(s.store.ListNodes(), []model.TunnelMapping{m}); err != nil {
+func checkMappingConflicts(st *store.Store, m model.TunnelMapping) error {
+	if err := validation.WANBindings(st.ListNodes(), []model.TunnelMapping{m}); err != nil {
 		return err
 	}
-	for _, other := range s.store.ListMappings() {
+	for _, other := range st.ListMappings() {
 		if other.ID == m.ID {
 			continue
 		}

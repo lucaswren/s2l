@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/lucaswren/s2l/internal/lockutil"
 	"github.com/lucaswren/s2l/internal/singbox"
-	"sync"
 )
 
 func (s *MappingService) Connections(ctx context.Context, id string) (singbox.Connections, error) {
@@ -13,12 +12,11 @@ func (s *MappingService) Connections(ctx context.Context, id string) (singbox.Co
 		return singbox.Connections{}, err
 	}
 	defer s.stateGate.RUnlock()
-	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
-	mu := value.(*sync.Mutex)
-	if err := lockutil.Lock(ctx, mu); err != nil {
+	unlock, err := s.acquireMappingLock(ctx, id)
+	if err != nil {
 		return singbox.Connections{}, err
 	}
-	defer mu.Unlock()
+	defer unlock()
 	m, ok := s.store.GetMapping(id)
 	if !ok {
 		return singbox.Connections{}, fmt.Errorf("映射不存在")
@@ -30,12 +28,11 @@ func (s *MappingService) CloseConnection(ctx context.Context, id, connection str
 		return err
 	}
 	defer s.stateGate.RUnlock()
-	value, _ := s.operationLocks.LoadOrStore(id, &sync.Mutex{})
-	mu := value.(*sync.Mutex)
-	if err := lockutil.Lock(ctx, mu); err != nil {
+	unlock, err := s.acquireMappingLock(ctx, id)
+	if err != nil {
 		return err
 	}
-	defer mu.Unlock()
+	defer unlock()
 	m, ok := s.store.GetMapping(id)
 	if !ok {
 		return fmt.Errorf("映射不存在")

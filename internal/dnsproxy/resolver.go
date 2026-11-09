@@ -147,12 +147,14 @@ func ValidateResponse(query, response []byte) error {
 	if response[0] != query[0] || response[1] != query[1] || response[2]&0x80 == 0 || response[2]&0x02 != 0 || response[2]&0x78 != query[2]&0x78 || len(q) != len(a) || !bytes.EqualFold(q[:len(q)-4], a[:len(a)-4]) || !bytes.Equal(q[len(q)-4:], a[len(a)-4:]) {
 		return errors.New("DNS response mismatch")
 	}
-	switch response[3] & 15 {
-	case 0, 3:
-		return validateRecords(response)
-	default:
-		return errors.New("DNS server returned failure")
+	code, err := responseCode(response)
+	if err != nil {
+		return err
 	}
+	if code != 0 && code != 3 {
+		return fmt.Errorf("DNS server returned failure (RCODE %d)", code)
+	}
+	return nil
 }
 
 func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]byte, error) {

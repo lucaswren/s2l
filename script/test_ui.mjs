@@ -59,6 +59,19 @@ chrome.on('error',error=>{chromeError=error});
  }
  await send('Page.enable');await send('Runtime.enable');
  await send('Page.addScriptToEvaluateOnNewDocument',{source:"localStorage.setItem('s2l-language','zh-CN')"});
+ const failureFixture=await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+  const originalFetch=window.fetch;
+  window.mappingListRequests=0;
+  window.fetch=(path, options)=>{
+   if(String(path)==='/api/nodes')return Promise.resolve(Response.json({error:'node list unavailable'},{status:503}));
+   if(String(path)==='/api/mappings')window.mappingListRequests++;
+   return originalFetch(path, options);
+  };
+ `});
+ await send('Page.navigate',{url:`http://127.0.0.1:${apiPort}/`});
+ await wait(`document.body?.innerText.includes('node list unavailable') && document.body.innerText.includes('account-a')`);
+ if(await evaluate('window.mappingListRequests!==0'))throw Error('dashboard fetched a duplicate mapping list');
+ await send('Page.removeScriptToEvaluateOnNewDocument',failureFixture);
  const results=[];
  for(const width of [1440,768,390,320]){
   await send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:width<600});
@@ -273,5 +286,4 @@ chrome.on('error',error=>{chromeError=error});
  }
  if(errors.length)throw Error(errors.join('\n'));
  console.log(JSON.stringify({results,consoleErrors:errors}));
- await send('Browser.close');
 }finally{socket?.close();await disposeFixture(cwd,profile,[server,chrome])}
