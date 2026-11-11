@@ -323,9 +323,15 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 		t.Fatal("custom TCP DNS failure did not use the configured DoH resolver on the same node")
 	}
 	node1.tcpOffline.Store(false)
+	node1.dohStalls.Store(true)
+	integrationClientDNS(t, "s2l-dial-1", "tcp-recovery.fixture.test", model.ClientDNSAddresses()[0], true)
+	node1.dohStalls.Store(false)
+	if got := sb.ResolverStatus("tun102").Active; got != "tcp" {
+		t.Fatalf("live TCP DNS replies did not restore preference while DoH stalled: %s", got)
+	}
 	node1.assertDNSTargets(t, "dns.fixture.invalid:5353", "resolver.fixture.invalid:8443")
 	assertNoDirectEgress()
-	t.Log("custom TCP DNS, configured DoH fallback and UDP/TCP client DNS passed through node1 only")
+	t.Log("custom TCP DNS, DoH fallback, and live TCP recovery while DoH stalled passed through node1 only")
 	if !ipsec {
 		// Reusing an account must reject only the new excess session.
 		dupNS := "s2l-dial-duplicate"
@@ -666,6 +672,13 @@ func integrationSOCKS(t *testing.T, id string, cert tls.Certificate, bind ...str
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
+			if state.dohStalls.Load() {
+				select {
+				case <-r.Context().Done():
+				case <-holdDone:
+				}
+				return
+			}
 			w.Header().Set("Content-Type", "application/dns-message")
 			w.Write(integrationDNSAnswer(q))
 			return
@@ -807,6 +820,7 @@ type integrationProxyState struct {
 	connections            map[net.Conn]bool
 	dnsTargets             map[string]int
 	tcpOffline             atomic.Bool
+	dohStalls              atomic.Bool
 	dohQueries, tcpQueries atomic.Int32
 }
 

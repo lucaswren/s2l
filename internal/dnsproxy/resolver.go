@@ -104,8 +104,8 @@ func (r *Resolver) Close() {
 	}
 }
 
-func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
+func (r *Resolver) attempt(parent context.Context, method string, query []byte) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(parent, 2500*time.Millisecond)
 	defer cancel()
 	r.mu.Lock()
 	exchange := r.exchange
@@ -126,7 +126,7 @@ func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]
 			err = ValidateResponse(query, response)
 		}
 	}
-	if err != nil && !errors.Is(ctx.Err(), context.Canceled) {
+	if err != nil && parent.Err() == nil && ctx.Err() != context.Canceled && !errors.Is(err, errTCPPoolWait) {
 		var protocolError *speedtest.StageError
 		switch {
 		case errors.Is(ctx.Err(), context.DeadlineExceeded):
@@ -192,7 +192,7 @@ func (r *Resolver) autoAttempt(ctx context.Context, preferred string, query []by
 	timer := time.NewTimer(fallbackDelay)
 	defer timer.Stop()
 	pending, startedBackup := 1, false
-	preferredFailed := false
+	tcpFailed := false
 	startBackup := func() {
 		if !startedBackup {
 			startedBackup = true
@@ -209,14 +209,14 @@ func (r *Resolver) autoAttempt(ctx context.Context, preferred string, query []by
 		case v := <-results:
 			pending--
 			if v.err == nil {
-				return v.answer, v.method, preferredFailed, nil
+				return v.answer, v.method, tcpFailed, nil
 			}
-			if v.method == preferred {
-				preferredFailed = true
+			if v.method == "tcp" && !errors.Is(v.err, errTCPPoolWait) {
+				tcpFailed = true
 			}
 			startBackup()
 			if pending == 0 {
-				return nil, "", preferredFailed, v.err
+				return nil, "", tcpFailed, v.err
 			}
 		}
 	}
@@ -239,15 +239,7 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	}
 	r.status.Queries++
 	mode, active, generation := r.status.Mode, r.status.Active, r.status.Switches
-	probe := mode == "auto" && active == "doh" && !r.probing && !time.Now().Before(r.nextProbe)
-	if probe {
-		r.probing = true
-		r.wg.Add(1)
-	}
 	r.mu.Unlock()
-	if probe {
-		go r.probePrimary(append([]byte(nil), query...), generation)
-	}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	stop := context.AfterFunc(r.ctx, cancel)
@@ -256,9 +248,9 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	var response []byte
 	var err error
 	used := method
-	var preferredFailed bool
+	var tcpFailed bool
 	if mode == "auto" {
-		response, used, preferredFailed, err = r.autoAttempt(ctx, method, query)
+		response, used, tcpFailed, err = r.autoAttempt(ctx, method, query)
 	} else {
 		response, err = r.attempt(ctx, method, query)
 	}
@@ -272,23 +264,29 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	r.mu.Lock()
 	if !r.closed && mode == "auto" && generation == r.status.Switches {
 		switch {
-		case method == "doh":
-			if err != nil {
-				r.successes = 0
-			} else if preferredFailed && used == "tcp" {
-				// A real query already confirmed recovery while DoH was failing.
-				r.notePrimarySuccess()
-			}
 		case err != nil:
 			// Neither transport answered, so there is no usable backup to prefer.
-			r.failures = 0
-		case preferredFailed:
-			r.notePrimaryFailure()
+			if method == "doh" {
+				r.successes = 0
+			} else {
+				r.failures = 0
+			}
 		case used == "tcp":
-			r.failures = 0
+			if method == "doh" {
+				// A valid TCP reply confirms recovery even if DoH was still pending.
+				r.notePrimarySuccess()
+			} else {
+				r.failures = 0
+			}
+		case tcpFailed:
+			if method == "tcp" {
+				r.notePrimaryFailure()
+			} else {
+				r.successes = 0
+			}
 		case !r.probing && !time.Now().Before(r.nextProbe):
-			// A faster backup leaves the primary result unknown. Confirm it
-			// independently at a bounded rate without delaying the client.
+			// DoH answered without a definitive TCP result. Check TCP at a
+			// bounded rate, without probing a query already answered by TCP.
 			r.probing = true
 			r.wg.Add(1)
 			go r.probePrimary(append([]byte(nil), query...), generation)
@@ -345,6 +343,9 @@ func (r *Resolver) probePrimary(query []byte, generation uint64) {
 		return
 	}
 	r.nextProbe = time.Now().Add(30 * time.Second)
+	if errors.Is(err, errTCPPoolWait) {
+		return
+	}
 	if r.status.Active == "tcp" {
 		if err != nil {
 			r.notePrimaryFailure()

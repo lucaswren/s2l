@@ -13,6 +13,8 @@ import (
 	"github.com/lucaswren/s2l/internal/speedtest"
 )
 
+var errTCPPoolWait = fmt.Errorf("DNS TCP connection pool wait: %w", context.DeadlineExceeded)
+
 // Each leased connection processes one query at a time. The bounded pool is
 // private to one mapping and its fixed SOCKS5 exit; DNS packets are not cached.
 type tcpPool struct {
@@ -35,10 +37,15 @@ func (p *tcpPool) close() {
 func (p *tcpPool) query(ctx context.Context, q []byte) ([]byte, error) {
 	select {
 	case p.slots <- struct{}{}:
+		defer func() { <-p.slots }()
 	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
-	defer func() { <-p.slots }()
+	if err := ctx.Err(); err != nil {
+		if err == context.DeadlineExceeded {
+			return nil, errTCPPoolWait
+		}
+		return nil, err
+	}
 	var last error
 	for attempt := 0; attempt < 2; attempt++ {
 		p.mu.Lock()

@@ -77,6 +77,19 @@ func TestTCPPoolCancellationReleasesCapacity(t *testing.T) {
 	}
 }
 
+func TestTCPPoolReportsDeadlineWhileWaitingForCapacity(t *testing.T) {
+	p := &tcpPool{slots: make(chan struct{}, 1)}
+	p.slots <- struct{}{}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := p.query(ctx, nil); !errors.Is(err, errTCPPoolWait) || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("pool wait was indistinguishable from upstream timeout: %v", err)
+	}
+	if len(p.slots) != 1 {
+		t.Fatal("waiting request released another request's lease")
+	}
+}
+
 func TestTCPPoolDoesNotRedialAfterDNSFailure(t *testing.T) {
 	client, server := net.Pipe()
 	defer server.Close()

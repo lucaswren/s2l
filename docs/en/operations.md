@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.6 on a clean, dedicated server.**
+**Install S2L 1.0.7 on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
@@ -264,7 +264,7 @@ ip route show table all
 - Dial succeeds but traffic fails: check upstream, assigned subnet conflicts, policy routes, firewall and client DNS/route selection.
 - SSH access changes fail: retain the current connection and use a provider console or approved recovery route; inspect backup metadata before restoring.
 
-For failed Telegram, WeChat or web images, inspect the failed request and separate TCP/UDP/DNS health results. S2L preserves the client's destination IP instead of replacing CDN addresses with sniffed domains. By default, TCP SYN MSS is capped at 1200 in `mangle/FORWARD` for both PPP directions. Non-DNS UDP is actively rejected by default; DNS uses DoH/TCP. TCP fallback requires application support; UDP-only applications require a separately reviewed deployment because managed mappings reject non-DNS UDP. Automatic DNS mode can use the first valid DoH or TCP DNS response. A faster DoH response triggers a rate-limited background check of TCP DNS. Two confirmed primary failures with evidence that DoH can answer are required to change the preference. After switching, background recovery checks start after 60 seconds and run at least 30 seconds apart. Two successful checks restore the TCP DNS preference. Live TCP DNS answers also count toward recovery when DoH fails.
+For failed Telegram, WeChat or web images, inspect the failed request and separate TCP/UDP/DNS health results. S2L preserves the client's destination IP instead of replacing CDN addresses with sniffed domains. By default, TCP SYN MSS is capped at 1200 in `mangle/FORWARD` for both PPP directions. Non-DNS UDP is actively rejected by default; DNS uses DoH/TCP. TCP fallback requires application support; UDP-only applications require a separately reviewed deployment because managed mappings reject non-DNS UDP. Automatic DNS mode can use the first valid DoH or TCP DNS response. A faster DoH response triggers a rate-limited background check of TCP DNS. Two confirmed primary failures with evidence that DoH can answer are required to change the preference. After switching, queries can trigger a background recovery check after 60 seconds. Checks run at least 30 seconds apart. Two successful checks restore the TCP DNS preference. A live TCP DNS answer counts toward recovery when DoH fails or stalls. Caller cancellation and local TCP connection pool timeouts do not count as upstream failures.
 
 Updating restarts the service and automatically regenerates configurations for previously running mappings; reconnect L2TP and recreate application connections if needed. Inspect `s2l-tcpmss` with `sudo iptables -t mangle -S FORWARD`. If images still fail, compare the same failing image host through SOCKS5 and the client path, and inspect a log ZIP collected with Debug enabled in Settings to distinguish upstream, DNS and tunnel failures.
 

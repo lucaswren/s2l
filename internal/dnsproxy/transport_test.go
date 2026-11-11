@@ -61,12 +61,17 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 	}()
 	var dohQueries atomic.Int32
 	var dohHTTP2 atomic.Int32
+	var dohStalls atomic.Bool
 	doh := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dohQueries.Add(1)
 		if r.ProtoMajor == 2 {
 			dohHTTP2.Add(1)
 		}
 		q, _ := io.ReadAll(io.LimitReader(r.Body, 65536))
+		if dohStalls.Load() {
+			<-r.Context().Done()
+			return
+		}
 		w.Header().Set("Content-Type", "application/dns-message")
 		w.Write(answerA(q))
 	}))
@@ -196,6 +201,25 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 	// the DoH backup negotiated HTTP/2 over the same proxy.
 	if int(tcpQueries.Load()) != tcpConnects || tcpConnects < 4 || dohConnects < 1 || dohQueries.Load() < 2 || dohHTTP2.Load() < 2 {
 		t.Fatalf("DNS transport path mismatch: TCP queries=%d CONNECTs=%d DoH CONNECTs=%d requests=%d HTTP/2=%d", tcpQueries.Load(), tcpConnects, dohConnects, dohQueries.Load(), dohHTTP2.Load())
+	}
+	primaryWorks.Store(false)
+	for i := 0; i < 2; i++ {
+		if _, err := s.Query(context.Background(), q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := r.Status().Active; got != "doh" {
+		t.Fatalf("TCP outage did not switch to DoH: %s", got)
+	}
+	dohStalls.Store(true)
+	primaryWorks.Store(true)
+	for _, want := range []string{"doh", "tcp"} {
+		if _, err := s.Query(context.Background(), q); err != nil {
+			t.Fatal("working TCP did not answer while DoH stalled", err)
+		}
+		if got := r.Status().Active; got != want {
+			t.Fatalf("active transport after live TCP reply = %s, want %s", got, want)
+		}
 	}
 	// Even if both actual resolvers are directly reachable on this host, an
 	// unavailable SOCKS upstream must never trigger a direct DNS connection.

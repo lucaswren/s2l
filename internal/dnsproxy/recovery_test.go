@@ -93,6 +93,72 @@ func TestDoHFailureRestoresTCPFromSuccessfulLiveQueries(t *testing.T) {
 	}
 }
 
+func TestStalledDoHRestoresTCPFromSuccessfulLiveQueries(t *testing.T) {
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
+	defer r.Close()
+	r.status.Active = "doh"
+	var dohCalls atomic.Int32
+	r.exchange = func(ctx context.Context, method string, q []byte) ([]byte, error) {
+		if method == "doh" {
+			dohCalls.Add(1)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return response(q, 0), nil
+	}
+	q, _ := QueryA("example.com")
+	for _, want := range []string{"doh", "tcp", "tcp"} {
+		if _, err := r.Resolve(context.Background(), q); err != nil {
+			t.Fatal(err)
+		}
+		if got := r.Status().Active; got != want {
+			t.Fatalf("active transport %q, want %q", got, want)
+		}
+	}
+	if s := r.Status(); dohCalls.Load() != 2 || s.Fallbacks != 2 || s.Switches != 1 {
+		t.Fatalf("recovered TCP did not handle the next request directly: %+v", s)
+	}
+}
+
+func TestTCPPoolWaitDoesNotSwitchToDoH(t *testing.T) {
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
+	defer r.Close()
+	r.nextProbe = time.Now().Add(time.Hour)
+	r.exchange = func(_ context.Context, method string, q []byte) ([]byte, error) {
+		if method == "tcp" {
+			return nil, errTCPPoolWait
+		}
+		return response(q, 0), nil
+	}
+	q, _ := QueryA("example.com")
+	for i := 0; i < 3; i++ {
+		if _, err := r.Resolve(context.Background(), q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if s := r.Status(); s.Active != "tcp" || s.Fallbacks != 3 || s.Switches != 0 || s.LastTCPFailure != nil {
+		t.Fatalf("local connection pool congestion was treated as an upstream failure: %+v", s)
+	}
+}
+
+func TestCallerDeadlineDoesNotRecordTCPFailure(t *testing.T) {
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "tcp"})
+	defer r.Close()
+	r.exchange = func(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	q, _ := QueryA("example.com")
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	if _, err := r.Resolve(ctx, q); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	if s := r.Status(); s.Failures != 0 || s.LastTCPFailure != nil {
+		t.Fatalf("caller deadline was recorded as an upstream failure: %+v", s)
+	}
+}
+
 func TestMalformedAnswerCannotBypassFallback(t *testing.T) {
 	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})
 	defer r.Close()

@@ -33,6 +33,12 @@ func Current() Info {
 		}
 	}
 	switch strings.TrimPrefix(result.Version, "v") {
+	case "1.0.7":
+		result.ReleaseNotes = map[string]string{
+			"en":    "1.0.7: Restore TCP DNS preference after two successful live TCP answers when DoH fails or stalls. Keep local pool waits and caller deadlines out of upstream failure diagnostics. Upgrade during a maintenance window because mappings restart.",
+			"zh-TW": "1.0.7：DoH 失敗或遲遲未回覆時，連續兩次實際 TCP DNS 查詢成功後恢復優先使用 TCP。本機連線池等候逾時與呼叫端逾時不再計入上游故障。升級會重啟映射，請安排維護時段。",
+			"zh-CN": "1.0.7：DoH 失败或迟迟未返回时，连续两次实际 TCP DNS 查询成功后恢复优先使用 TCP。本地连接池排队超时与调用方超时不再计入上游故障。升级会重启映射，请安排维护窗口。",
+		}
 	case "1.0.6":
 		result.ReleaseNotes = map[string]string{
 			"en":    "1.0.6: Prefer TCP DNS at 8.8.8.8 with automatic DoH fallback through the same SOCKS5 exit. Block stray packets sourced from the TUN address, reduce repeated firewall reads and improve DNS and UDP diagnostics. Upgrade during a maintenance window because mappings restart.",
