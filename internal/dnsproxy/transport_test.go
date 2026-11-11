@@ -26,6 +26,7 @@ func answerA(q []byte) []byte {
 // SOCKS CONNECT, so a direct DNS fallback would fail the forwarding assertion.
 func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 	var tcpQueries atomic.Int32
+	var primaryWorks atomic.Bool
 	tcpListener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -49,23 +50,21 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 					return
 				}
 				tcpQueries.Add(1)
-				a := answerA(q)
+				a := response(q, 2)
+				if primaryWorks.Load() {
+					a = answerA(q)
+				}
 				binary.BigEndian.PutUint16(size[:], uint16(len(a)))
 				c.Write(append(size[:], a...))
 			}()
 		}
 	}()
-	var primaryWorks atomic.Bool
 	var dohQueries atomic.Int32
 	var dohHTTP2 atomic.Int32
 	doh := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dohQueries.Add(1)
 		if r.ProtoMajor == 2 {
 			dohHTTP2.Add(1)
-		}
-		if !primaryWorks.Load() {
-			w.WriteHeader(503)
-			return
 		}
 		q, _ := io.ReadAll(io.LimitReader(r.Body, 65536))
 		w.Header().Set("Content-Type", "application/dns-message")
@@ -162,7 +161,7 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 			t.Fatal("real DNS response was not forwarded", e)
 		}
 	}
-	if s := r.Status(); s.Active != "tcp" || s.Fallbacks != 2 {
+	if s := r.Status(); s.Active != "doh" || s.Fallbacks != 2 {
 		t.Fatal(s)
 	}
 	primaryWorks.Store(true)
@@ -187,15 +186,14 @@ func TestRealTransportsAndFallbackStayOnSOCKS(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}
-	if r.Status().Active != "doh" {
+	if r.Status().Active != "tcp" {
 		t.Fatal("live primary did not recover")
 	}
 	mu.Lock()
 	tcpConnects, dohConnects := targets[tcpName], targets[dohName]
 	mu.Unlock()
-	// The first two DoH attempts may be cancelled before reaching the HTTP
-	// handler when the 300 ms hedge wins (e.g. under a slow TLS handshake).
-	// Two successful primary recovery probes must still reach HTTP/2 via SOCKS.
+	// Check the primary failures and recovery probes via SOCKS, and verify
+	// the DoH backup negotiated HTTP/2 over the same proxy.
 	if int(tcpQueries.Load()) != tcpConnects || tcpConnects < 4 || dohConnects < 1 || dohQueries.Load() < 2 || dohHTTP2.Load() < 2 {
 		t.Fatalf("DNS transport path mismatch: TCP queries=%d CONNECTs=%d DoH CONNECTs=%d requests=%d HTTP/2=%d", tcpQueries.Load(), tcpConnects, dohConnects, dohQueries.Load(), dohHTTP2.Load())
 	}

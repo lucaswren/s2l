@@ -15,7 +15,7 @@ const DefaultDNSTCPAddress = "8.8.8.8:53"
 // These IPCP addresses are intercepted on the mapping's TUN, not public
 // listeners or direct fallback resolvers. Each mapping selects its actual
 // resolver through its fixed SOCKS5 upstream.
-func ClientDNSAddresses() []string { return []string{"1.1.1.1", "8.8.8.8"} }
+func ClientDNSAddresses() []string { return []string{"8.8.8.8", "1.1.1.1"} }
 
 // DNSOptions is comparable so probes share only identical resolver policy.
 type DNSOptions struct {

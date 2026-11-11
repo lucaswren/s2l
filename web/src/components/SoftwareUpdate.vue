@@ -4,6 +4,7 @@ import { tr, language, dateTime, clockTime } from '../i18n/index.js';
 import {computed,ref,watch,onMounted,onBeforeUnmount} from 'vue';
 import {ElMessageBox} from 'element-plus';
 import {api} from '../api/client';
+import {isOlderStableRelease} from '../utils/release-version.js';
 const props=defineProps({active:Boolean});
 const info=ref({current:{},job:{},release:{}}), busy=ref(false), error=ref('');
 const running=computed(()=>['queued','running'].includes(info.value.job?.status));
@@ -12,11 +13,7 @@ const installedNotes=computed(()=>info.value.current?.release_notes?.[language.v
 const phases={get preparing() { return tr("准备更新"); },get building() { return tr("编译程序"); },get backup() { return tr("备份与停止服务"); },get installing() { return tr("安装更新"); },get restarting() { return tr("重启服务"); },get verifying() { return tr("验证服务"); },get rolling_back() { return tr("执行失败恢复"); }};
 const statuses={get queued() { return tr("已排队"); },get running() { return tr("更新中"); },get succeeded() { return tr("更新完成"); },get failed() { return tr("更新失败"); },get interrupted() { return tr("任务已中断"); }};
 const sameVersion=computed(()=>{const r=info.value.release,c=info.value.current;return r?.commit && !c?.modified && (c?.revision===r.commit || (c?.version===r.tag && !c?.revision));});
-const olderRelease=computed(()=>{
- const a=/^v(\d+)\.(\d+)\.(\d+)$/.exec(info.value.current?.version||''),b=/^v(\d+)\.(\d+)\.(\d+)$/.exec(info.value.release?.tag||'');
- if(!a||!b)return false;
- for(let i=1;i<=3;i++){if(+a[i]!==+b[i])return +a[i]>+b[i];}return false;
-});
+const olderRelease=computed(()=>isOlderStableRelease(info.value.release?.tag,info.value.current?.version));
 let timer,controller,version=0,disposed=false;
 function stop(){version++;clearTimeout(timer);controller?.abort();}
 function schedule(){if((props.active||running.value)&&!disposed)timer=setTimeout(load,running.value?1000:10000);}

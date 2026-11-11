@@ -139,6 +139,12 @@ func (s *Store) Observe(status model.SystemStatus, now time.Time) {
 	for _, m := range status.Mappings {
 		mappingByID[m.ID] = m
 	}
+	sessions := make(map[string]int, len(status.Sessions))
+	if status.SessionsError == "" {
+		for _, peer := range status.Sessions {
+			sessions[peer.MappingID]++
+		}
+	}
 	groups := map[string][]string{}
 	for _, m := range status.Mappings {
 		if m.Status != model.StatusRunning {
@@ -150,17 +156,9 @@ func (s *Store) Observe(status model.SystemStatus, now time.Time) {
 		}
 		state := ""
 		scope := "mapping"
-		if status.SessionsError == "" {
-			count := 0
-			for _, p := range status.Sessions {
-				if p.MappingID == m.ID {
-					count++
-				}
-			}
-			if count > 1 {
-				key := m.ID + ":duplicate-session"
-				desired[key] = Incident{Key: key, Scope: "mapping", State: "duplicate-session", Affected: []string{m.ID}}
-			}
+		if sessions[m.ID] > 1 {
+			key := m.ID + ":duplicate-session"
+			desired[key] = Incident{Key: key, Scope: "mapping", State: "duplicate-session", Affected: []string{m.ID}}
 		}
 		if h.LocalState != "" && h.LocalState != "healthy" {
 			state = "local-" + h.LocalState

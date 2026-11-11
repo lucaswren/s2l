@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/lucaswren/s2l/internal/buildinfo"
 )
 
 func TestWebUpdateRequiresAuthenticatedSameOriginJSON(t *testing.T) {
@@ -34,6 +36,23 @@ func TestWebUpdateRequiresAuthenticatedSameOriginJSON(t *testing.T) {
 		if w.Code != tc.want {
 			t.Fatal(w.Code, tc.want, w.Body.String())
 		}
+	}
+}
+
+func TestWebUpdateRejectsOlderUnprefixedStableTag(t *testing.T) {
+	original := buildinfo.Version
+	buildinfo.Version = "1.0.6"
+	t.Cleanup(func() { buildinfo.Version = original })
+	s := NewServer(nil, nil, nil, "admin", "test-password-123")
+	s.ConfigureSettings("/opt/s2l/config.json")
+	handler := s.Handler()
+	r := httptest.NewRequest("POST", "https://admin.example/api/settings/update", strings.NewReader(`{"action":"start","tag":"1.0.5"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.AddCookie(testLogin(t, handler, "admin", "test-password-123"))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "目标稳定版低于当前版本") {
+		t.Fatalf("web downgrade was not rejected before launch: %d %s", w.Code, w.Body)
 	}
 }
 

@@ -4,7 +4,7 @@ import { setLanguage } from '../src/i18n/index.js';
 
 // Assertions must not depend on the host operating system language.
 test.beforeEach(() => setLanguage('zh-CN'));
-import {healthLabels,protocolSummary,passRate,isResolved} from '../src/utils/health.js';
+import {dnsFallbackDetails,healthLabels,protocolSummary,passRate,isResolved} from '../src/utils/health.js';
 import {api} from '../src/api/client.js';
 
 test('restrictions retain stage, HTTP status and duration without implying node death',()=>{
@@ -13,6 +13,11 @@ test('restrictions retain stage, HTTP status and duration without implying node 
  assert.equal(protocolSummary(null),'');
  assert.equal(passRate({pass:3,fail:1,restricted:1}),'60.0%');
  assert.equal(passRate({}),'—');
+});
+test('DNS fallback details retain the primary failure stage and both timings',()=>{
+ assert.equal(dnsFallbackDetails(undefined),'');
+ assert.equal(dnsFallbackDetails({primary_stage:'target-connect',primary_ms:3000,backup_ms:18}),
+   '目标连接 · 3000 ms · DoH 备用耗时 18 ms');
 });
 test('history and mapping diagnostics pass cancellation and encode identifiers',async t=>{
  const calls=[],controller=new AbortController();

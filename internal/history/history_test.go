@@ -89,6 +89,45 @@ func TestHistoryRecordsMeasurementsAndSuccessfulRepairs(t *testing.T) {
 	}
 }
 
+func TestHistoryPersistsLatestDNSFallbackAfterHealthyProbe(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.json")
+	s := New(path)
+	now := time.Now().Truncate(5 * time.Minute)
+	status := sample(now)
+	h := status.UpstreamHealth["m"]
+	h.DNS.State = "degraded"
+	h.DNS.Method = "doh-fallback"
+	h.DNS.Attempts = []model.ProbeAttempt{
+		{Method: "tcp", Stage: "proxy-connect", DurationMS: 3000},
+		{Method: "doh", Stage: "dns-response", DurationMS: 1150},
+	}
+	status.UpstreamHealth["m"] = h
+	s.Record(status, now)
+	s.Record(status, now.Add(time.Second))
+	h.DNS.CheckedAt = now.Add(2 * time.Second)
+	h.DNS.Attempts[0] = model.ProbeAttempt{Method: "tcp", Stage: "target-connect", SOCKSReply: 2, DurationMS: 225}
+	status.UpstreamHealth["m"] = h
+	s.Record(status, h.DNS.CheckedAt)
+	s.Record(sample(now.Add(3*time.Second)), now.Add(3*time.Second))
+	s.Flush()
+
+	restored := New(path)
+	rows, warning := restored.Snapshot("m")
+	if len(rows) != 1 || warning != "" || rows[0].DNS.Fallback != 2 || rows[0].DNS.Pass != 3 {
+		t.Fatalf("unexpected history: %+v, warning %q", rows, warning)
+	}
+	got := rows[0].LastDNSFallback
+	if got == nil || !got.CheckedAt.Equal(h.DNS.CheckedAt) || got.PrimaryStage != "target-connect" ||
+		got.SOCKSReply != 2 || got.PrimaryMS != 225 || got.BackupMS != 1150 {
+		t.Fatalf("unexpected DNS fallback: %+v", got)
+	}
+	got.PrimaryStage = "modified"
+	rows, _ = restored.Snapshot("m")
+	if rows[0].LastDNSFallback.PrimaryStage != "target-connect" {
+		t.Fatal("snapshot changed retained DNS fallback")
+	}
+}
+
 func TestStoppedMappingStillExpiresHistory(t *testing.T) {
 	s := New("")
 	now := time.Now()

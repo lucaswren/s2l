@@ -3,10 +3,56 @@
 package network
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/lucaswren/s2l/internal/model"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/lucaswren/s2l/internal/model"
 )
+
+func TestVerificationRoundReusesOnlyCompleteUnexpiredSnapshots(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "commands")
+	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
+	t.Setenv("S2L_TEST_COMMAND_LOG", log)
+	for _, name := range []string{"ip", "iptables", "ip6tables"} {
+		script := "#!/bin/sh\nprintf '%s\\n' \"" + name + "\" >> \"$S2L_TEST_COMMAND_LOG\"\n"
+		if name == "ip6tables" {
+			script += "test \"$S2L_TEST_FAIL_READ\" != 1\n"
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := context.Background()
+	var round VerificationRound
+	for range 2 {
+		if err := round.refresh(ctx, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	round.at = time.Now().Add(-time.Second)
+	t.Setenv("S2L_TEST_FAIL_READ", "1")
+	if err := round.refresh(ctx, 0); err == nil {
+		t.Fatal("incomplete snapshot was accepted")
+	}
+	t.Setenv("S2L_TEST_FAIL_READ", "")
+	if err := round.refresh(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	// A managed mutation makes even a newly captured snapshot obsolete.
+	if err := round.refresh(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(log)
+	if err != nil || strings.Count(string(data), "\n") != 12 {
+		t.Fatalf("expected three commands for each fresh read, got %q (%v)", data, err)
+	}
+}
 
 func TestVerifyRouteJSONRejectsMissingRulesAndUnderstandsSystemTables(t *testing.T) {
 	m := model.TunnelMapping{Subnet: "10.0.101.2/24", TableID: 101, TunName: "tun101"}

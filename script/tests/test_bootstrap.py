@@ -25,7 +25,12 @@ class BootstrapTests(unittest.TestCase):
             path.write_text('#!/bin/sh\n' + body + '\n')
             path.chmod(0o755)
         # Move host checks/lock to this fixture; all git operations stay local.
-        source = SCRIPT.read_text().replace('/run/systemd/system', str(self.root)).replace('/run/s2l-bootstrap.lock', str(self.root / 'lock')).replace('/var/lib/s2l-install', str(self.root / 'journal'))
+        os_release = self.root / 'os-release'
+        os_release.write_text('ID=debian\n')
+        source = SCRIPT.read_text().replace('/etc/os-release', str(os_release))
+        source = source.replace('/run/systemd/system', str(self.root))
+        source = source.replace('/run/s2l-bootstrap.lock', str(self.root / 'lock'))
+        source = source.replace('/var/lib/s2l-install', str(self.root / 'journal'))
         self.script = self.root / 'bootstrap.sh'
         self.script.write_text(source)
         self.repo = self.root / 'upstream'

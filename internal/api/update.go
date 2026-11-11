@@ -38,6 +38,10 @@ func (s *Server) handleUpdate(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "invalid update action")
 			return
 		}
+		if body.Action == "start" && buildinfo.IsOlderStableRelease(body.Tag, buildinfo.Version) {
+			writeError(w, http.StatusConflict, "目标稳定版低于当前版本")
+			return
+		}
 	}
 	s.authMu.RLock()
 	authenticated := s.adminUser != "" && s.adminPass != ""

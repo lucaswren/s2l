@@ -41,7 +41,9 @@ def main():
         subprocess.run(["mount", *options], check=True)
         mounted.append(options[-1])
 
-    with tempfile.TemporaryDirectory(prefix="s2l-l2tp-fixture-") as temp:
+    # pppd rejects privileged hook paths with writable ancestors. IPsec
+    # children also replace /run with private mounts and must still see them.
+    with tempfile.TemporaryDirectory(prefix="s2l-l2tp-fixture-", dir="/root") as temp:
         root = Path(temp)
         try:
             # Inherit namespace FDs: bind-mounting an ancestor mount namespace
@@ -70,7 +72,7 @@ def main():
             # sysfs network counters otherwise still refer to the namespace
             # in which the original /sys was mounted.
             mount("-t", "sysfs", "-o", "ro", "sysfs", "/sys")
-            env = dict(os.environ, S2L_L2TP_INTEGRATION="1", **{"S2L_FIXTURE_HOST_" + kind.upper() + "_FD": str(fd) for kind, fd in host_fds.items()},
+            env = dict(os.environ, TMPDIR=str(root), S2L_L2TP_INTEGRATION="1", **{"S2L_FIXTURE_HOST_" + kind.upper() + "_FD": str(fd) for kind, fd in host_fds.items()},
                        S2L_SINGBOX_CHECK_BIN=str(singbox), S2L_FIXTURE_TRANSPORT=args.transport,
                        S2L_FIXTURE_SCRIPT_DIR=str(Path(__file__).resolve().parent))
             return subprocess.run([str(binary), "-test.run", "^TestRealL2TPFixedExitsAndRecovery$",

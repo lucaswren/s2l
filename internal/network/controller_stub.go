@@ -61,6 +61,12 @@ func (c *Controller) Verify(model.TunnelMapping) error {
 	return fmt.Errorf("forwarding verification requires Linux")
 }
 
+type VerificationRound struct{}
+
+func (c *Controller) VerifyInRound(ctx context.Context, m model.TunnelMapping, _ *VerificationRound) error {
+	return c.VerifyContext(ctx, m)
+}
+
 func (c *Controller) VerifyContext(context.Context, model.TunnelMapping) error {
 	return fmt.Errorf("forwarding verification requires Linux")
 }

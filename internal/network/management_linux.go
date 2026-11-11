@@ -38,6 +38,7 @@ func (c *Controller) SetManagementAccess(a model.ManagementAccess) error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.rulesRevision++
 	if err := ensureGuard(a); err != nil {
 		return err
 	}

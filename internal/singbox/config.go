@@ -92,7 +92,7 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 					"strategy": "ipv4_only",
 				},
 			},
-			"final":             "doh",
+			"final":             "tcpdns",
 			"strategy":          "ipv4_only",
 			"independent_cache": true,
 		},
@@ -143,8 +143,8 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 		cfg["outbounds"] = []map[string]any{{"type": "direct", "tag": "proxy", "bind_interface": node.WANInterface, "domain_strategy": "ipv4_only"}}
 		cfg["route"].(map[string]any)["auto_detect_interface"] = false
 	}
-	if dns.Mode == "tcp" {
-		cfg["dns"].(map[string]any)["final"] = "tcpdns"
+	if dns.Mode == "doh" {
+		cfg["dns"].(map[string]any)["final"] = "doh"
 	}
 	if len(resolverAddress) > 0 {
 		host, portText, err := net.SplitHostPort(resolverAddress[0])

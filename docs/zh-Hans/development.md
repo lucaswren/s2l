@@ -41,7 +41,7 @@ go test ./...
 python3 -m unittest discover -s script/tests
 ```
 
-`make build` 包含前端构建；`make test` 执行 Go 测试。`npm --prefix web run dev` 的 API 代理至本机 8080。非 Linux 测试不验证实际 Linux 隧道，集成验证须使用授权、可丢弃的 Linux VM。`make run` 启动本机后端，可能修改主机网络与 PPP 文件。`make install-service` 统一调用 `script/install.sh`，包括依赖、HTTPS 与服务配置，仅在预定全新安装的主机执行；通过当前安装器部署后可使用 `script/update.sh`。
+`make build` 包含前端构建。`make build-go` 和 `make run` 复用已有前端产物。`make test` 执行 Go 测试。`npm --prefix web run dev` 的 API 代理至本机 8080。非 Linux 测试不验证实际 Linux 隧道，集成验证须使用授权、可丢弃的 Linux VM。`make run` 启动本机后端，可能修改主机网络与 PPP 文件。`make install-service` 统一调用 `script/install.sh`，包括依赖、HTTPS 与服务配置，仅在预定全新安装的主机执行；通过当前安装器部署后可使用 `script/update.sh`。
 
 变更须说明触发条件、结果与相关验证；勿提交运行配置、状态、依赖或秘密。前端变更须重建并提交 `web/dist/`。文档先更新英文，再繁体、简体中文，保持命令、默认值与法律语义一致。法律来源使用官方链接并记录核查日期；仅提交有权按 Apache-2.0 许可的内容，保留第三方声明。依赖更新后执行 `python3 script/collect_frontend_licenses.py` 并提交声明清单。
 
@@ -65,7 +65,7 @@ for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
 done
 ```
 
-L2TP 测试隔离挂载、网络与 PID 命名空间，通过真实 PPP IPCP 验证 DNS 下发，检查自定义 DoH、同节点 TCP DNS 回退及客户端 UDP/TCP DNS 查询，并验证双固定出口。单个及双上游中断时，HTTPS 与未缓存 DNS 请求须失败，PPP 保持连接。另设可直接到达且证书验证成功的 HTTPS 出口作正向对照；故障与 TUN 消失期间，其出站数据包计数须保持零。也检查 UDP 主动拒绝、进程恢复与规则修复。浏览器测试覆盖桌面、390/320 像素、语言切换与未保存表单；鉴权测试使用真实后端与临时数据，覆盖登录、会话保持及退出。页面测试不能替代 Linux 数据路径测试。
+L2TP 测试隔离挂载、网络与 PID 命名空间，通过真实 PPP IPCP 验证 DNS 下发，检查自定义 TCP DNS、同节点 DoH 回退及客户端 UDP/TCP DNS 查询，并验证双固定出口。单个及双上游中断时，HTTPS 与未缓存 DNS 请求须失败，PPP 保持连接。另设可直接到达且证书验证成功的 HTTPS 出口作正向对照；故障与 TUN 消失期间，其出站数据包计数须保持零。也检查 UDP 主动拒绝、进程恢复与规则修复。浏览器测试覆盖桌面、390/320 像素、语言切换与未保存表单；鉴权测试使用真实后端与临时数据，覆盖登录、会话保持及退出。页面测试不能替代 Linux 数据路径测试。
 
 额外模式需要 strongSwan/starter、conntrack 以及内核 XFRM、连接跟踪区和 NAT INPUT 支持。`ipsec` 验证无 NAT 路由器的客户端（仍强制 NAT-T）；`ipsec-nat` 使用不同转换后地址；`ipsec-shared-nat` 共享公网地址、源端口分别为 1701/1702；`ipsec-shared-nat-1701` 同时共享公网地址及源端口 1701。均使用生产配置和 updown 辅助程序，验证 DNS、各节点固定出口、UDP allow/reject-quic、上游/TUN 故障及直连出站计数为零。相同端口模式还延迟 updown 复现早到包、在线修复防火墙并删除回包标记、轮换 CHILD_SA，并让一个客户端断线重拨，核对另一客户端不受影响、退役连接跟踪区为空。入站和出站防护缺失必须被检测并修复。外部节点探测单独运行；Linux 对端通过不代表原生 Windows/macOS 已验证。
 

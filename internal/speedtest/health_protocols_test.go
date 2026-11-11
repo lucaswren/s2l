@@ -147,13 +147,14 @@ func fixtureGreeting(conn net.Conn, auth bool) bool {
 }
 
 func TestUDPHealthThroughAuthenticatedSOCKSRelay(t *testing.T) {
-	for _, mode := range []string{"valid", "unsupported", "refused", "reserved-code", "wrong-id", "fragment", "wrong-source", "timeout"} {
+	for _, mode := range []string{"valid", "unsupported", "refused", "reserved-code", "wrong-id", "fragment", "wrong-source", "timeout", "control-closed"} {
 		t.Run(mode, func(t *testing.T) {
 			relay, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
 			if err != nil {
 				t.Fatal(err)
 			}
 			done := make(chan struct{})
+			udpReceived := make(chan struct{}, 1)
 			go func() {
 				defer close(done)
 				buffer := make([]byte, 4096)
@@ -172,6 +173,13 @@ func TestUDPHealthThroughAuthenticatedSOCKSRelay(t *testing.T) {
 						return
 					}
 					if mode == "timeout" {
+						continue
+					}
+					if mode == "control-closed" {
+						select {
+						case udpReceived <- struct{}{}:
+						default:
+						}
 						continue
 					}
 					dns := dnsAnswer(buffer[10:n])
@@ -220,15 +228,26 @@ func TestUDPHealthThroughAuthenticatedSOCKSRelay(t *testing.T) {
 				// Wildcard relay addresses must use the proxy peer, never a DNS destination.
 				port := relay.LocalAddr().(*net.UDPAddr).Port
 				conn.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, byte(port >> 8), byte(port)})
+				if mode == "control-closed" {
+					select {
+					case <-udpReceived:
+					case <-time.After(time.Second):
+						t.Error("proxy did not receive the UDP probe")
+					}
+					return
+				}
 				io.Copy(io.Discard, conn)
 			})
 			timeout := 200 * time.Millisecond
-			if mode == "valid" {
+			if mode == "valid" || mode == "control-closed" {
 				timeout = time.Second
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			result := checkUDPHealth(ctx, model.SocksNode{Addr: proxy, Username: "user", Password: "secret"})
+			if mode == "control-closed" && (result.Method != "udp-associate" || !strings.Contains(result.Error, "control connection closed")) {
+				t.Fatalf("closed control connection was reported as a relay timeout: %+v", result)
+			}
 			want := "unavailable"
 			if mode == "valid" {
 				want = "healthy"
@@ -279,21 +298,27 @@ func connectFixture(t *testing.T) string {
 	})
 }
 
-func TestDNSDoHAndTCPFallbackThroughProxy(t *testing.T) {
-	for _, mode := range []string{"doh", "fallback", "invalid"} {
+func TestDNSPrefersTCPAndFallsBackToDoHThroughProxy(t *testing.T) {
+	for _, mode := range []string{"tcp", "fallback", "invalid", "tls-failure"} {
 		t.Run(mode, func(t *testing.T) {
-			doh := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != "POST" || r.Header.Get("Content-Type") != "application/dns-message" {
 					t.Error("invalid DoH request")
 				}
-				if mode != "doh" {
+				if mode == "invalid" {
 					w.WriteHeader(503)
 					return
 				}
 				q, _ := io.ReadAll(r.Body)
 				w.Header().Set("Content-Type", "application/dns-message")
 				w.Write(dnsAnswer(q))
-			}))
+			})
+			var doh *httptest.Server
+			if mode == "tls-failure" {
+				doh = httptest.NewTLSServer(handler)
+			} else {
+				doh = httptest.NewServer(handler)
+			}
 			defer doh.Close()
 			tcp := socksFixture(t, func(conn net.Conn) {
 				var size [2]byte
@@ -305,7 +330,7 @@ func TestDNSDoHAndTCPFallbackThroughProxy(t *testing.T) {
 					return
 				}
 				r := dnsAnswer(q)
-				if mode == "invalid" {
+				if mode != "tcp" {
 					r[0] ^= 1
 				}
 				binary.BigEndian.PutUint16(size[:], uint16(len(r)))
@@ -317,17 +342,29 @@ func TestDNSDoHAndTCPFallbackThroughProxy(t *testing.T) {
 			defer cancel()
 			result := checkDNSHealthTargets(ctx, model.SocksNode{Addr: proxy}, doh.URL, tcp)
 			want := "healthy"
-			method := "doh"
+			method := "tcp"
 			if mode == "fallback" {
 				want = "degraded"
-				method = "tcp-fallback"
+				method = "doh-fallback"
 			}
-			if mode == "invalid" {
+			if mode == "invalid" || mode == "tls-failure" {
 				want = "unavailable"
 				method = "doh/tcp"
 			}
 			if result.State != want || result.Method != method {
 				t.Fatalf("got %+v, want %s/%s", result, want, method)
+			}
+			if mode == "tcp" && (len(result.Attempts) != 1 || result.Attempts[0].Method != "tcp") {
+				t.Fatalf("healthy TCP probe used a backup: %+v", result.Attempts)
+			}
+			if mode == "fallback" && (len(result.Attempts) != 2 || result.Attempts[0].Method != "tcp" || result.Attempts[1].Method != "doh" || result.Attempts[1].Stage != "dns-response") {
+				t.Fatalf("unexpected DoH and TCP stages: %+v", result.Attempts)
+			}
+			if mode == "invalid" && (len(result.Attempts) != 2 || result.Attempts[1].Stage != "http") {
+				t.Fatalf("unexpected HTTP failure stage: %+v", result.Attempts)
+			}
+			if mode == "tls-failure" && (len(result.Attempts) != 2 || result.Attempts[1].Stage != "tls") {
+				t.Fatalf("unexpected TLS failure stage: %+v", result.Attempts)
 			}
 		})
 	}
@@ -383,6 +420,26 @@ func TestDNSCompressedCNAMEChain(t *testing.T) {
 	response = append(response, 0xc0|byte(offset>>8), byte(offset), 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 93, 184, 216, 34)
 	if err := validateDNS(q, response); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDNSHealthRejectsExtendedFailureAndTruncatedAdditionalRecord(t *testing.T) {
+	query, err := dnsQuery()
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer := dnsAnswer(query)
+	answer[11] = 1
+	valid := append(append([]byte(nil), answer...), 0, 0, 41, 4, 208, 0, 0, 0, 0, 0, 0)
+	if err := validateDNS(query, valid); err != nil {
+		t.Fatalf("valid EDNS reply rejected: %v", err)
+	}
+	extendedFailure := append([]byte(nil), valid...)
+	extendedFailure[len(answer)+5] = 1
+	for _, invalid := range [][]byte{extendedFailure, valid[:len(valid)-1]} {
+		if err := validateDNS(query, invalid); err == nil {
+			t.Fatal("invalid DNS reply reported as healthy")
+		}
 	}
 }
 

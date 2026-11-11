@@ -34,7 +34,56 @@ func (c *Controller) VerifyContext(ctx context.Context, m model.TunnelMapping) e
 	return c.verifyContext(ctx, m)
 }
 
+// VerificationRound shares only global read-only inputs for one monitor sweep.
+// All access is under the owning controller's lock.
+type VerificationRound struct {
+	revision       uint64
+	at             time.Time
+	rules          []byte
+	ipv4, ipv6     string
+	rules4, rules6 map[string]bool
+}
+
+func (c *Controller) VerifyInRound(ctx context.Context, m model.TunnelMapping, round *VerificationRound) error {
+	if err := lockutil.Lock(ctx, &c.mu); err != nil {
+		return err
+	}
+	defer c.mu.Unlock()
+	err := c.verifyWithRound(ctx, m, round)
+	if err != nil {
+		// Any discrepancy discards the snapshot before the next mapping.
+		// RepairContext always rechecks with fresh kernel state under the lock.
+		round.at = time.Time{}
+	}
+	return err
+}
+
+func (v *VerificationRound) refresh(ctx context.Context, revision uint64) error {
+	now := time.Now()
+	if v.revision == revision && now.Sub(v.at) < time.Second {
+		return nil
+	}
+	rules, err := outputContext(ctx, "ip", "-N", "-j", "rule", "show")
+	if err != nil {
+		return err
+	}
+	ipv4, err := outputContext(ctx, "iptables", "-S")
+	if err != nil {
+		return err
+	}
+	ipv6, err := outputContext(ctx, "ip6tables", "-S")
+	if err != nil {
+		return err
+	}
+	*v = VerificationRound{revision: revision, at: now, rules: []byte(rules), ipv4: ipv4, ipv6: ipv6, rules4: filterRuleKeys(ipv4), rules6: filterRuleKeys(ipv6)}
+	return nil
+}
+
 func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) error {
+	return c.verifyWithRound(ctx, m, &VerificationRound{})
+}
+
+func (c *Controller) verifyWithRound(ctx context.Context, m model.TunnelMapping, round *VerificationRound) error {
 	run := func(name string, args ...string) error { return runContext(ctx, name, args...) }
 	output := func(name string, args ...string) (string, error) { return outputContext(ctx, name, args...) }
 	if err := validateMapping(m); err != nil {
@@ -47,8 +96,7 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 	if iface.Flags&net.FlagUp == 0 {
 		return missingState("TUN interface down", "ip", "link", "set", "dev", m.TunName, "up")
 	}
-	rules, err := output("ip", "-N", "-j", "rule", "show")
-	if err != nil {
+	if err := round.refresh(ctx, c.rulesRevision); err != nil {
 		return err
 	}
 	routes, err := output("ip", "-N", "-j", "route", "show", "table", strconv.Itoa(m.TableID))
@@ -61,7 +109,7 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 		// repair, just as routeSnapshot does during setup and cleanup.
 		routes = "[]"
 	}
-	if err := verifyRouteJSON(m, []byte(rules), []byte(routes)); err != nil {
+	if err := verifyRouteJSON(m, round.rules, []byte(routes)); err != nil {
 		return err
 	}
 	checks := [][]string{
@@ -83,16 +131,8 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 	if c.sessionGuard {
 		checks = append(checks, sessionFirewallRules()...)
 	}
-	// Read each filter table once. Use its rules for presence and order checks.
-	ipv4, err := output("iptables", "-S")
-	if err != nil {
-		return err
-	}
-	ipv6, err := output("ip6tables", "-S")
-	if err != nil {
-		return err
-	}
-	rules4, rules6 := filterRuleKeys(ipv4), filterRuleKeys(ipv6)
+	ipv4, ipv6 := round.ipv4, round.ipv6
+	rules4, rules6 := round.rules4, round.rules6
 	for _, args := range checks {
 		if args[0] == "-C" && rules4[mappingGuardRuleKey("-A "+strings.Join(args[1:], " "))] {
 			continue
@@ -125,7 +165,7 @@ func (c *Controller) verifyContext(ctx context.Context, m model.TunnelMapping) e
 			return err
 		}
 		if owner, ok := c.admitted[m.ID]; ok {
-			if err := verifySessionReturn(m, owner, []byte(rules), []byte(routes)); err != nil {
+			if err := verifySessionReturn(m, owner, round.rules, []byte(routes)); err != nil {
 				return err
 			}
 		}
@@ -267,6 +307,7 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 		return err
 	}
 	defer c.mu.Unlock()
+	c.rulesRevision++
 	for attempts := 0; attempts < 24; attempts++ {
 		err := c.verifyContext(ctx, m)
 		if err == nil {

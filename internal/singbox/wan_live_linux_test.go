@@ -38,6 +38,9 @@ func TestLiveWANInterfaceIsolation(t *testing.T) {
 	}
 	run("ip", "link", "set", "lo", "up")
 	run("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
+	// Both exits use the same remote address. The reverse path via the
+	// default-route fixture must not filter replies on the selected WAN.
+	run("sysctl", "-w", "net.ipv4.conf.default.rp_filter=0")
 	dnsDir := t.TempDir()
 	for _, pair := range []struct{ dev, ns, label string }{{"wanfixture", "s2l-wan-live", "WAN"}, {"fallbackfixture", "s2l-fallback-live", "FALLBACK"}} {
 		run("ip", "netns", "add", pair.ns)

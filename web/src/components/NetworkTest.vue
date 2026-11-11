@@ -17,7 +17,7 @@ const target = ref('www.example.com:443');
 const stopped = ref(false),comparisonSnapshot=ref(null);
 const busy = ref(false), result = ref(null), error = ref(''), elapsed = ref(0);
 const labels = {get healthy() { return tr("正常"); }, get degraded() { return tr("仅备用可用"); }, get unavailable() { return tr("不可用"); }, get unsupported() { return tr("不支持"); },get restricted() { return tr("目标已响应 · 状态异常"); }};
-const methods = {get https() { return tr("HTTPS 转发"); }, get 'dns-udp'() { return tr("UDP 中继"); }, get 'udp-associate'() { return tr("UDP 协商"); }, doh:'DoH', tcp:'TCP DNS', get 'tcp-fallback'() { return tr("TCP DNS 备用"); }, 'doh/tcp':'DoH / TCP DNS'};
+const methods = {get https() { return tr("HTTPS 转发"); }, get 'dns-udp'() { return tr("UDP 中继"); }, get 'udp-associate'() { return tr("UDP 协商"); }, doh:'DoH', tcp:'TCP DNS', get 'tcp-fallback'() { return tr("TCP DNS 备用"); }, get 'doh-fallback'() { return tr("DoH 备用"); }, 'doh/tcp':'DoH / TCP DNS'};
 const advanced=ref(false);
 const modes = computed(()=>[{value:'protocols',get label() { return tr("协议检测"); }}, {value:'https',label:'HTTPS'}, {value:'quality',get label() { return tr("传输质量"); }}, ...(advanced.value?[{value:'google',get label() { return tr("Google 专项"); }}, {value:'tcping',label:'TCPing'}, {value:'ping',label:'Ping'}, {value:'mtr',get label() { return tr("MTR 追踪"); }}]:[])]);
 watch(advanced,value=>{if(!value&&!['protocols','https','quality'].includes(kind.value))kind.value='protocols'});

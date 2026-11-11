@@ -1,12 +1,16 @@
-.PHONY: build frontend run test clean install-service
+.PHONY: build build-go frontend run test clean install-service
 
 frontend:
 	cd web && npm ci && npm run build
 
 build: frontend
+	$(MAKE) build-go
+
+build-go:
+	@test -f web/dist/index.html || { echo "Frontend assets missing. Run make frontend first."; exit 1; }
 	go build -o bin/s2l ./cmd/s2l
 
-run: build
+run: build-go
 	sudo ./bin/s2l -config config.example.json
 
 test:

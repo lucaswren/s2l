@@ -5,7 +5,7 @@ import {computed,ref,watch,onBeforeUnmount} from 'vue';
 import Operations from './Operations.vue';
 import {ElMessageBox} from 'element-plus';
 import {api} from '../api/client';
-import {passRate} from '../utils/health';
+import {dnsFallbackDetails,passRate} from '../utils/health';
 import {mbps} from '../utils/runtime.js';
 const props=defineProps({status:Object,active:{type:Boolean,default:true},samples:{type:Object,default:()=>({sessions:{},host:{}})},stale:Boolean});
 const selected=ref(''),history=ref([]),warning=ref(''),busy=ref(false);
@@ -56,14 +56,15 @@ const recent=computed(()=>history.value.slice(-12).reverse());
   <div class="history-controls"><el-select v-model="selected" :aria-label='tr("历史记录映射")' :placeholder='tr("选择映射")'><el-option v-for="m in mappings" :key="m.id" :label="m.tun_name" :value="m.id"/></el-select><el-button :loading="busy" @click="load">{{ tr("刷新") }}</el-button></div>
   <el-alert v-if="warning" :title="warning" type="warning" :closable="false"/>
   <p>{{ tr("TCP 探测成功率") }} {{passRate(totals)}} {{ tr("· 成功") }} {{totals.pass}} {{ tr("· 失败") }} {{totals.fail}} {{ tr("· 目标限制") }} {{totals.restricted}}</p>
+  <p class="muted">{{ tr("DNS 回退来自独立健康探测。") }}</p>
   <el-table scrollbar-always-on class="desktop-list" :data="recent" :empty-text='tr("暂无历史采样")'>
    <el-table-column :label='tr("时段")' min-width="180"><template #default="{row}">{{time(row.at*1000)}}</template></el-table-column>
-   <el-table-column :label='tr("TCP / DNS 成功率")' min-width="160"><template #default="{row}">{{passRate(row.tcp)}} / {{passRate(row.dns)}}</template></el-table-column>
+   <el-table-column :label='tr("TCP / DNS 成功率")' min-width="160"><template #default="{row}">{{passRate(row.tcp)}} / {{passRate(row.dns)}}<div v-if="row.dns?.fallback" class="muted">{{ tr("DNS 回退 {0} 次", row.dns.fallback) }}</div><div v-if="row.last_dns_fallback" class="muted">{{time(row.last_dns_fallback.checked_at)}} · {{dnsFallbackDetails(row.last_dns_fallback)}}</div></template></el-table-column>
    <el-table-column :label='tr("平均 HTTPS 耗时")' min-width="145"><template #default="{row}">{{row.latency_samples?Math.round(row.latency_total_ms/row.latency_samples)+' ms':'—'}}</template></el-table-column>
    <el-table-column :label='tr("恢复 / 进程变化 / 会话变化")' min-width="210"><template #default="{row}">{{row.repairs}} / {{row.restarts}} / {{row.session_changes}}<div v-if="row.forwarding_pass || row.forwarding_fail || row.exit_changes" class="muted">{{ tr("转发实测") }} {{row.forwarding_pass || 0}} {{ tr("成功 /") }} {{row.forwarding_fail || 0}} {{ tr("失败 · 出口变化") }} {{row.exit_changes || 0}}</div></template></el-table-column>
    <el-table-column :label='tr("接收 / 发送峰值")' min-width="170"><template #default="{row}">{{bytes(row.rx_peak_bps)}}/s · {{bytes(row.tx_peak_bps)}}/s</template></el-table-column>
   </el-table>
-  <div class="mobile-list"><el-empty v-if="!recent.length" :description='tr("暂无历史采样")'/><article v-for="row in recent.slice(0,6)" :key="row.at" class="session-row"><strong>{{time(row.at*1000)}}</strong><p>TCP {{passRate(row.tcp)}} · DNS {{passRate(row.dns)}}</p><p>{{ tr("恢复") }} {{row.repairs}} {{ tr("· 进程变化") }} {{row.restarts}} {{ tr("· 会话变化") }} {{row.session_changes}}</p><p v-if="row.forwarding_pass || row.forwarding_fail || row.exit_changes">{{ tr("实测") }} {{row.forwarding_pass || 0}} {{ tr("成功 /") }} {{row.forwarding_fail || 0}} {{ tr("失败 · 出口变化") }} {{row.exit_changes || 0}}</p></article></div>
+  <div class="mobile-list"><el-empty v-if="!recent.length" :description='tr("暂无历史采样")'/><article v-for="row in recent.slice(0,6)" :key="row.at" class="session-row"><strong>{{time(row.at*1000)}}</strong><p>TCP {{passRate(row.tcp)}} · DNS {{passRate(row.dns)}}</p><p v-if="row.dns?.fallback">{{ tr("DNS 回退 {0} 次", row.dns.fallback) }}</p><p v-if="row.last_dns_fallback">{{time(row.last_dns_fallback.checked_at)}} · {{dnsFallbackDetails(row.last_dns_fallback)}}</p><p>{{ tr("恢复") }} {{row.repairs}} {{ tr("· 进程变化") }} {{row.restarts}} {{ tr("· 会话变化") }} {{row.session_changes}}</p><p v-if="row.forwarding_pass || row.forwarding_fail || row.exit_changes">{{ tr("实测") }} {{row.forwarding_pass || 0}} {{ tr("成功 /") }} {{row.forwarding_fail || 0}} {{ tr("失败 · 出口变化") }} {{row.exit_changes || 0}}</p></article></div>
   <p class="muted">{{ tr("每 5 分钟汇总；列表展示最近时段。成功率来自已完成探测，未采样不计为离线。") }}</p>
  </el-card>
 <p v-if="Object.keys(status.host_stats||{}).length" class="muted">{{ tr("服务器 TCP 连接") }} {{status.host_stats.CurrEstab ?? '—'}} {{ tr("· 累计重传段") }} {{status.host_stats.RetransSegs ?? '—'}} · {{tr('最近新增重传段')}} {{stale?'—':(samples.host?.retrans ?? '—')}} · conntrack {{status.host_stats.conntrack_count ?? '—'}} / {{status.host_stats.conntrack_max ?? '—'}}{{ tr("（全机统计）") }}</p>

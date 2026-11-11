@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/dnswire"
 	"github.com/lucaswren/s2l/internal/model"
 )
 
@@ -41,7 +42,7 @@ func (s *Server) Address() string { return s.listener.Addr().String() }
 // Query exercises the same loopback TCP listener used by sing-box. It does not
 // bypass the running mapping's resolver or fall back to host DNS.
 func (s *Server) Query(ctx context.Context, query []byte) ([]byte, error) {
-	if _, err := question(query); err != nil {
+	if _, err := dnswire.Question(query); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
@@ -123,7 +124,7 @@ func (s *Server) serve() {
 					for i := 6; i < 12; i++ {
 						answer[i] = 0
 					}
-					questionBytes, e := question(q)
+					questionBytes, e := dnswire.Question(q)
 					if e != nil {
 						return
 					}

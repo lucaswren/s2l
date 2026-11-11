@@ -25,6 +25,7 @@ const sessionTable = "s2l_ppp_sessions"
 func (c *Controller) EnableSessionGuard() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.rulesRevision++
 	if err := ensureSessionFirewall(); err != nil {
 		return err
 	}
@@ -85,7 +86,11 @@ func (c *Controller) syncSessionGuard(ctx context.Context) error {
 		return err
 	}
 	next := selectSessionPeers(mappings, rows, c.admitted)
-	pinErrors := pinSessionReturns(ctx, mappings, next, c.admitted, pinSessionReturn)
+	pinErrors := pinSessionReturns(ctx, mappings, next, c.admitted, func(ctx context.Context, mapping model.TunnelMapping, peer model.PPPSession) error {
+		// A new session may install an IP policy rule cached by the monitor.
+		c.rulesRevision++
+		return pinSessionReturn(ctx, mapping, peer)
+	})
 	if maps.Equal(next, c.admitted) && c.guardSnapshot != "" {
 		err := c.inspectSessionGuard(ctx)
 		if !IsMissingState(err) {

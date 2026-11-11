@@ -1,4 +1,16 @@
 {
+  "DNS 回退来自独立健康探测。": {
+    "en": "DNS fallback is measured by independent health probes.",
+    "tw": "DNS 回退來自獨立健康探測。"
+  },
+  "DNS 回退 {0} 次": {
+    "en": "DNS fallbacks: {0}",
+    "tw": "DNS 回退 {0} 次"
+  },
+  "DoH 备用耗时 {0} ms": {
+    "en": "DoH fallback took {0} ms",
+    "tw": "DoH 備用耗時 {0} ms"
+  },
   "DNS 代理拒绝 DoH {0} / TCP {1}": {
     "en": "DNS proxy rejections: DoH {0} / TCP {1}",
     "tw": "DNS 代理拒絕 DoH {0} / TCP {1}"
@@ -259,6 +271,10 @@
   "TCP / DNS 正常 · UDP 能力受限": {
     "en": "TCP / DNS healthy · Limited UDP support",
     "tw": "TCP / DNS 正常 · UDP 能力受限"
+  },
+  "DoH 备用": {
+    "en": "DoH fallback",
+    "tw": "DoH 備用"
   },
   "TCP DNS 备用": {
     "en": "TCP DNS fallback",
@@ -2319,10 +2335,6 @@
   "自动恢复冷却": {
     "en": "Recovery cooldown",
     "tw": "自動恢復冷卻"
-  },
-  "自动：DoH 故障时切换 TCP DNS": {
-    "en": "Auto: fall back from DoH to TCP DNS",
-    "tw": "自動：DoH 故障時切換 TCP DNS"
   },
   "自定义 NTP": {
     "en": "Custom NTP",

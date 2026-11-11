@@ -4,7 +4,6 @@ package dnsproxy
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lucaswren/s2l/internal/dnswire"
 	"github.com/lucaswren/s2l/internal/model"
 	"github.com/lucaswren/s2l/internal/speedtest"
 )
@@ -25,6 +25,7 @@ type Resolver struct {
 	failures, successes int
 	nextProbe           time.Time
 	probing             bool
+	exchangeDoH         func(context.Context, []byte) ([]byte, error)
 	exchange            func(context.Context, string, []byte) ([]byte, error)
 	dohEndpoint         string
 	tcpEndpoint         string
@@ -45,14 +46,14 @@ func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolve
 	if mode == "" {
 		mode = "auto"
 	}
-	r := &Resolver{status: model.ResolverStatus{Mode: mode, Active: "doh"}}
+	r := &Resolver{status: model.ResolverStatus{Mode: mode, Active: "tcp"}}
 	if endpoint, err := url.Parse(dohURL); err == nil {
 		r.dohEndpoint = endpoint.Host
 	}
 	r.tcpEndpoint = tcpAddress
 	r.ctx, r.cancel = context.WithCancel(context.Background())
-	if mode == "tcp" {
-		r.status.Active = "tcp"
+	if mode == "doh" {
+		r.status.Active = "doh"
 	}
 	r.transport = &http.Transport{Proxy: nil, ForceAttemptHTTP2: true, MaxConnsPerHost: 8, MaxIdleConns: 4, MaxIdleConnsPerHost: 4, IdleConnTimeout: 30 * time.Second, MaxResponseHeaderBytes: 64 * 1024,
 		TLSHandshakeTimeout: 3 * time.Second, ResponseHeaderTimeout: 3 * time.Second,
@@ -62,31 +63,28 @@ func newResolver(node model.SocksNode, mode, dohURL, tcpAddress string) *Resolve
 	r.tcp = &tcpPool{slots: make(chan struct{}, 4), dial: func(ctx context.Context) (net.Conn, error) {
 		return speedtest.DialNode(ctx, node, tcpAddress)
 	}}
-	r.exchange = func(ctx context.Context, method string, query []byte) ([]byte, error) {
-		if method == "doh" {
-			req, err := http.NewRequestWithContext(ctx, "POST", dohURL, bytes.NewReader(query))
-			if err != nil {
-				return nil, err
-			}
-			req.Header.Set("Content-Type", "application/dns-message")
-			req.Header.Set("Accept", "application/dns-message")
-			client := http.Client{Transport: r.transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-			resp, err := client.Do(req)
-			if err != nil {
-				return nil, err
-			}
-			defer resp.Body.Close()
-			media, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-			if err != nil || media != "application/dns-message" || resp.StatusCode != 200 {
-				return nil, &speedtest.StageError{Stage: "doh-http-response", Err: errors.New("invalid DoH response")}
-			}
-			body, err := io.ReadAll(io.LimitReader(resp.Body, 65536))
-			if len(body) > 65535 {
-				return nil, &speedtest.StageError{Stage: "dns-response", Err: errors.New("DNS response too large")}
-			}
-			return body, err
+	r.exchangeDoH = func(ctx context.Context, query []byte) ([]byte, error) {
+		req, err := http.NewRequestWithContext(ctx, "POST", dohURL, bytes.NewReader(query))
+		if err != nil {
+			return nil, err
 		}
-		return r.tcp.query(ctx, query)
+		req.Header.Set("Content-Type", "application/dns-message")
+		req.Header.Set("Accept", "application/dns-message")
+		client := http.Client{Transport: r.transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		media, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+		if err != nil || media != "application/dns-message" || resp.StatusCode != 200 {
+			return nil, &speedtest.StageError{Stage: "doh-http-response", Err: errors.New("invalid DoH response")}
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 65536))
+		if len(body) > 65535 {
+			return nil, &speedtest.StageError{Stage: "dns-response", Err: errors.New("DNS response too large")}
+		}
+		return body, err
 	}
 	return r
 }
@@ -106,68 +104,27 @@ func (r *Resolver) Close() {
 	}
 }
 
-// Responses must match the query; NXDOMAIN is valid, SERVFAIL/REFUSED trigger fallback.
-func question(packet []byte) ([]byte, error) {
-	if len(packet) < 12 || binary.BigEndian.Uint16(packet[4:6]) != 1 {
-		return nil, errors.New("one DNS question required")
-	}
-	pos := 12
-	for {
-		if pos >= len(packet) {
-			return nil, io.ErrUnexpectedEOF
-		}
-		n := int(packet[pos])
-		pos++
-		if n == 0 {
-			break
-		}
-		if n > 63 || pos+n > len(packet) {
-			return nil, errors.New("invalid DNS question name")
-		}
-		pos += n
-		if pos > 266 {
-			return nil, errors.New("DNS name too long")
-		}
-	}
-	if pos+4 > len(packet) {
-		return nil, io.ErrUnexpectedEOF
-	}
-	return packet[12 : pos+4], nil
-}
-
-func ValidateResponse(query, response []byte) error {
-	q, err := question(query)
-	if err != nil {
-		return err
-	}
-	a, err := question(response)
-	if err != nil {
-		return err
-	}
-	if response[0] != query[0] || response[1] != query[1] || response[2]&0x80 == 0 || response[2]&0x02 != 0 || response[2]&0x78 != query[2]&0x78 || len(q) != len(a) || !bytes.EqualFold(q[:len(q)-4], a[:len(a)-4]) || !bytes.Equal(q[len(q)-4:], a[len(a)-4:]) {
-		return errors.New("DNS response mismatch")
-	}
-	code, err := responseCode(response)
-	if err != nil {
-		return err
-	}
-	if code != 0 && code != 3 {
-		return fmt.Errorf("DNS server returned failure (RCODE %d)", code)
-	}
-	return nil
-}
-
 func (r *Resolver) attempt(ctx context.Context, method string, query []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2500*time.Millisecond)
 	defer cancel()
 	r.mu.Lock()
 	exchange := r.exchange
 	r.mu.Unlock()
-	response, err := exchange(ctx, method, query)
+	var response []byte
+	var err error
 	stage := "exchange"
-	if err == nil {
-		stage = "dns-response"
-		err = ValidateResponse(query, response)
+	if exchange == nil && method == "tcp" {
+		response, err = r.tcp.query(ctx, query)
+	} else {
+		if exchange != nil {
+			response, err = exchange(ctx, method, query)
+		} else {
+			response, err = r.exchangeDoH(ctx, query)
+		}
+		if err == nil {
+			stage = "dns-response"
+			err = ValidateResponse(query, response)
+		}
 	}
 	if err != nil && !errors.Is(ctx.Err(), context.Canceled) {
 		var protocolError *speedtest.StageError
@@ -269,7 +226,7 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if _, err := question(query); err != nil {
+	if _, err := dnswire.Question(query); err != nil {
 		return nil, err
 	}
 	if query[2]&0xf8 != 0 {
@@ -282,7 +239,7 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	}
 	r.status.Queries++
 	mode, active, generation := r.status.Mode, r.status.Active, r.status.Switches
-	probe := mode == "auto" && active == "tcp" && !r.probing && !time.Now().Before(r.nextProbe)
+	probe := mode == "auto" && active == "doh" && !r.probing && !time.Now().Before(r.nextProbe)
 	if probe {
 		r.probing = true
 		r.wg.Add(1)
@@ -296,9 +253,6 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 	stop := context.AfterFunc(r.ctx, cancel)
 	defer stop()
 	method := active
-	if mode == "doh" {
-		method = "doh"
-	}
 	var response []byte
 	var err error
 	used := method
@@ -316,16 +270,23 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 		return nil, r.ctx.Err()
 	}
 	r.mu.Lock()
-	if !r.closed && method == "doh" && mode == "auto" && generation == r.status.Switches {
+	if !r.closed && mode == "auto" && generation == r.status.Switches {
 		switch {
+		case method == "doh":
+			if err != nil {
+				r.successes = 0
+			} else if preferredFailed && used == "tcp" {
+				// A real query already confirmed recovery while DoH was failing.
+				r.notePrimarySuccess()
+			}
 		case err != nil:
 			// Neither transport answered, so there is no usable backup to prefer.
 			r.failures = 0
 		case preferredFailed:
 			r.notePrimaryFailure()
-		case used == "doh" && err == nil:
+		case used == "tcp":
 			r.failures = 0
-		case used == "tcp" && err == nil && !r.probing && !time.Now().Before(r.nextProbe):
+		case !r.probing && !time.Now().Before(r.nextProbe):
 			// A faster backup leaves the primary result unknown. Confirm it
 			// independently at a bounded rate without delaying the client.
 			r.probing = true
@@ -355,17 +316,28 @@ func (r *Resolver) Resolve(ctx context.Context, query []byte) ([]byte, error) {
 func (r *Resolver) notePrimaryFailure() {
 	r.failures++
 	if r.failures >= 2 {
-		r.status.Active = "tcp"
+		r.status.Active = "doh"
 		r.status.Switches++
 		r.successes = 0
 		r.nextProbe = time.Now().Add(60 * time.Second)
 	}
 }
 
+// notePrimarySuccess is called with mu held while DoH is preferred.
+func (r *Resolver) notePrimarySuccess() {
+	r.successes++
+	if r.successes >= 2 {
+		r.status.Active = "tcp"
+		r.status.Switches++
+		r.failures = 0
+		r.successes = 0
+	}
+}
+
 // Recheck the primary in the background; an available backup must not wait for it.
 func (r *Resolver) probePrimary(query []byte, generation uint64) {
 	defer r.wg.Done()
-	_, err := r.attempt(r.ctx, "doh", query)
+	_, err := r.attempt(r.ctx, "tcp", query)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.probing = false
@@ -373,7 +345,7 @@ func (r *Resolver) probePrimary(query []byte, generation uint64) {
 		return
 	}
 	r.nextProbe = time.Now().Add(30 * time.Second)
-	if r.status.Active == "doh" {
+	if r.status.Active == "tcp" {
 		if err != nil {
 			r.notePrimaryFailure()
 		} else {
@@ -385,11 +357,5 @@ func (r *Resolver) probePrimary(query []byte, generation uint64) {
 		r.successes = 0
 		return
 	}
-	r.successes++
-	if r.successes >= 2 && r.status.Active == "tcp" {
-		r.status.Active = "doh"
-		r.status.Switches++
-		r.failures = 0
-		r.successes = 0
-	}
+	r.notePrimarySuccess()
 }

@@ -55,8 +55,8 @@ onBeforeUnmount(()=>clearInterval(freshnessTimer));
 const stale=computed(()=>{const at=validSampleTime(props.status.collected_at);return at!==null&&now.value-at>30000;});
 function freshErrors(row){const n=stale.value?null:samples.value.processes[row.id];return Number.isFinite(n)?String(n):'—';}
 function protocolLabel(result) {
- if (result?.method === "udp-associate" && result?.error?.includes("code=")) return tr("节点拒绝 UDP");
- if (result?.state === "degraded" && result?.method === "tcp-fallback") return tr("仅备用可用");
+ if (result?.method === "udp-associate" && (result.socks_reply || result.error?.includes("code="))) return tr("节点拒绝 UDP");
+ if (result?.state === "degraded" && ["tcp-fallback", "doh-fallback"].includes(result?.method)) return tr("仅备用可用");
  return healthLabels[result?.state] || tr("检测中");
 }
 function rejectionSummary(row) {
@@ -72,7 +72,7 @@ function rejectionSummary(row) {
 }
 function protocolDetail(result) {
  if(result?.state==='blocked')return tr("未发起 UDP 探测");
- const methods = {get https() { return tr("HTTPS 转发"); }, get "dns-udp"() { return tr("UDP 中继实测"); }, get "udp-associate"() { return tr("UDP 协商"); }, doh: "DoH", tcp: "TCP DNS", get "tcp-fallback"() { return tr("TCP DNS 备用"); }, "doh/tcp": "DoH / TCP DNS"};
+ const methods = {get https() { return tr("HTTPS 转发"); }, get "dns-udp"() { return tr("UDP 中继实测"); }, get "udp-associate"() { return tr("UDP 协商"); }, doh: "DoH", tcp: "TCP DNS", get "tcp-fallback"() { return tr("TCP DNS 备用"); }, get "doh-fallback"() { return tr("DoH 备用"); }, "doh/tcp": "DoH / TCP DNS"};
  const attempts = (result?.attempts || []).map(attempt =>
   [attempt.method, attempt.target, protocolSummary(attempt)].filter(Boolean).join(' ')
  );

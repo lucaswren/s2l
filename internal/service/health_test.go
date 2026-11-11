@@ -89,6 +89,20 @@ func TestSeparateProtocolsDoNotDisableHealthyTCP(t *testing.T) {
 	}
 }
 
+func TestProtocolRecordRetainsLatestSOCKSReplyAndExitIP(t *testing.T) {
+	var record protocolRecord
+	now := time.Now()
+	record.observe(model.ProtocolHealth{State: "unsupported", SOCKSReply: 7, CheckedAt: now}, now)
+	record.observe(model.ProtocolHealth{State: "healthy", CheckedAt: now.Add(-time.Second)}, now)
+	if record.SOCKSReply != 7 {
+		t.Fatalf("cached health lost the proxy reply: %+v", record)
+	}
+	record.observe(model.ProtocolHealth{State: "healthy", ExitIP: "203.0.113.7", CheckedAt: now.Add(time.Second)}, now)
+	if record.SOCKSReply != 0 || record.ExitIP != "203.0.113.7" {
+		t.Fatalf("latest health did not replace probe metadata: %+v", record)
+	}
+}
+
 func TestHTTPSFailureWithWorkingDNSIsPartialAvailability(t *testing.T) {
 	h := healthRecord{UpstreamHealth: model.UpstreamHealth{State: "checking"}}
 	report := speedtest.HealthReport{TCP: model.ProtocolHealth{State: "unavailable"}, DNS: model.ProtocolHealth{State: "healthy"}, UDP: model.ProtocolHealth{State: "unsupported"}}
@@ -253,28 +267,26 @@ func TestHealthyProbeCadenceAndFastConfirmation(t *testing.T) {
 	}
 }
 
-func TestDispatchChecksAdvancesWithOneAvailableWorker(t *testing.T) {
-	mappings := []model.TunnelMapping{
-		{ID: "busy", Status: model.StatusRunning},
+func TestMonitorLaneRefillsWhenWorkerFinishes(t *testing.T) {
+	lane := newMonitorLane()
+	lane.slots = make(chan struct{}, 1)
+	lane.waiting = []model.TunnelMapping{
 		{ID: "a", Status: model.StatusRunning},
 		{ID: "stopped", Status: model.StatusStopped},
 		{ID: "b", Status: model.StatusRunning},
 		{ID: "c", Status: model.StatusRunning},
 	}
 	var admitted []string
-	cursor := 0
-	for range 4 {
-		available := true
-		cursor = dispatchChecks(mappings, cursor, func(m model.TunnelMapping) bool {
-			if !available || m.ID == "busy" {
-				return false
-			}
-			available = false
-			admitted = append(admitted, m.ID)
-			return true
-		})
+	launch := func(m model.TunnelMapping) {
+		lane.slots <- struct{}{}
+		admitted = append(admitted, m.ID)
 	}
-	if want := []string{"a", "b", "c", "a"}; !reflect.DeepEqual(admitted, want) {
-		t.Fatalf("admitted %v, want %v", admitted, want)
+	for range 3 {
+		lane.fill(launch)
+		lane.fill(launch) // An unrelated wake cannot exceed the worker limit.
+		<-lane.slots
+	}
+	if want := []string{"a", "b", "c"}; !reflect.DeepEqual(admitted, want) || len(lane.waiting) != 0 {
+		t.Fatalf("admitted %v, want %v with an empty queue", admitted, want)
 	}
 }

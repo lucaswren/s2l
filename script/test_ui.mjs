@@ -118,7 +118,7 @@ chrome.on('error',error=>{chromeError=error});
   await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(b=>b.innerText==='返回编辑').click()`);await pause(350);
   await evaluate(`document.querySelector('.el-dialog .el-dialog__headerbtn').click()`);await pause(350);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='帮助').click()`);
-  await wait(`document.querySelector('.el-drawer')?.innerText.includes('1.1.1.1, 8.8.8.8')`);
+  await wait(`document.querySelector('.el-drawer')?.innerText.includes('8.8.8.8, 1.1.1.1')`);
   await evaluate(`for(const e of document.querySelectorAll('.el-drawer .el-collapse-item__header'))if(['DNS 与客户端路由','接入验收'].includes(e.innerText.trim()))e.click()`);
   await pause(350);
   for(const locale of ['en','zh-TW','zh-CN']) {

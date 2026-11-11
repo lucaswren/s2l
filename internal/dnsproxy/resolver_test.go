@@ -27,7 +27,7 @@ func TestFallbackCooldownAndHystereticRecovery(t *testing.T) {
 		callsMu.Lock()
 		calls = append(calls, method)
 		callsMu.Unlock()
-		if method == "doh" && !primaryOK.Load() {
+		if method == "tcp" && !primaryOK.Load() {
 			return nil, errors.New("primary down")
 		}
 		return response(q, 0), nil
@@ -37,7 +37,7 @@ func TestFallbackCooldownAndHystereticRecovery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if s := r.Status(); s.Active != "tcp" || s.Fallbacks != 2 || s.Switches != 1 {
+	if s := r.Status(); s.Active != "doh" || s.Fallbacks != 2 || s.Switches != 1 {
 		t.Fatal(s)
 	}
 	callsMu.Lock()
@@ -49,7 +49,7 @@ func TestFallbackCooldownAndHystereticRecovery(t *testing.T) {
 	callsMu.Lock()
 	callsCopy := append([]string(nil), calls...)
 	callsMu.Unlock()
-	if len(callsCopy) != 1 || callsCopy[0] != "tcp" {
+	if len(callsCopy) != 1 || callsCopy[0] != "doh" {
 		t.Fatal("cooldown retried failed primary", callsCopy)
 	}
 	primaryOK.Store(true)
@@ -73,11 +73,11 @@ func TestFallbackCooldownAndHystereticRecovery(t *testing.T) {
 			}
 			time.Sleep(time.Millisecond)
 		}
-		if i == 0 && r.Status().Active != "tcp" {
+		if i == 0 && r.Status().Active != "doh" {
 			t.Fatal("one success prematurely restored primary")
 		}
 	}
-	if r.Status().Active != "doh" {
+	if r.Status().Active != "tcp" {
 		t.Fatal("primary did not recover")
 	}
 }

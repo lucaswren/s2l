@@ -22,6 +22,7 @@ type Controller struct {
 	sessionGuard     bool
 	admitted         map[string]model.PPPSession
 	guardSnapshot    string
+	rulesRevision    uint64
 	sessionSyncError error
 }
 
@@ -42,6 +43,7 @@ func mappingKey(m model.TunnelMapping) string {
 func (c *Controller) Setup(m model.TunnelMapping) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.rulesRevision++
 
 	if err := ValidateMapping(m); err != nil {
 		return err
@@ -90,6 +92,7 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 func (c *Controller) Teardown(m model.TunnelMapping) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.rulesRevision++
 
 	_, active := c.active[mappingKey(m)]
 	delete(c.active, mappingKey(m))
@@ -111,6 +114,7 @@ func (c *Controller) revokeSessionAdmission(id string) error {
 func (c *Controller) TeardownAll() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.rulesRevision++
 	var errs []error
 	for _, m := range c.active {
 		errs = append(errs, DelFirewall(m), DelPolicyRoute(m))

@@ -57,11 +57,10 @@ func TestDNSIsOfferedToNewClientsWithoutRestartingDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, address := range model.ClientDNSAddresses() {
-		line := "ms-dns " + address + "\n"
-		if strings.Count(string(data), line) != 1 || !strings.Contains(strings.ReplaceAll(string(installer), "\r\n", "\n"), line) {
-			t.Fatalf("runtime or fresh installer missing IPCP DNS offer %q", address)
-		}
+	const dnsOffer = "ms-dns 8.8.8.8\nms-dns 1.1.1.1\n"
+	if strings.Count(string(data), dnsOffer) != 1 ||
+		strings.Count(strings.ReplaceAll(string(installer), "\r\n", "\n"), dnsOffer) != 1 {
+		t.Fatal("runtime and fresh installer must offer 8.8.8.8 before 1.1.1.1")
 	}
 	if c.Changed() || !strings.Contains(string(data), "nodefaultroute\n") || !strings.Contains(string(data), "require-mschap-v2\n") {
 		t.Fatal("DNS offer changed daemon structure, routing or authentication")

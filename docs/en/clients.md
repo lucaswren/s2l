@@ -25,13 +25,13 @@ S2L terminates L2TP, with optional L2TP/IPsec. WireGuard, OpenVPN and native IKE
 
 ## DNS offered to the client versus actual resolvers
 
-PPP offers **1.1.1.1 and 8.8.8.8** during IPCP negotiation. Accept automatic VPN DNS. Upgrade existing servers using the [update procedure](operations.md), then reconnect clients to renegotiate DNS. Existing sessions do not receive changed PPP options. Do not hand-edit the generated PPP options file.
+PPP offers **8.8.8.8 and 1.1.1.1** during IPCP negotiation. Accept automatic VPN DNS. Upgrade existing servers using the [update procedure](operations.md), then reconnect clients to renegotiate DNS. Existing sessions do not receive changed PPP options. Do not hand-edit the generated PPP options file.
 
 These addresses identify DNS requests inside the tunnel. All TCP/UDP port 53 traffic reaching a mapping's TUN is intercepted; actual DNS exchanges use that mapping's fixed SOCKS5 node. No public DNS listener or PPP-to-host firewall exception is required. If an offered address is assigned locally on the S2L host, use a different, nonlocal DNS destination routed into the tunnel: local INPUT is blocked before TUN interception.
 
-DNS is managed automatically. The mapping uses `https://1.1.1.1/dns-query` and `8.8.8.8:53` through its fixed SOCKS5 exit. A mapping that requires a private resolver needs a separately reviewed deployment; the managed defaults resolve public names.
+DNS is managed automatically. The mapping prefers TCP DNS at `8.8.8.8:53` and uses `https://1.1.1.1/dns-query` as a fallback through its fixed SOCKS5 exit. A mapping that requires a private resolver needs a separately reviewed deployment; the managed defaults resolve public names.
 
-A failed transport starts the alternate immediately. If no valid response arrives within 300 ms, the alternate runs concurrently; the first valid answer wins and cancels the other request. This also allows a failed TCP backup to fall back to DoH. After two DoH failures or slower responses won by TCP, TCP becomes preferred; background recovery still requires two successful DoH checks before switching back. Valid NXDOMAIN does not trigger fallback. Both methods always use the same SOCKS5 node; if that node is unavailable, alternate DNS cannot restore its connectivity. No direct server DNS or exit switching is used. Working DNS does not require SOCKS5 UDP support. sing-box retains normal DNS caching.
+A failed transport starts the alternate immediately. If no valid response arrives within 300 ms, the alternate runs concurrently; the first valid answer wins and cancels the other request. After two confirmed TCP DNS failures with DoH available, the resolver temporarily prefers DoH. Two successful TCP DNS checks restore the preference. If DoH fails and TCP answers a live query, that answer also counts toward recovery. Valid NXDOMAIN does not trigger fallback. Both methods always use the same SOCKS5 node; if that node is unavailable, alternate DNS cannot restore its connectivity. No direct server DNS or exit switching is used. Working DNS does not require SOCKS5 UDP support. sing-box retains normal DNS caching.
 
 ## Client settings
 
@@ -45,7 +45,7 @@ A failed transport starts the alternate immediately. If no valid response arrive
 
 pppd exposes negotiated addresses to the IP-up hook as `DNS1`/`DNS2` and can write `/etc/ppp/resolv.conf`; that file is distinct from the system resolver configuration. See the [pppd manual](https://github.com/ppp-project/ppp/blob/master/pppd/pppd.8). Avoid blindly overwriting `/etc/resolv.conf` on a managed system.
 
-If automatic DNS is ignored, enter 1.1.1.1 and 8.8.8.8 manually **and route both into L2TP**. Check LAN DNS, browser secure DNS, application DoH and split routing separately. DoH on HTTPS does not use S2L's port 53 interception; it follows the client's application routing.
+If automatic DNS is ignored, enter 8.8.8.8 and 1.1.1.1 manually **and route both into L2TP**. Check LAN DNS, browser secure DNS, application DoH and split routing separately. DoH on HTTPS does not use S2L's port 53 interception; it follows the client's application routing.
 
 S2L blocks IPv6 arriving through PPP, but cannot block IPv6 through a client's other adapters. Enforce the required IPv6 and disconnect-fallback policy on the client/router. An inactive VPN must not silently restore WAN access if the intended policy is to fail closed.
 

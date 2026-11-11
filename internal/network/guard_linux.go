@@ -16,6 +16,7 @@ import (
 func (c *Controller) EnsureGuard() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.rulesRevision++
 	return ensureGuard(c.management)
 }
 

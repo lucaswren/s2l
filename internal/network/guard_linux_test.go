@@ -25,6 +25,9 @@ func TestLeakGuardsIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	must("sysctl", "-w", "net.ipv4.ip_forward=1")
+	must("sysctl", "-w", "net.ipv4.conf.all.rp_filter=0")
+	must("sysctl", "-w", "net.ipv4.conf.default.rp_filter=0")
 	client := fmt.Sprintf("s2l-client-%d", os.Getpid())
 	outside := fmt.Sprintf("s2l-outside-%d", os.Getpid())
 	for _, ns := range []string{client, outside} {
@@ -44,7 +47,6 @@ func TestLeakGuardsIntegration(t *testing.T) {
 			must("ip", append([]string{"netns", "exec", link.ns, "ip"}, args...)...)
 		}
 	}
-	must("sysctl", "-w", "net.ipv4.ip_forward=1")
 	must("sysctl", "-w", "net.ipv6.conf.all.forwarding=1")
 	must("ip", "netns", "exec", client, "ip", "route", "add", "default", "via", "10.0.101.1")
 	must("ip", "netns", "exec", outside, "ip", "route", "add", "default", "via", "198.18.0.1")

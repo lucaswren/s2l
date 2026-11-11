@@ -4,11 +4,12 @@ package history
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -18,6 +19,9 @@ import (
 const bucketSeconds = int64(300)
 const maxBuckets = 288
 
+// Allow room for fallback details across a full day of samples for every mapping.
+const maxHistoryBytes = 64 << 20
+
 type Counts struct {
 	Pass        int `json:"pass"`
 	Fail        int `json:"fail"`
@@ -25,6 +29,14 @@ type Counts struct {
 	Unsupported int `json:"unsupported"`
 	Fallback    int `json:"fallback"`
 }
+type DNSFallback struct {
+	CheckedAt    time.Time `json:"checked_at"`
+	PrimaryStage string    `json:"primary_stage"`
+	SOCKSReply   byte      `json:"socks_reply,omitempty"`
+	PrimaryMS    int64     `json:"primary_ms"`
+	BackupMS     int64     `json:"backup_ms"`
+}
+
 type Bucket struct {
 	At             int64  `json:"at"`
 	TCP            Counts `json:"tcp"`
@@ -40,12 +52,14 @@ type Bucket struct {
 	ForwardingFail int    `json:"forwarding_fail"`
 	RxPeakBPS      uint64 `json:"rx_peak_bps"`
 	TxPeakBPS      uint64 `json:"tx_peak_bps"`
+
+	LastDNSFallback *DNSFallback `json:"last_dns_fallback,omitempty"`
 }
 type baseline struct {
 	tcp, dns, udp time.Time
 	pid           int
-	local         string
-	sessions      string
+	sessions      []string
+	sessionsKnown bool
 	traffic       model.TunTraffic
 	at            time.Time
 	exitIP        string
@@ -106,8 +120,8 @@ func New(path string) *Store {
 		return s
 	}
 	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, 32<<20+1))
-	if err != nil || len(data) > 32<<20 {
+	data, err := io.ReadAll(io.LimitReader(f, maxHistoryBytes+1))
+	if err != nil || len(data) > maxHistoryBytes {
 		s.loadNotice = "历史记录文件无效，已重新开始采样"
 		return s
 	}
@@ -116,28 +130,26 @@ func New(path string) *Store {
 		s.loadNotice = "历史记录文件无效，已重新开始采样"
 		return s
 	}
+	now := time.Now()
 	for id, rows := range s.rows {
-		if len(rows) > maxBuckets {
-			rows = rows[len(rows)-maxBuckets:]
-		}
-		s.rows[id] = trim(rows, time.Now())
+		sort.Slice(rows, func(i, j int) bool { return rows[i].At < rows[j].At })
+		s.rows[id] = trim(rows, now)
 	}
 	return s
 }
+
+// Rows stay sorted by time. Readers that need an independent copy make it
+// under the store lock before returning.
 func trim(rows []Bucket, now time.Time) []Bucket {
-	cutoff := now.Unix() - 24*3600
-	out := make([]Bucket, 0, len(rows))
-	for _, b := range rows {
-		if b.At > cutoff && b.At <= now.Unix() {
-			out = append(out, b)
-		}
+	unix := now.Unix()
+	end := sort.Search(len(rows), func(i int) bool { return rows[i].At > unix })
+	start := sort.Search(end, func(i int) bool { return rows[i].At > unix-24*3600 })
+	if end-start > maxBuckets {
+		start = end - maxBuckets
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
-	if len(out) > maxBuckets {
-		out = out[len(out)-maxBuckets:]
-	}
-	return out
+	return rows[start:end]
 }
+
 func count(c *Counts, p model.ProtocolHealth, last *time.Time) {
 	if p.CheckedAt.IsZero() || !p.CheckedAt.After(*last) {
 		return
@@ -169,18 +181,24 @@ func (s *Store) Record(status model.SystemStatus, now time.Time) {
 	for _, t := range status.TunTraffic {
 		traffic[t.TunName] = t
 	}
+	sessions := make(map[string][]string, len(status.Sessions))
+	if status.SessionsError == "" {
+		for _, peer := range status.Sessions {
+			key := peer.Interface + "/" + strconv.Itoa(peer.Index) + "/" + peer.PeerIP
+			sessions[peer.MappingID] = append(sessions[peer.MappingID], key)
+		}
+	}
 	for _, m := range status.Mappings {
 		active[m.ID] = true
-		// Retention also applies to stopped mappings, not only new samples.
-		if rows, exists := s.rows[m.ID]; exists {
-			s.rows[m.ID] = trim(rows, now)
-		}
+		rows := trim(s.rows[m.ID], now)
 		h, ok := status.UpstreamHealth[m.ID]
 		if !ok || m.Status != model.StatusRunning {
+			if _, exists := s.rows[m.ID]; exists {
+				s.rows[m.ID] = rows
+			}
 			delete(s.previous, m.ID)
 			continue
 		}
-		rows := trim(s.rows[m.ID], now)
 		stamp := now.Unix() / bucketSeconds * bucketSeconds
 		if len(rows) == 0 || rows[len(rows)-1].At != stamp {
 			rows = append(rows, Bucket{At: stamp})
@@ -189,7 +207,18 @@ func (s *Store) Record(status model.SystemStatus, now time.Time) {
 		old := s.previous[m.ID]
 		fresh := !h.TCP.CheckedAt.IsZero() && h.TCP.CheckedAt.After(old.tcp)
 		count(&b.TCP, h.TCP, &old.tcp)
+		fallbacks := b.DNS.Fallback
 		count(&b.DNS, h.DNS, &old.dns)
+		if b.DNS.Fallback > fallbacks && h.DNS.Method == "doh-fallback" && len(h.DNS.Attempts) == 2 {
+			primary, backup := h.DNS.Attempts[0], h.DNS.Attempts[1]
+			b.LastDNSFallback = &DNSFallback{
+				CheckedAt:    h.DNS.CheckedAt,
+				PrimaryStage: primary.Stage,
+				SOCKSReply:   primary.SOCKSReply,
+				PrimaryMS:    primary.DurationMS,
+				BackupMS:     backup.DurationMS,
+			}
+		}
 		count(&b.UDP, h.UDP, &old.udp)
 		if fresh && (h.TCP.MeasuredState == "healthy" || (h.TCP.MeasuredState == "" && h.TCP.State == "healthy")) {
 			b.LatencyTotalMS += h.TCP.DurationMS
@@ -207,19 +236,13 @@ func (s *Store) Record(status model.SystemStatus, now time.Time) {
 			}
 		}
 		if status.SessionsError == "" {
-			keys := []string{}
-			for _, p := range status.Sessions {
-				if p.MappingID == m.ID {
-					keys = append(keys, fmt.Sprintf("%s/%d/%s", p.Interface, p.Index, p.PeerIP))
-				}
-			}
+			keys := sessions[m.ID]
 			sort.Strings(keys)
-			encoded, _ := json.Marshal(keys)
-			current := string(encoded)
-			if old.sessions != "" && current != old.sessions {
+			if old.sessionsKnown && !slices.Equal(old.sessions, keys) {
 				b.SessionChanges++
 			}
-			old.sessions = current
+			old.sessions = keys
+			old.sessionsKnown = true
 		}
 		t := traffic[m.TunName]
 		elapsed := now.Sub(old.at).Seconds()
@@ -238,7 +261,6 @@ func (s *Store) Record(status model.SystemStatus, now time.Time) {
 			}
 		}
 		old.pid = pid
-		old.local = h.LocalState
 		old.repairs = h.RepairSuccesses
 		old.exits = h.Process.Exits
 		old.traffic = t
@@ -266,7 +288,14 @@ func (s *Store) Snapshot(id string) ([]Bucket, string) {
 	if warning == "" {
 		warning = s.loadNotice
 	}
-	return append([]Bucket{}, trim(s.rows[id], time.Now())...), warning
+	rows := append([]Bucket{}, trim(s.rows[id], time.Now())...)
+	for i := range rows {
+		if fallback := rows[i].LastDNSFallback; fallback != nil {
+			detail := *fallback
+			rows[i].LastDNSFallback = &detail
+		}
+	}
+	return rows, warning
 }
 func (s *Store) Flush() { s.mu.Lock(); defer s.mu.Unlock(); s.flushLocked(time.Now()) }
 func (s *Store) flushLocked(now time.Time) {

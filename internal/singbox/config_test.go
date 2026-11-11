@@ -132,7 +132,7 @@ func TestGenerateConfig(t *testing.T) {
 	if !ok {
 		t.Fatal("missing dns")
 	}
-	if dns["final"] != "doh" {
+	if dns["final"] != "tcpdns" {
 		t.Fatalf("dns.final = %v", dns["final"])
 	}
 	route := cfg["route"].(map[string]any)

@@ -49,7 +49,7 @@ func TestAutoDNSFastAnswerDoesNotSendBackup(t *testing.T) {
 	var calls atomic.Int32
 	r.exchange = func(_ context.Context, method string, q []byte) ([]byte, error) {
 		calls.Add(1)
-		if method != "doh" {
+		if method != "tcp" {
 			return nil, errors.New("unexpected alternate")
 		}
 		return response(q, 3), nil // Valid NXDOMAIN must not trigger fallback.
@@ -71,7 +71,7 @@ func TestAutoDNSFailedTCPImmediatelyRetriesDoH(t *testing.T) {
 	r.nextProbe = time.Now().Add(time.Hour)
 	r.exchange = func(_ context.Context, method string, q []byte) ([]byte, error) {
 		if method == "tcp" {
-			return nil, errors.New("backup refused")
+			return nil, errors.New("primary refused")
 		}
 		return response(q, 0), nil
 	}
@@ -87,7 +87,7 @@ func TestAutoDNSFailedTCPImmediatelyRetriesDoH(t *testing.T) {
 	s := r.Status()
 	if s.LastDoHFailure != nil || s.LastTCPFailure == nil ||
 		s.LastTCPFailure.Endpoint != model.DefaultDNSTCPAddress || s.LastTCPFailure.Stage != "exchange" {
-		t.Fatal("backup transport failure must remain visible after successful fallback", s)
+		t.Fatal("primary transport failure must remain visible after successful fallback", s)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestAutoDNSBothFailCountOneQueryFailure(t *testing.T) {
 			t.Fatal("both failures hidden")
 		}
 	}
-	if s := r.Status(); s.Queries != 3 || s.Failures != 3 || s.Fallbacks != 0 || s.Switches != 0 || s.Active != "doh" {
+	if s := r.Status(); s.Queries != 3 || s.Failures != 3 || s.Fallbacks != 0 || s.Switches != 0 || s.Active != "tcp" {
 		t.Fatal(s)
 	}
 }
@@ -145,7 +145,7 @@ func TestRepeatedFastBackupDoesNotSwitchPrimary(t *testing.T) {
 	defer r.Close()
 	r.nextProbe = time.Now().Add(time.Hour)
 	r.exchange = func(ctx context.Context, method string, q []byte) ([]byte, error) {
-		if method == "doh" {
+		if method == "tcp" {
 			<-ctx.Done()
 			return nil, ctx.Err()
 		}
@@ -157,8 +157,8 @@ func TestRepeatedFastBackupDoesNotSwitchPrimary(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if s := r.Status(); s.Active != "doh" || s.Switches != 0 || s.Fallbacks != 3 || s.LastDoHFailure != nil {
-		t.Fatalf("backup speed was treated as confirmed DoH failure: %+v", s)
+	if s := r.Status(); s.Active != "tcp" || s.Switches != 0 || s.Fallbacks != 3 || s.LastTCPFailure != nil {
+		t.Fatalf("backup speed was treated as confirmed TCP DNS failure: %+v", s)
 	}
 }
 
@@ -167,7 +167,7 @@ func TestAutoDNSExtendedErrorFallsBack(t *testing.T) {
 	defer r.Close()
 	r.exchange = func(_ context.Context, method string, query []byte) ([]byte, error) {
 		answer := response(query, 0)
-		if method == "doh" {
+		if method == "tcp" {
 			answer[11] = 1
 			// OPT with extended RCODE 1 and header RCODE 0 gives BADVERS (16).
 			return append(answer, 0, 0, 41, 4, 208, 1, 0, 0, 0, 0, 0), nil
@@ -181,7 +181,7 @@ func TestAutoDNSExtendedErrorFallsBack(t *testing.T) {
 	if _, err := r.Resolve(context.Background(), query); err != nil {
 		t.Fatal(err)
 	}
-	if status := r.Status(); status.Fallbacks != 1 || status.LastDoHFailure == nil {
+	if status := r.Status(); status.Fallbacks != 1 || status.LastTCPFailure == nil {
 		t.Fatalf("BADVERS did not trigger fallback: %+v", status)
 	}
 }

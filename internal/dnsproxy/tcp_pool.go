@@ -9,6 +9,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/lucaswren/s2l/internal/speedtest"
 )
 
 // Each leased connection processes one query at a time. The bounded pool is
@@ -79,11 +81,12 @@ func (p *tcpPool) query(ctx context.Context, q []byte) ([]byte, error) {
 			answer = make([]byte, binary.BigEndian.Uint16(size[:]))
 			_, err = io.ReadFull(c, answer)
 		}
-		if err == nil {
-			err = ValidateResponse(q, answer)
-		}
 		stopped := stop()
 		if err == nil && stopped && ctx.Err() == nil {
+			if validationErr := ValidateResponse(q, answer); validationErr != nil {
+				c.Close()
+				return nil, &speedtest.StageError{Stage: "dns-response", Err: validationErr}
+			}
 			err = c.SetDeadline(time.Time{})
 			p.mu.Lock()
 			if err == nil && !p.closed {
@@ -95,16 +98,15 @@ func (p *tcpPool) query(ctx context.Context, q []byte) ([]byte, error) {
 			// A valid response remains valid if the peer closes immediately
 			// afterwards. Failure to reset its deadline only prevents reuse.
 			return answer, nil
-		} else {
-			c.Close()
 		}
+		c.Close()
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		last = err
 		if !reused {
 			break
-		} // Only replay an idempotent query on an expired idle socket.
+		} // Only replay an idempotent query after I/O fails on a reused socket.
 	}
 	if last == nil {
 		last = context.Canceled

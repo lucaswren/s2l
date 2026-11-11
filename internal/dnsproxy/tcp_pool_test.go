@@ -3,11 +3,14 @@ package dnsproxy
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/lucaswren/s2l/internal/speedtest"
 )
 
 func TestTCPPoolReuseStaleReconnectAndClose(t *testing.T) {
@@ -71,6 +74,38 @@ func TestTCPPoolCancellationReleasesCapacity(t *testing.T) {
 	}
 	if len(p.slots) != 0 {
 		t.Fatal("leaked connection lease")
+	}
+}
+
+func TestTCPPoolDoesNotRedialAfterDNSFailure(t *testing.T) {
+	client, server := net.Pipe()
+	defer server.Close()
+	dials := 0
+	p := &tcpPool{
+		idle:  []net.Conn{client},
+		slots: make(chan struct{}, 1),
+		dial: func(context.Context) (net.Conn, error) {
+			dials++
+			return nil, errors.New("unexpected redial")
+		},
+	}
+	defer p.close()
+	query, _ := QueryA("example.com")
+	go func() {
+		frame := make([]byte, 2+len(query))
+		if _, err := io.ReadFull(server, frame); err != nil {
+			return
+		}
+		frame[5] = 0x82 // SERVFAIL in a complete, matching DNS response.
+		frame[4] |= 0x80
+		server.Write(frame)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err := p.query(ctx, query)
+	var staged *speedtest.StageError
+	if dials != 0 || !errors.As(err, &staged) || staged.Stage != "dns-response" {
+		t.Fatalf("DNS failure should trigger fallback without redial: dials=%d, err=%v", dials, err)
 	}
 }
 

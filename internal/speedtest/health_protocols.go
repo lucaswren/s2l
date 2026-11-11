@@ -10,9 +10,11 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/lucaswren/s2l/internal/model"
@@ -102,25 +104,31 @@ func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget,
 		result.Attempts = attempts
 		return result
 	}
-	if mode == "tcp" {
-		if err := run("tcp", tcpTarget, exchangeTCPDNS); err != nil {
-			return finish("tcp", fmt.Errorf("TCP DNS forwarding or response validation failed"))
+	if mode == "doh" {
+		if err := run("doh", dohTarget, exchangeDoH); err != nil {
+			return finish("doh", fmt.Errorf("DoH forwarding or response validation failed"))
 		}
-		return finish("tcp", nil)
-	}
-	if err := run("doh", dohTarget, exchangeDoH); err == nil {
 		return finish("doh", nil)
 	}
-	if mode == "doh" {
-		return finish("doh", fmt.Errorf("DoH forwarding or response validation failed"))
-	}
 	if err := run("tcp", tcpTarget, exchangeTCPDNS); err == nil {
-		return model.ProtocolHealth{State: "degraded", Method: "tcp-fallback", Error: "Primary DoH failed; TCP DNS probe succeeded; inspect the mapping's live resolver status", CheckedAt: time.Now(), Attempts: attempts}
+		return finish("tcp", nil)
+	}
+	if mode == "tcp" {
+		return finish("tcp", fmt.Errorf("TCP DNS forwarding or response validation failed"))
+	}
+	if err := run("doh", dohTarget, exchangeDoH); err == nil {
+		return model.ProtocolHealth{State: "degraded", Method: "doh-fallback", Error: "Primary TCP DNS failed; DoH probe succeeded; inspect the mapping's live resolver status", CheckedAt: time.Now(), Attempts: attempts}
 	}
 	return finish("doh/tcp", fmt.Errorf("DoH and TCP DNS forwarding or response validation failed"))
 }
 
 func exchangeDoH(ctx context.Context, node model.SocksNode, target string, query []byte) error {
+	var phase atomic.Value
+	phase.Store("")
+	ctx = httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		TLSHandshakeStart: func() { phase.Store("tls") },
+		GotConn:           func(httptrace.GotConnInfo) { phase.Store("http") },
+	})
 	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, DialContext: func(c context.Context, _, addr string) (net.Conn, error) {
 		return DialNode(c, node, addr)
 	}}
@@ -134,18 +142,28 @@ func exchangeDoH(ctx context.Context, node model.SocksNode, target string, query
 	req.Header.Set("Accept", "application/dns-message")
 	resp, err := client.Do(req)
 	if err != nil {
+		var staged *StageError
+		if stage := phase.Load().(string); stage != "" && !errors.As(err, &staged) {
+			return &StageError{Stage: stage, Err: err}
+		}
 		return err
 	}
 	defer resp.Body.Close()
 	media, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
 	if err != nil || resp.StatusCode != 200 || media != "application/dns-message" {
-		return fmt.Errorf("invalid DoH response")
+		return &StageError{Stage: "http", Err: fmt.Errorf("invalid DoH response")}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4097))
-	if err != nil || len(body) > 4096 {
-		return fmt.Errorf("invalid DoH body")
+	if err != nil {
+		return &StageError{Stage: "http", Err: err}
 	}
-	return validateDNS(query, body)
+	if len(body) > 4096 {
+		return &StageError{Stage: "dns-validation", Err: fmt.Errorf("invalid DoH body size")}
+	}
+	if err := validateDNS(query, body); err != nil {
+		return &StageError{Stage: "dns-validation", Err: err}
+	}
+	return nil
 }
 
 func exchangeTCPDNS(ctx context.Context, node model.SocksNode, target string, query []byte) error {
@@ -199,9 +217,7 @@ func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHea
 		}
 		return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association failed"))
 	}
-	controlDone := make(chan struct{})
-	go func() { var b [1]byte; _, _ = control.Read(b[:]); close(controlDone) }()
-	defer func() { control.Close(); <-controlDone }()
+	defer control.Close()
 	host, port, err := net.SplitHostPort(relay)
 	number, parseErr := strconv.Atoi(port)
 	if err != nil || parseErr != nil || number < 1 || number > 65535 {
@@ -220,6 +236,22 @@ func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHea
 		return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP relay is unreachable"))
 	}
 	defer udp.Close()
+	controlDone := make(chan struct{})
+	go func() {
+		var b [1]byte
+		_, _ = control.Read(b[:])
+		close(controlDone)
+		udp.Close()
+	}()
+	defer func() { control.Close(); <-controlDone }()
+	controlClosed := func() bool {
+		select {
+		case <-controlDone:
+			return true
+		default:
+			return false
+		}
+	}
 	stop := context.AfterFunc(attempt, func() { udp.Close(); control.Close() })
 	defer stop()
 	for _, target := range []string{"1.1.1.1:53", "8.8.8.8:53"} {
@@ -247,15 +279,16 @@ func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHea
 			}
 			payload, err := udpResponse(buffer[:n], target)
 			if err == nil && validateDNS(query, payload) == nil {
-				select {
-				case <-controlDone:
+				if controlClosed() {
 					return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP control connection closed"))
-				default:
 				}
 				return protocolResult("dns-udp", nil)
 			}
 			// Ignore unrelated, spoofed, fragmented or malformed packets until deadline.
 		}
+	}
+	if controlClosed() && attempt.Err() == nil {
+		return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP control connection closed"))
 	}
 	return protocolResult("dns-udp", fmt.Errorf("No valid DNS response through the SOCKS5 UDP relay"))
 }

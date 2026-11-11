@@ -4,6 +4,13 @@ export const stageLabels = {get 'proxy-connect'() { return tr("节点连接"); }
 export function protocolSummary(result) {
  return [stageLabels[result?.stage] || result?.stage, result?.socks_reply ? tr('SOCKS5 拒绝码 {0}', result.socks_reply) : '',  result?.status_code ? `HTTP ${result.status_code}` : '', Number.isFinite(result?.duration_ms) ? `${result.duration_ms} ms` : ''].filter(Boolean).join(' · ');
 }
+export function dnsFallbackDetails(fallback) {
+ if (!fallback) return '';
+ const primary = protocolSummary({stage:fallback.primary_stage,socks_reply:fallback.socks_reply,duration_ms:fallback.primary_ms});
+ const backup = Number.isFinite(fallback.backup_ms) ? tr('DoH 备用耗时 {0} ms', fallback.backup_ms) : '';
+ return [primary, backup].filter(Boolean).join(' · ');
+}
+
 export function passRate(counts) {
  const total=(counts?.pass||0)+(counts?.fail||0)+(counts?.restricted||0)+(counts?.unsupported||0);
  return total ? `${((counts?.pass||0)/total*100).toFixed(1)}%` : '—';

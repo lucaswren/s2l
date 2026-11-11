@@ -308,35 +308,24 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 			integrationIPsecLifecycle(t, root, caPath, run, assertNoDirectEgress)
 		}
 	}
-	if proxyState["node1"].dohQueries.Load() == 0 {
-		// A cold TLS handshake can legitimately lose the TCP hedge on a slow
-		// emulator. Send uncached client queries through the same mapping until
-		// the configured DoH endpoint is actually used (including its 30s retry).
-		attempt := 0
-		integrationWait(t, 45*time.Second, func() bool {
-			if proxyState["node1"].dohQueries.Load() > 0 {
-				return true
-			}
-			attempt++
-			integrationClientDNS(t, "s2l-dial-1", fmt.Sprintf("doh-ready-%d.fixture.test", attempt), "1.1.1.1", true)
-			return proxyState["node1"].dohQueries.Load() > 0
-		})
+	node1 := proxyState["node1"]
+	if sb.ResolverStatus("tun102").Active != "tcp" || node1.tcpQueries.Load() == 0 {
+		t.Fatal("auto DNS did not prefer the configured TCP resolver")
 	}
-	// Slow TLS handshakes may legitimately hedge through TCP even while the
-	// DoH endpoint is online, especially during repeated IPsec rekeys. Measure
-	// new fallback traffic rather than requiring a lifetime TCP count of zero.
-	tcpBeforeFallback := proxyState["node1"].tcpQueries.Load()
-	// Use new names to bypass sing-box cache and prove both DNS ingress transports.
-	proxyState["node1"].dohOnline.Store(false)
-	for i := 0; i < 2; i++ {
-		integrationClientDNS(t, "s2l-dial-1", fmt.Sprintf("fallback%d.fixture.test", i), "1.1.1.1", true)
+	dohBeforeFallback := node1.dohQueries.Load()
+	node1.tcpOffline.Store(true)
+	t.Cleanup(func() { node1.tcpOffline.Store(false) })
+	// Use uncached names and send requests to both advertised DNS addresses.
+	for i, address := range model.ClientDNSAddresses() {
+		integrationClientDNS(t, "s2l-dial-1", fmt.Sprintf("fallback%d.fixture.test", i), address, true)
 	}
-	if sb.ResolverStatus("tun102").Active != "tcp" || proxyState["node1"].tcpQueries.Load()-tcpBeforeFallback < 2 {
-		t.Fatal("custom DoH failure did not use the configured TCP resolver on the same node")
+	if sb.ResolverStatus("tun102").Active != "doh" || node1.dohQueries.Load()-dohBeforeFallback < 2 {
+		t.Fatal("custom TCP DNS failure did not use the configured DoH resolver on the same node")
 	}
-	proxyState["node1"].assertDNSTargets(t, "resolver.fixture.invalid:8443", "dns.fixture.invalid:5353")
+	node1.tcpOffline.Store(false)
+	node1.assertDNSTargets(t, "dns.fixture.invalid:5353", "resolver.fixture.invalid:8443")
 	assertNoDirectEgress()
-	t.Log("custom DoH, configured TCP fallback and UDP/TCP client DNS passed through node1 only")
+	t.Log("custom TCP DNS, configured DoH fallback and UDP/TCP client DNS passed through node1 only")
 	if !ipsec {
 		// Reusing an account must reject only the new excess session.
 		dupNS := "s2l-dial-duplicate"
@@ -518,6 +507,10 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 	svc.peerMu.Unlock()
 	// Missing rules are repaired independently of upstream probes and without
 	// replacing either mapping's live sing-box process.
+	round := &network.VerificationRound{}
+	if err := controller.VerifyInRound(context.Background(), second, round); err != nil {
+		t.Fatalf("could not prime shared inspection with the healthy mapping: %v", err)
+	}
 	run("iptables", "-t", "nat", "-D", "POSTROUTING", "-o", first.TunName, "-j", "MASQUERADE", "-m", "comment", "--comment", "s2l:"+first.ID)
 	if controller.Verify(first) == nil {
 		t.Fatal("removed rule was not detected")
@@ -526,7 +519,7 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 	svc.health[first.ID].forwardingNext = time.Time{}
 	svc.mu.Unlock()
 	pid := sb.PID(first.TunName)
-	svc.checkLocalMapping(context.Background(), first)
+	svc.checkLocalMappingInRound(context.Background(), first, round)
 	if err := controller.Verify(first); err != nil {
 		t.Fatal(err)
 	}
@@ -664,15 +657,10 @@ func integrationCertificate(t *testing.T) (tls.Certificate, []byte) {
 func integrationSOCKS(t *testing.T, id string, cert tls.Certificate, bind ...string) (string, func(bool), *integrationProxyState) {
 	t.Helper()
 	state := &integrationProxyState{online: true, connections: make(map[net.Conn]bool), dnsTargets: make(map[string]int)}
-	state.dohOnline.Store(true)
 	holdDone := make(chan struct{})
 	target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/custom-dns" {
 			state.dohQueries.Add(1)
-			if !state.dohOnline.Load() {
-				w.WriteHeader(http.StatusServiceUnavailable)
-				return
-			}
 			q, err := io.ReadAll(io.LimitReader(r.Body, 65536))
 			if err != nil || len(q) < 12 || r.Method != "POST" || r.Header.Get("Content-Type") != "application/dns-message" {
 				w.WriteHeader(http.StatusBadRequest)
@@ -792,6 +780,9 @@ func integrationSOCKS(t *testing.T, id string, cert tls.Certificate, bind ...str
 						return
 					}
 					q = integrationDNSAnswer(q)
+					if state.tcpOffline.Load() {
+						q[3] = q[3]&0xf0 | 2 // SERVFAIL
+					}
 					binary.BigEndian.PutUint16(size[:], uint16(len(q)))
 					c.Write(size[:])
 					c.Write(q)
@@ -815,7 +806,7 @@ type integrationProxyState struct {
 	online                 bool
 	connections            map[net.Conn]bool
 	dnsTargets             map[string]int
-	dohOnline              atomic.Bool
+	tcpOffline             atomic.Bool
 	dohQueries, tcpQueries atomic.Int32
 }
 
@@ -872,7 +863,7 @@ func integrationAssertClientDNS(t *testing.T, path string) []string {
 	var data []byte
 	integrationWait(t, 10*time.Second, func() bool {
 		data, _ = os.ReadFile(path)
-		return string(data) == "1.1.1.1\n8.8.8.8\n"
+		return string(data) == "8.8.8.8\n1.1.1.1\n"
 	})
 	return strings.Fields(string(data))
 }

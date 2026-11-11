@@ -266,8 +266,8 @@ mru 1400
 lcp-echo-interval 30
 lcp-echo-failure 4
 connect-delay 5000
-ms-dns 1.1.1.1
 ms-dns 8.8.8.8
+ms-dns 1.1.1.1
 EOF
 
 cat >/etc/xl2tpd/xl2tpd.conf <<'EOF'

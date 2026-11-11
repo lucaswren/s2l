@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.5 on a clean, dedicated server.**
+**Install S2L 1.0.6 on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
@@ -92,7 +92,7 @@ Mapping `running` and upstream health are separate. The monitor reports TCP, UDP
 |---|---|---|
 | TCP | A small HTTPS response through SOCKS5 authentication and forwarding; Cloudflare and Google are alternate targets | Successful web forwarding to a probe target |
 | UDP | SOCKS5 `UDP ASSOCIATE`, followed by a DNS datagram to `1.1.1.1:53` or `8.8.8.8:53` through the negotiated relay | A valid reply must match its source, query ID and question; fragmented/invalid replies are ignored. Only explicit SOCKS reply code 7 is classified as unsupported |
-| DNS | A validated DNS response from the configured DoH endpoint through SOCKS5; auto mode falls back to the configured TCP DNS endpoint. Defaults: `https://1.1.1.1/dns-query` and `8.8.8.8:53` | Working primary DoH is healthy. If only TCP DNS succeeds, the UI reports backup-only availability; this probe does not control live DNS; automatic mode switches based on real query failures |
+| DNS | A validated response from the configured TCP DNS endpoint through SOCKS5. Auto mode falls back to the configured DoH endpoint. Defaults are `8.8.8.8:53` and `https://1.1.1.1/dns-query` | Working primary TCP DNS is healthy. If only DoH succeeds, the UI reports backup-only availability; this probe does not control live DNS; automatic mode switches based on real query failures |
 
 DNS probes query the public name `example.com`. Target traffic always uses the selected proxy; there is no direct DNS-target fallback. Proxy/relay hostnames may still require the server's own resolver to establish the upstream connection. Providers receive these probe connections and queries. The health checker does not read or upload client DNS history.
 
@@ -264,7 +264,7 @@ ip route show table all
 - Dial succeeds but traffic fails: check upstream, assigned subnet conflicts, policy routes, firewall and client DNS/route selection.
 - SSH access changes fail: retain the current connection and use a provider console or approved recovery route; inspect backup metadata before restoring.
 
-For failed Telegram, WeChat or web images, inspect the failed request and separate TCP/UDP/DNS health results. S2L preserves the client's destination IP instead of replacing CDN addresses with sniffed domains. By default, TCP SYN MSS is capped at 1200 in `mangle/FORWARD` for both PPP directions. Non-DNS UDP is actively rejected by default; DNS uses DoH/TCP. TCP fallback requires application support; UDP-only applications require a separately reviewed deployment because managed mappings reject non-DNS UDP. Automatic DNS mode can use the first valid DoH or TCP DNS response. A faster TCP response triggers a bounded background check of DoH. Two confirmed primary failures with evidence that TCP can answer are required to change the preference. After switching, background recovery checks start after 60 seconds and run at least 30 seconds apart. Two successful checks restore DoH.
+For failed Telegram, WeChat or web images, inspect the failed request and separate TCP/UDP/DNS health results. S2L preserves the client's destination IP instead of replacing CDN addresses with sniffed domains. By default, TCP SYN MSS is capped at 1200 in `mangle/FORWARD` for both PPP directions. Non-DNS UDP is actively rejected by default; DNS uses DoH/TCP. TCP fallback requires application support; UDP-only applications require a separately reviewed deployment because managed mappings reject non-DNS UDP. Automatic DNS mode can use the first valid DoH or TCP DNS response. A faster DoH response triggers a rate-limited background check of TCP DNS. Two confirmed primary failures with evidence that DoH can answer are required to change the preference. After switching, background recovery checks start after 60 seconds and run at least 30 seconds apart. Two successful checks restore the TCP DNS preference. Live TCP DNS answers also count toward recovery when DoH fails.
 
 Updating restarts the service and automatically regenerates configurations for previously running mappings; reconnect L2TP and recreate application connections if needed. Inspect `s2l-tcpmss` with `sudo iptables -t mangle -S FORWARD`. If images still fail, compare the same failing image host through SOCKS5 and the client path, and inspect a log ZIP collected with Debug enabled in Settings to distinguish upstream, DNS and tunnel failures.
 

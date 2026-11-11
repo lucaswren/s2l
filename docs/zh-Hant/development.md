@@ -41,7 +41,7 @@ go test ./...
 python3 -m unittest discover -s script/tests
 ```
 
-`make build` 包含前端建置；`make test` 執行 Go 測試。`npm --prefix web run dev` 的 API 代理至本機 8080。非 Linux 測試不驗證實際 Linux 隧道，整合驗證須使用授權、可丟棄的 Linux VM。`make run` 啟動本機後端，可能修改主機網路與 PPP 檔案。`make install-service` 統一呼叫 `script/install.sh`，包括依賴、HTTPS 與服務設定，僅在預定全新安裝的主機執行；透過目前的安裝程式部署後可使用 `script/update.sh`。
+`make build` 包含前端建置。`make build-go` 和 `make run` 重用既有前端產物。`make test` 執行 Go 測試。`npm --prefix web run dev` 的 API 代理至本機 8080。非 Linux 測試不驗證實際 Linux 隧道，整合驗證須使用授權、可丟棄的 Linux VM。`make run` 啟動本機後端，可能修改主機網路與 PPP 檔案。`make install-service` 統一呼叫 `script/install.sh`，包括依賴、HTTPS 與服務設定，僅在預定全新安裝的主機執行；透過目前的安裝程式部署後可使用 `script/update.sh`。
 
 變更須說明觸發條件、結果與相關驗證；勿提交執行設定、狀態、依賴或秘密。前端變更須重建並提交 `web/dist/`。文件先更新英文，再繁體、簡體中文，保持命令、預設值與法律語意一致。法律來源使用官方連結並記錄查核日期；僅提交有權按 Apache-2.0 授權的內容，保留第三方聲明。依賴更新後執行 `python3 script/collect_frontend_licenses.py` 並提交聲明清單。
 
@@ -65,7 +65,7 @@ for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
 done
 ```
 
-L2TP 測試隔離掛載、網路與 PID 命名空間，透過真實 PPP IPCP 驗證 DNS 下發，檢查自訂 DoH、同節點 TCP DNS 回退及用戶端 UDP/TCP DNS 查詢，並驗證雙固定出口。單一及雙上游中斷時，HTTPS 與未快取 DNS 請求須失敗，PPP 維持連線。另設可直接到達且憑證驗證成功的 HTTPS 出口作正向對照；故障與 TUN 消失期間，其出站封包計數須維持零。也檢查 UDP 主動拒絕、程序恢復及規則修復。瀏覽器測試涵蓋桌面、390/320 像素、語言切換與未儲存表單；驗證測試使用真實後端及暫存資料，涵蓋登入、工作階段保持與登出。頁面測試不能取代 Linux 資料路徑測試。
+L2TP 測試隔離掛載、網路與 PID 命名空間，透過真實 PPP IPCP 驗證 DNS 下發，檢查自訂 TCP DNS、同節點 DoH 回退及用戶端 UDP/TCP DNS 查詢，並驗證雙固定出口。單一及雙上游中斷時，HTTPS 與未快取 DNS 請求須失敗，PPP 維持連線。另設可直接到達且憑證驗證成功的 HTTPS 出口作正向對照；故障與 TUN 消失期間，其出站封包計數須維持零。也檢查 UDP 主動拒絕、程序恢復及規則修復。瀏覽器測試涵蓋桌面、390/320 像素、語言切換與未儲存表單；驗證測試使用真實後端及暫存資料，涵蓋登入、工作階段保持與登出。頁面測試不能取代 Linux 資料路徑測試。
 
 額外模式需要 strongSwan/starter、conntrack 及核心 XFRM、連線追蹤區與 NAT INPUT 支援。`ipsec` 驗證無 NAT 路由器的用戶端（仍強制 NAT-T）；`ipsec-nat` 使用不同轉換後位址；`ipsec-shared-nat` 共用公網位址、來源埠分別為 1701/1702；`ipsec-shared-nat-1701` 同時共用公網位址及來源埠 1701。均使用正式設定與 updown 輔助程式，驗證 DNS、各節點固定出口、UDP allow/reject-quic、上游/TUN 故障及直連出站計數為零。相同埠模式還延遲 updown 重現早到封包、線上修復防火牆並刪除回包標記、輪換 CHILD_SA，並讓一個用戶端斷線重撥，核對另一用戶端不受影響、退役連線追蹤區為空。入站和出站防護缺失必須被偵測並修復。外部節點探測單獨執行；Linux 對端通過不代表原生 Windows/macOS 已驗證。
 

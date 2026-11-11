@@ -98,76 +98,93 @@ func (s *MappingService) Monitor(ctx context.Context) {
 	wg.Add(1)
 	go func() { defer wg.Done(); s.runSessionGuard(ctx) }()
 	defer wg.Wait()
-	localSlots, probeSlots := make(chan struct{}, 4), make(chan struct{}, 4)
-	localBusy := make(map[string]bool)
-	launch := func(m model.TunnelMapping, local bool) bool {
-		s.mu.Lock()
+	local := newMonitorLane()
+	probes := newMonitorLane()
+	var round *network.VerificationRound
+	launch := func(lane *monitorLane, m model.TunnelMapping, verification *network.VerificationRound) {
 		busy := s.inflight
-		if local {
-			busy = localBusy
+		if verification != nil {
+			busy = local.busy
 		}
-		if busy[m.ID] || s.health[m.ID] == nil {
-			s.mu.Unlock()
-			return false
-		}
+		s.mu.Lock()
 		h := s.health[m.ID]
-		if !local && time.Now().Before(h.next) {
+		if h == nil || busy[m.ID] || (verification == nil && time.Now().Before(h.next)) {
 			s.mu.Unlock()
-			return false
+			return
 		}
-		slots := probeSlots
-		if local {
-			slots = localSlots
-		}
-		select {
-		case slots <- struct{}{}:
-		default:
-			s.mu.Unlock()
-			return false
-		}
+		lane.slots <- struct{}{}
 		busy[m.ID] = true
 		s.mu.Unlock()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			defer func() { <-slots; s.mu.Lock(); delete(busy, m.ID); s.mu.Unlock() }()
+			defer func() {
+				s.mu.Lock()
+				delete(busy, m.ID)
+				s.mu.Unlock()
+				<-lane.slots
+				select {
+				case lane.done <- struct{}{}:
+				default:
+				}
+			}()
 			if ctx.Err() != nil {
 				return
 			}
-			if local {
-				s.checkLocalMapping(ctx, m)
+			if verification != nil {
+				s.checkLocalMappingInRound(ctx, m, verification)
 			} else {
 				s.checkMapping(ctx, m)
 			}
 		}()
-		return true
 	}
-	var localCursor, probeCursor int
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			mappings := s.store.ListMappings()
+			if len(local.waiting) == 0 {
+				local.waiting = mappings
+				round = &network.VerificationRound{}
+			}
+			if len(probes.waiting) == 0 {
+				probes.waiting = mappings
+			}
+		case <-local.done:
+		case <-probes.done:
 		}
-		mappings := s.store.ListMappings()
-		localCursor = dispatchChecks(mappings, localCursor, func(m model.TunnelMapping) bool { return launch(m, true) })
-		probeCursor = dispatchChecks(mappings, probeCursor, func(m model.TunnelMapping) bool { return launch(m, false) })
+		local.fill(func(m model.TunnelMapping) { launch(&local, m, round) })
+		probes.fill(func(m model.TunnelMapping) { launch(&probes, m, nil) })
 	}
 }
 
-// Resume after the last admitted mapping, even when only one worker is free.
-func dispatchChecks(mappings []model.TunnelMapping, cursor int, launch func(model.TunnelMapping) bool) int {
-	next := cursor
-	for offset := range mappings {
-		i := (cursor + offset) % len(mappings)
-		if m := mappings[i]; m.Status == model.StatusRunning && launch(m) {
-			next = (i + 1) % len(mappings)
+type monitorLane struct {
+	waiting []model.TunnelMapping
+	slots   chan struct{}
+	done    chan struct{}
+	busy    map[string]bool
+}
+
+func newMonitorLane() monitorLane {
+	return monitorLane{slots: make(chan struct{}, 4), done: make(chan struct{}, 1), busy: make(map[string]bool)}
+}
+
+func (l *monitorLane) fill(launch func(model.TunnelMapping)) {
+	for len(l.waiting) > 0 && len(l.slots) < cap(l.slots) {
+		m := l.waiting[0]
+		l.waiting = l.waiting[1:]
+		if m.Status == model.StatusRunning {
+			launch(m)
 		}
 	}
-	return next
 }
 
 func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMapping) {
+	s.checkLocalMappingInRound(ctx, m, &network.VerificationRound{})
+}
+
+func (s *MappingService) checkLocalMappingInRound(ctx context.Context, m model.TunnelMapping, round *network.VerificationRound) {
 	s.stateGate.RLock()
 	defer s.stateGate.RUnlock()
 	unlock := s.lockMapping(m.ID)
@@ -212,7 +229,7 @@ func (s *MappingService) checkLocalMapping(ctx context.Context, m model.TunnelMa
 		s.mu.Unlock()
 		repairAttempted, repairSucceeded := false, false
 		if verifyDue {
-			ruleErr := s.net.VerifyContext(ctx, m)
+			ruleErr := s.net.VerifyInRound(ctx, m, round)
 			if network.IsMissingState(ruleErr) && ctx.Err() == nil {
 				s.recordFault(m, "local-rules", ruleErr.Error())
 				repairAttempted = true
@@ -421,7 +438,7 @@ func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
 	} else {
 		p.CheckedAt = now
 	}
-	p.Method = result.Method
+	p.Method, p.ExitIP, p.SOCKSReply = result.Method, result.ExitIP, result.SOCKSReply
 	p.MeasuredState = result.State
 	p.Stage, p.StatusCode, p.DurationMS = result.Stage, result.StatusCode, result.DurationMS
 	p.Attempts = append([]model.ProbeAttempt(nil), result.Attempts...)

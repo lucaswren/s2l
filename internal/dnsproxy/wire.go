@@ -1,157 +1,31 @@
 package dnsproxy
 
 import (
-	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"net"
-	"strings"
+
+	"github.com/lucaswren/s2l/internal/dnswire"
 )
 
-func QueryA(host string) ([]byte, error) {
-	host = strings.TrimSuffix(host, ".")
-	if len(host) == 0 || len(host) > 253 {
-		return nil, errors.New("invalid DNS name")
-	}
-	q := make([]byte, 12)
-	if _, err := rand.Read(q[:2]); err != nil {
-		return nil, err
-	}
-	q[2] = 1
-	q[5] = 1
-	for _, label := range strings.Split(host, ".") {
-		if len(label) == 0 || len(label) > 63 {
-			return nil, errors.New("invalid DNS label")
-		}
-		q = append(q, byte(len(label)))
-		q = append(q, label...)
-	}
-	return append(q, 0, 0, 1, 0, 1), nil
-}
-func skipName(packet []byte, pos int) (int, error) {
-	end := -1
-	expanded := 0
-	for steps := 0; steps < 128; steps++ {
-		if pos >= len(packet) {
-			break
-		}
-		n := int(packet[pos])
-		pos++
-		if n == 0 {
-			if end != -1 {
-				return end, nil
-			}
-			return pos, nil
-		}
-		if n&0xc0 == 0xc0 {
-			if pos >= len(packet) {
-				break
-			}
-			target := (n&0x3f)<<8 | int(packet[pos])
-			if target >= len(packet) {
-				break
-			}
-			if end == -1 {
-				end = pos + 1
-			}
-			pos = target
-			continue
-		}
-		if n > 63 || pos+n > len(packet) {
-			break
-		}
-		pos += n
-		expanded += n + 1
-		if expanded > 255 {
-			break
-		}
-	}
-	return 0, errors.New("invalid DNS name")
+func QueryA(host string) ([]byte, error) { return dnswire.QueryA(host) }
+
+func ValidateResponse(query, response []byte) error {
+	return dnswire.ValidateResponse(query, response)
 }
 
-func responseCode(packet []byte) (int, error) {
-	pos, err := skipName(packet, 12)
-	if err != nil {
-		return 0, err
-	}
-	pos += 4
-	additionalStart := int(binary.BigEndian.Uint16(packet[6:8])) + int(binary.BigEndian.Uint16(packet[8:10]))
-	count := additionalStart + int(binary.BigEndian.Uint16(packet[10:12]))
-	code := int(packet[3] & 15)
-	seenOPT := false
-	for i := 0; i < count; i++ {
-		nameStart := pos
-		pos, err = skipName(packet, pos)
-		if err != nil || pos+10 > len(packet) {
-			return 0, errors.New("invalid DNS record")
-		}
-		kind := binary.BigEndian.Uint16(packet[pos:])
-		size := int(binary.BigEndian.Uint16(packet[pos+8:]))
-		extendedCode := int(packet[pos+4])
-		pos += 10
-		end := pos + size
-		if end > len(packet) {
-			return 0, errors.New("truncated DNS record")
-		}
-		switch kind {
-		case 41:
-			if i < additionalStart || seenOPT || packet[nameStart] != 0 {
-				return 0, errors.New("invalid DNS OPT record")
-			}
-			for option := pos; option < end; {
-				if end-option < 4 {
-					return 0, errors.New("truncated DNS OPT option")
-				}
-				size := int(binary.BigEndian.Uint16(packet[option+2:]))
-				option += 4 + size
-				if option > end {
-					return 0, errors.New("truncated DNS OPT option data")
-				}
-			}
-			seenOPT = true
-			code |= extendedCode << 4
-		case 1:
-			if size != 4 {
-				return 0, errors.New("invalid A record")
-			}
-		case 28:
-			if size != 16 {
-				return 0, errors.New("invalid AAAA record")
-			}
-		case 2, 5, 12, 39:
-			nameEnd, e := skipName(packet, pos)
-			if e != nil || nameEnd != end {
-				return 0, errors.New("invalid DNS name record")
-			}
-		case 6:
-			next, e := skipName(packet, pos)
-			if e != nil || next > end {
-				return 0, errors.New("invalid SOA record")
-			}
-			next, e = skipName(packet, next)
-			if e != nil || next+20 != end {
-				return 0, errors.New("invalid SOA record")
-			}
-		}
-		pos = end
-	}
-	if pos != len(packet) {
-		return 0, errors.New("unexpected trailing DNS data")
-	}
-	return code, nil
-}
 func IPv4Answers(query, response []byte) ([]net.IP, error) {
 	if err := ValidateResponse(query, response); err != nil {
 		return nil, err
 	}
-	pos, err := skipName(response, 12)
+	pos, err := dnswire.SkipName(response, 12)
 	if err != nil {
 		return nil, err
 	}
 	pos += 4
 	var addresses []net.IP
 	for i := 0; i < int(binary.BigEndian.Uint16(response[6:8])); i++ {
-		pos, err = skipName(response, pos)
+		pos, err = dnswire.SkipName(response, pos)
 		if err != nil || pos+10 > len(response) {
 			return nil, errors.New("invalid DNS answer")
 		}

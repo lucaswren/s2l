@@ -16,7 +16,7 @@ class Handler(SimpleHTTPRequestHandler):
  def do_GET(self):
   if self.path=='/api/auth/status':return self.reply(dict(enabled=False,authenticated=True))
   if self.path=='/api/settings/ppp-management':return self.reply(dict(available=True,access=dict(enabled=False,destination_ip='',source_cidrs=[],tcp_ports=[]),sources=[dict(id='m',subnet='10.0.101.0/24',name='account-a')],detected_ports=[38866,51234],configured_ports=[38866,51234],port_check_available=True,local_ipv4=['203.0.113.10']))
-  if self.path=='/api/settings':return self.reply(dict(client_dns=["1.1.1.1","8.8.8.8"],account_enabled=False,ssh_enabled=False,ssh_ports=[51234],ipsec=dict(available=False)))
+  if self.path=='/api/settings':return self.reply(dict(client_dns=["8.8.8.8","1.1.1.1"],account_enabled=False,ssh_enabled=False,ssh_ports=[51234],ipsec=dict(available=False)))
   if self.path=='/api/settings/time':return self.reply(dict(available=True,timezone='Asia/Shanghai',timezones=['UTC','Asia/Shanghai','America/New_York'],server_time=now,auto_sync=True,synchronized=False,mode='system',custom_available=True,servers=[]))
   if self.path=='/api/backups':return self.reply([dict(id='backup-2-2.json',created_at=now,nodes=1,mappings=1),dict(id='backup-1-1.json',created_at=now,nodes=1,mappings=1)])
   if self.path=='/api/debug':return self.reply(dict(enabled=False))
