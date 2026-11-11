@@ -150,6 +150,23 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	must("ip", "link", "add", "tun101", "type", "dummy")
 	must("ip", "link", "set", "tun101", "up")
 	m := model.TunnelMapping{ID: "test", TunName: "tun101", TableID: 101, Subnet: "10.0.101.0/24"}
+	tunIP := m.TUNAddress().Addr().String()
+	must("ip", "addr", "add", m.TUNAddress().String(), "dev", m.TunName)
+	must("ip", "netns", "exec", outside, "ip", "route", "add", tunIP+"/32", "via", "198.18.0.1")
+	// A SYN to an unused port on the synthetic address causes a kernel RST.
+	// The positive control proves this path goes through WAN without the guard.
+	tunReset := func(refused bool) {
+		t.Helper()
+		must("ip", "netns", "exec", outside, "python3", "-c", `
+import errno, socket, sys
+with socket.socket() as sock:
+    sock.settimeout(1)
+    result = sock.connect_ex((sys.argv[1], 47532))
+    expected = errno.ECONNREFUSED if sys.argv[2] == 'true' else errno.EAGAIN
+    assert result == expected, (result, expected)
+`, tunIP, strconv.FormatBool(refused))
+	}
+	tunReset(true)
 	if err := AddPolicyRoute(m); err != nil {
 		t.Fatal(err)
 	}
@@ -174,6 +191,24 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	}
 	if err := controller.Verify(m); err != nil {
 		t.Fatal("complete forwarding path rejected", err)
+	}
+	tunReset(false)
+	for _, change := range [][]string{
+		append([]string{"-t", "mangle", "-D"}, tunEgressArgs(m)...),
+		{"-t", "mangle", "-I", "POSTROUTING", "1", "-j", "ACCEPT"},
+	} {
+		must("iptables", change...)
+		if err := controller.Verify(m); !IsMissingState(err) {
+			t.Fatal("TUN egress guard drift was not detected", err)
+		}
+		if err := controller.RepairContext(context.Background(), m); err != nil {
+			t.Fatal("repair TUN egress guard", err)
+		}
+		tunReset(false)
+	}
+	must("iptables", "-t", "mangle", "-D", "POSTROUTING", "-j", "ACCEPT")
+	if err := controller.ReleaseTUNEgress(m); err == nil {
+		t.Fatal("egress guard released with TUN still present")
 	}
 	// Check that kernel drift is visible and repaired from the configured policy.
 	for _, change := range [][]string{
@@ -398,6 +433,13 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	ping("198.18.0.2", false)
 	if err := DelFirewall(m); err != nil {
 		t.Fatal(err)
+	}
+	if err := controller.ReleaseTUNEgress(m); err != nil {
+		t.Fatal(err)
+	}
+	postrouting, err := output("iptables", "-t", "mangle", "-S", "POSTROUTING")
+	if err != nil || strings.Contains(postrouting, tunEgressComment) {
+		t.Fatalf("TUN egress cleanup failed: %s %v", postrouting, err)
 	}
 	mssRules, err = output("iptables", "-t", "mangle", "-S", "FORWARD")
 	if err != nil || strings.Contains(mssRules, mappingComment(m)+"-mss") {

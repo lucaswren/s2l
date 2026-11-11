@@ -37,16 +37,6 @@ func ConfigPath(tunName string) string {
 	return filepath.Join(configDir, fmt.Sprintf("s2l-%s.json", tunName))
 }
 
-// TunInet4Address 为 TUN 分配点对点地址（与 L2TP Subnet 独立）
-// 使用 172.19.<tableID%256>.1/30，避免与常见业务网段冲突。
-func TunInet4Address(tableID int) string {
-	octet := tableID % 256
-	if octet < 0 {
-		octet = -octet
-	}
-	return fmt.Sprintf("172.19.%d.1/30", octet)
-}
-
 // GenerateConfig pins application traffic and DNS to the selected egress.
 // SOCKS5 uses one proxy; WAN uses one explicitly bound interface. DNS uses
 // DoH/TCP without requiring the proxy's UDP relay support.
@@ -101,7 +91,7 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 				"type":           "tun",
 				"tag":            "tun-in",
 				"interface_name": mapping.TunName,
-				"address":        []string{TunInet4Address(mapping.TableID)},
+				"address":        []string{mapping.TUNAddress().String()},
 				"mtu":            mapping.EffectiveMTU(),
 				"auto_route":     false,
 				"strict_route":   false,

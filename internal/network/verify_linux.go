@@ -42,6 +42,8 @@ type VerificationRound struct {
 	rules          []byte
 	ipv4, ipv6     string
 	rules4, rules6 map[string]bool
+	tunEgress      map[string]bool
+	tunEgressDrift bool
 }
 
 func (c *Controller) VerifyInRound(ctx context.Context, m model.TunnelMapping, round *VerificationRound) error {
@@ -75,7 +77,11 @@ func (v *VerificationRound) refresh(ctx context.Context, revision uint64) error 
 	if err != nil {
 		return err
 	}
-	*v = VerificationRound{revision: revision, at: now, rules: []byte(rules), ipv4: ipv4, ipv6: ipv6, rules4: filterRuleKeys(ipv4), rules6: filterRuleKeys(ipv6)}
+	postrouting, err := outputContext(ctx, "iptables", "-t", "mangle", "-S", "POSTROUTING")
+	if err != nil {
+		return err
+	}
+	*v = VerificationRound{revision: revision, at: now, rules: []byte(rules), ipv4: ipv4, ipv6: ipv6, rules4: filterRuleKeys(ipv4), rules6: filterRuleKeys(ipv6), tunEgress: filterRuleKeys(postrouting), tunEgressDrift: tunEgressOrderPlan(postrouting) != ""}
 	return nil
 }
 
@@ -133,6 +139,15 @@ func (c *Controller) verifyWithRound(ctx context.Context, m model.TunnelMapping,
 	}
 	ipv4, ipv6 := round.ipv4, round.ipv6
 	rules4, rules6 := round.rules4, round.rules6
+	if args := tunEgressArgs(m); !round.tunEgress[mappingGuardRuleKey("-A "+strings.Join(args, " "))] {
+		check := append([]string{"-t", "mangle", "-C"}, args...)
+		if err := run("iptables", check...); err != nil {
+			return missingFirewall(err, "iptables", check)
+		}
+	}
+	if round.tunEgressDrift {
+		return missingState("TUN egress guards are shadowed or duplicated", "tun-egress-order")
+	}
 	for _, args := range checks {
 		if args[0] == "-C" && rules4[mappingGuardRuleKey("-A "+strings.Join(args[1:], " "))] {
 			continue
@@ -318,6 +333,10 @@ func (c *Controller) RepairContext(ctx context.Context, m model.TunnelMapping) e
 			return err
 		}
 		switch missing.command {
+		case "tun-egress-order":
+			if e := repairTUNEgressOrder(ctx); e != nil {
+				return e
+			}
 		case "mapping-guard-order":
 			if e := c.checkMappingGuardOrder(ctx, m, "", true); e != nil {
 				return e

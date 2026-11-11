@@ -417,7 +417,11 @@ func (s *MappingService) Status() model.SystemStatus {
 }
 
 func (s *MappingService) cleanupRuntime(m model.TunnelMapping) error {
-	return errors.Join(s.net.Teardown(m), s.singbox.Stop(m.TunName))
+	networkErr := s.net.Teardown(m)
+	if err := s.singbox.Stop(m.TunName); err != nil {
+		return errors.Join(networkErr, err)
+	}
+	return errors.Join(networkErr, s.net.ReleaseTUNEgress(m))
 }
 
 func (s *MappingService) failStart(m model.TunnelMapping, previous []model.TunnelMapping, cause error) error {

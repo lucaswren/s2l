@@ -42,6 +42,8 @@ func (c *Controller) TeardownAll() error {
 	return nil
 }
 
+func (c *Controller) ReleaseTUNEgress(model.TunnelMapping) error { return nil }
+
 func (c *Controller) ActiveCount() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()

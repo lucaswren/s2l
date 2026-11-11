@@ -138,6 +138,9 @@ func CheckResources(m model.TunnelMapping, ownInterface bool) error {
 			if ip == nil || ip.To4() == nil {
 				continue
 			}
+			if ip.String() == m.TUNAddress().Addr().String() {
+				return fmt.Errorf("TUN address %s is already assigned to %s", ip, iface.Name)
+			}
 			_, other, err := net.ParseCIDR(fmt.Sprintf("%s/%d", addr.Local, addr.Prefix))
 			if err != nil {
 				return err

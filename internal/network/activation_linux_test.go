@@ -22,12 +22,13 @@ case "$*" in
   echo 'Bad rule (does a matching rule exist in that chain?).' >&2; exit 1;;
 esac
 case "$*" in
- *" -t mangle -I "*) touch "$S2L_ACTIVATION_STATE/mss";;
+ *" -t mangle -I POSTROUTING "*) touch "$S2L_ACTIVATION_STATE/tun-egress";;
+ *" -t mangle -I FORWARD "*) touch "$S2L_ACTIVATION_STATE/mss";;
  *" -t nat -A "*) touch "$S2L_ACTIVATION_STATE/nat";;
  *" -I S2L_RETURN "*) touch "$S2L_ACTIVATION_STATE/return";;
  *" -I S2L_FORWARD "*" -j REJECT "*) touch "$S2L_ACTIVATION_STATE/restrict";;
  *" -I S2L_FORWARD "*" -j ACCEPT "*)
-  for rule in nat mss return restrict; do
+  for rule in tun-egress nat mss return restrict; do
    test -e "$S2L_ACTIVATION_STATE/$rule" || { echo "premature ingress: $rule" >&2; exit 99; }
   done
   case "$*" in *" -I S2L_FORWARD 2 "*) ;; *) echo 'restriction bypass' >&2; exit 98;; esac
@@ -42,7 +43,7 @@ fi
 	}
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 	m := model.TunnelMapping{ID: "activation", TunName: "tun101", TableID: 101, Subnet: "10.0.101.0/24", UDPPolicy: "reject"}
-	for _, failure := range []string{"", "-t nat -A", "-I S2L_RETURN", "-I S2L_FORWARD 2"} {
+	for _, failure := range []string{"", "-t mangle -I POSTROUTING", "-t nat -A", "-I S2L_RETURN", "-I S2L_FORWARD 2"} {
 		t.Run(failure, func(t *testing.T) {
 			state := t.TempDir()
 			t.Setenv("S2L_ACTIVATION_STATE", state)

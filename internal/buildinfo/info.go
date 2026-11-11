@@ -35,9 +35,9 @@ func Current() Info {
 	switch strings.TrimPrefix(result.Version, "v") {
 	case "1.0.6":
 		result.ReleaseNotes = map[string]string{
-			"en":    "1.0.6: Prefer TCP DNS at 8.8.8.8 with automatic DoH fallback through the same SOCKS5 exit. Reduce repeated firewall reads and improve DNS and UDP diagnostics. Upgrade during a maintenance window because mappings restart.",
-			"zh-TW": "1.0.6：優先使用 8.8.8.8 的 TCP DNS，自動經同一 SOCKS5 出口切換至 DoH。減少重複讀取防火牆規則，改善 DNS 與 UDP 診斷。升級會重啟映射，請安排維護時段。",
-			"zh-CN": "1.0.6：优先使用 8.8.8.8 的 TCP DNS，自动经同一 SOCKS5 出口切换至 DoH。减少重复读取防火墙规则，改进 DNS 与 UDP 诊断。升级会重启映射，请安排维护窗口。",
+			"en":    "1.0.6: Prefer TCP DNS at 8.8.8.8 with automatic DoH fallback through the same SOCKS5 exit. Block stray packets sourced from the TUN address, reduce repeated firewall reads and improve DNS and UDP diagnostics. Upgrade during a maintenance window because mappings restart.",
+			"zh-TW": "1.0.6：優先使用 8.8.8.8 的 TCP DNS，自動經同一 SOCKS5 出口切換至 DoH。阻擋以 TUN 位址為來源的異常封包外送，減少重複讀取防火牆規則，改善 DNS 與 UDP 診斷。升級會重啟映射，請安排維護時段。",
+			"zh-CN": "1.0.6：优先使用 8.8.8.8 的 TCP DNS，自动经同一 SOCKS5 出口切换至 DoH。阻止以 TUN 地址为来源的异常数据包直出，减少重复读取防火墙规则，改进 DNS 与 UDP 诊断。升级会重启映射，请安排维护窗口。",
 		}
 	case "1.0.5":
 		result.ReleaseNotes = map[string]string{

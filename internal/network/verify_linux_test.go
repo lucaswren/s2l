@@ -49,8 +49,8 @@ func TestVerificationRoundReusesOnlyCompleteUnexpiredSnapshots(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(log)
-	if err != nil || strings.Count(string(data), "\n") != 12 {
-		t.Fatalf("expected three commands for each fresh read, got %q (%v)", data, err)
+	if err != nil || strings.Count(string(data), "\n") != 15 {
+		t.Fatalf("expected four commands for each complete read, got %q (%v)", data, err)
 	}
 }
 

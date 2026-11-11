@@ -47,6 +47,9 @@ func AddFirewall(m model.TunnelMapping) (result error) {
 	cmt := mappingComment(m)
 	// A first packet accepted before MASQUERADE can create a persistent
 	// un-NATed conntrack entry. Keep ingress closed until the entire path exists.
+	if err := ensureTUNEgress(m); err != nil {
+		return err
+	}
 	if err := addMappingTCPMSS(m); err != nil {
 		return err
 	}

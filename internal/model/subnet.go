@@ -3,7 +3,17 @@ package model
 import (
 	"fmt"
 	"net"
+	"net/netip"
 )
+
+// TUNAddress is the local address of the mapping's synthetic TUN network.
+func (m TunnelMapping) TUNAddress() netip.Prefix {
+	octet := m.TableID % 256
+	if octet < 0 {
+		octet = -octet
+	}
+	return netip.PrefixFrom(netip.AddrFrom4([4]byte{172, 19, byte(octet), 1}), 30)
+}
 
 // TunnelSubnet accepts complete, canonical RFC1918 networks with two peer IPs.
 // The TUN transport pool is reserved and must never become a client subnet.
