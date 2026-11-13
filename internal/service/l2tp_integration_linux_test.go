@@ -369,6 +369,32 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 	first, _ := st.GetMapping("m0")
 	second, _ := st.GetMapping("m1")
 	for i := 0; i < 2; i++ {
+		if transport == "ipsec-shared-nat-1701" {
+			// After reconnect, Linux can use the same TCP source port for
+			// two different destinations. The TUN must keep both tuples
+			// distinct after MASQUERADE, even while the first state remains.
+			ns := fmt.Sprintf("s2l-dial-%d", i)
+			run("ip", "netns", "exec", ns, "python3", "-c", `import http.client,socket,ssl,sys
+client=int(sys.argv[1])
+tls=ssl.create_default_context(cafile=sys.argv[2])
+def probe(host, path, expected, next_probe=None):
+    with socket.socket() as raw:
+        raw.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+        raw.settimeout(4)
+        raw.bind(('',38873+client))
+        raw.connect((host,443))
+        with tls.wrap_socket(raw,server_hostname=host) as conn:
+            conn.sendall(f'GET {path} HTTP/1.1\r\nHost: {host}\r\n\r\n'.encode())
+            with http.client.HTTPResponse(conn) as response:
+                response.begin()
+                body=response.read()
+                assert response.status==200 and body.strip()==expected,(host,response.status,body)
+            if next_probe:
+                next_probe()
+probe('198.18.0.9','/',f'node{client}'.encode(),
+      lambda: probe('1.1.1.1','/cdn-cgi/trace',f'ip=203.0.113.{10+client}'.encode()))
+`, fmt.Sprint(i), caPath)
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		proof, err := svc.ProbeMapping(ctx, fmt.Sprintf("m%d", i))
 		cancel()

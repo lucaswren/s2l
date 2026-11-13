@@ -52,12 +52,14 @@ def main():
                         for kind in ("mnt", "net")}
             mount("-t", "proc", "proc", "/proc")
             # Avoid host PPP hooks, secrets, runtime files and device changes.
-            for target in ("/etc/ppp", "/run"):
-                source = root / target.lstrip("/")
-                source.mkdir(parents=True)
-                if not Path(target).is_dir():
-                    raise SystemExit(f"missing prerequisite directory: {target}")
-                mount("--bind", str(source), target)
+            source = root / "etc/ppp"
+            source.mkdir(parents=True)
+            if not Path("/etc/ppp").is_dir():
+                raise SystemExit("missing prerequisite directory: /etc/ppp")
+            mount("--bind", str(source), "/etc/ppp")
+            # ip netns creates a nested mount under /run/netns. Keep it on
+            # tmpfs so an active mount cannot block fixture directory cleanup.
+            mount("-t", "tmpfs", "-o", "mode=755", "tmpfs", "/run")
             mount("-t", "tmpfs", "-o", "mode=755", "tmpfs", "/dev")
             for name, major, minor in (("null", 1, 3), ("zero", 1, 5),
                                        ("random", 1, 8), ("urandom", 1, 9),

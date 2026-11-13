@@ -33,6 +33,12 @@ func Current() Info {
 		}
 	}
 	switch strings.TrimPrefix(result.Version, "v") {
+	case "1.0.9":
+		result.ReleaseNotes = map[string]string{
+			"en":    "1.0.9: Use the gVisor TUN stack to keep TCP connections to different destinations separate when they share a source port. Upgrade during a maintenance window because mappings restart.",
+			"zh-TW": "1.0.9：改用 gVisor TUN 網路堆疊，讓共用來源連接埠、目的地不同的 TCP 連線保持獨立。升級會重啟映射，請安排維護時段。",
+			"zh-CN": "1.0.9：改用 gVisor TUN 网络栈，避免源端口相同、目标不同的 TCP 连接串流。升级会重启映射，请安排维护窗口。",
+		}
 	case "1.0.8":
 		result.ReleaseNotes = map[string]string{
 			"en":    "1.0.8: Report unconfirmed HTTPS connection timeouts accurately, cancel pending SOCKS5 probe connections, and preserve the known SOCKS5 stage when DNS times out. Upgrade during a maintenance window because mappings restart.",

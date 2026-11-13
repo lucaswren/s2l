@@ -62,6 +62,9 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 
 	level := "warn"
 	dns := mapping.EffectiveDNSOptions()
+	// sing-box 1.11.15's system and mixed TCP stacks key sessions by source
+	// address and port. TUN masquerading can preserve that pair across
+	// different destinations, so use the stack that distinguishes both ends.
 	cfg := map[string]any{
 		"log": map[string]any{
 			"level":     level,
@@ -95,7 +98,7 @@ func GenerateConfig(node model.SocksNode, mapping model.TunnelMapping, resolverA
 				"mtu":            mapping.EffectiveMTU(),
 				"auto_route":     false,
 				"strict_route":   false,
-				"stack":          "system",
+				"stack":          "gvisor",
 			},
 		},
 		"outbounds": []map[string]any{
