@@ -88,7 +88,7 @@ func probeHTTPS(ctx context.Context, target string, dial func(context.Context, s
 	attempt, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var phase atomic.Value
-	phase.Store("target-connect")
+	phase.Store("dial")
 	trace := &httptrace.ClientTrace{TLSHandshakeStart: func() { phase.Store("tls") }, TLSHandshakeDone: func(_ tls.ConnectionState, err error) {
 		if err == nil {
 			phase.Store("http")
@@ -96,7 +96,15 @@ func probeHTTPS(ctx context.Context, target string, dial func(context.Context, s
 	}}
 	attempt = httptrace.WithClientTrace(attempt, trace)
 	tr := &http.Transport{Proxy: nil, DisableKeepAlives: true, MaxResponseHeaderBytes: 32 << 10,
-		DialContext: func(c context.Context, _, addr string) (net.Conn, error) { return dial(c, addr) }}
+		DialContext: func(c context.Context, _, addr string) (net.Conn, error) {
+			// The transport can keep a dial alive after the request ends.
+			// This one-shot probe has no other request that could use it.
+			dialCtx, cancelDial := context.WithCancel(c)
+			defer cancelDial()
+			stop := context.AfterFunc(attempt, cancelDial)
+			defer stop()
+			return dial(dialCtx, addr)
+		}}
 	defer tr.CloseIdleConnections()
 	client := &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	r := model.ProtocolHealth{State: "unavailable", Method: "https"}
@@ -125,8 +133,16 @@ func probeHTTPS(ctx context.Context, target string, dial func(context.Context, s
 		var se *StageError
 		if errors.As(err, &se) {
 			stage = se.Stage
+		} else if stage == "dial" {
+			// net/http can return the request deadline before DialContext
+			// returns its SOCKS stage. The target connection is unconfirmed.
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				stage = "cancelled"
+			} else {
+				stage = "target-connect"
+			}
 		}
-		descriptions := map[string]string{"proxy-connect": "节点连接失败或超时", "socks-auth": "SOCKS5 协商或认证失败", "target-connect": "目标连接失败或超时", "tls": "TLS 握手或证书校验失败", "http": "HTTP 响应读取失败"}
+		descriptions := map[string]string{"proxy-connect": "节点连接失败或超时", "socks-auth": "SOCKS5 协商或认证失败", "target-connect": "目标连接失败或超时", "tls": "TLS 握手或证书校验失败", "http": "HTTP 响应读取失败", "cancelled": "检测超时或已取消，连接阶段未确认"}
 		r.Error = descriptions[stage]
 	}
 	r.Stage = stage

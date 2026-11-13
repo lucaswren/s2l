@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/lucaswren/s2l/internal/model"
 )
 
 func TestHTTPClassificationAndBodyFailure(t *testing.T) {
@@ -65,5 +67,53 @@ func TestSOCKSStagesPreserveWrappedErrors(t *testing.T) {
 		if got.Stage != stage || got.State != "unavailable" || got.Error == "" || got.Error == "secret must never appear" {
 			t.Fatal(got)
 		}
+	}
+}
+
+func TestHTTPSDeadlineBeforeDialCompletesDoesNotClaimTargetConnect(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	finished := make(chan struct{})
+	defer close(finished)
+	got := probeHTTPS(ctx, "https://target.invalid", func(context.Context, string) (net.Conn, error) {
+		// Force the HTTP request to finish before the dial returns its stage.
+		<-finished
+		return nil, &StageError{Stage: "proxy-connect", Err: context.DeadlineExceeded}
+	})
+	if got.State != "unavailable" || got.Stage != "cancelled" {
+		t.Fatalf("dial stage was asserted without evidence: %+v", got)
+	}
+}
+
+func TestHTTPSCancellationStopsPendingSOCKSDial(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	started, stopped, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	defer close(release)
+	result := make(chan model.ProtocolHealth, 1)
+	go func() {
+		result <- probeHTTPS(ctx, "https://target.invalid", func(c context.Context, _ string) (net.Conn, error) {
+			close(started)
+			select {
+			case <-c.Done():
+				close(stopped)
+			case <-release:
+			}
+			return nil, &StageError{Stage: "socks-auth", Err: context.Canceled}
+		})
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("dial did not start")
+	}
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("SOCKS dial continued after the request was cancelled")
+	}
+	if got := <-result; got.State != "unavailable" || (got.Stage != "cancelled" && got.Stage != "socks-auth") {
+		t.Fatalf("unexpected cancellation result: %+v", got)
 	}
 }

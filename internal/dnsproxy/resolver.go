@@ -129,10 +129,10 @@ func (r *Resolver) attempt(parent context.Context, method string, query []byte) 
 	if err != nil && parent.Err() == nil && ctx.Err() != context.Canceled && !errors.Is(err, errTCPPoolWait) {
 		var protocolError *speedtest.StageError
 		switch {
-		case errors.Is(ctx.Err(), context.DeadlineExceeded):
-			stage = "timeout"
 		case errors.As(err, &protocolError):
 			stage = protocolError.Stage
+		case errors.Is(ctx.Err(), context.DeadlineExceeded):
+			stage = "timeout"
 		}
 		r.mu.Lock()
 		failure := &model.DNSAttemptFailure{At: time.Now(), Stage: stage, SOCKSReply: speedtest.SOCKSReplyCode(err)}

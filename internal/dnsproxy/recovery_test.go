@@ -9,7 +9,24 @@ import (
 
 	"github.com/lucaswren/s2l/internal/dnswire"
 	"github.com/lucaswren/s2l/internal/model"
+	"github.com/lucaswren/s2l/internal/speedtest"
 )
+
+func TestResolverDeadlinePreservesKnownSOCKSStage(t *testing.T) {
+	r := New(model.SocksNode{}, model.DNSOptions{Mode: "tcp"})
+	defer r.Close()
+	r.exchange = func(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+		<-ctx.Done()
+		return nil, &speedtest.StageError{Stage: "proxy-connect", Err: ctx.Err()}
+	}
+	query, _ := QueryA("example.com")
+	if _, err := r.Resolve(context.Background(), query); err == nil {
+		t.Fatal("timed-out query unexpectedly succeeded")
+	}
+	if failure := r.Status().LastTCPFailure; failure == nil || failure.Stage != "proxy-connect" {
+		t.Fatalf("deadline hid the known SOCKS phase: %+v", failure)
+	}
+}
 
 func TestCanceledRequestsDoNotDisablePrimary(t *testing.T) {
 	r := New(model.SocksNode{}, model.DNSOptions{Mode: "auto"})

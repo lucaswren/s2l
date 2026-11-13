@@ -33,6 +33,12 @@ func Current() Info {
 		}
 	}
 	switch strings.TrimPrefix(result.Version, "v") {
+	case "1.0.8":
+		result.ReleaseNotes = map[string]string{
+			"en":    "1.0.8: Report unconfirmed HTTPS connection timeouts accurately, cancel pending SOCKS5 probe connections, and preserve the known SOCKS5 stage when DNS times out. Upgrade during a maintenance window because mappings restart.",
+			"zh-TW": "1.0.8：準確標示連線階段未確認的 HTTPS 逾時，取消尚未完成的 SOCKS5 探測連線，並在 DNS 逾時時保留已知的 SOCKS5 階段。升級會重啟映射，請安排維護時段。",
+			"zh-CN": "1.0.8：准确标明连接阶段未确认的 HTTPS 超时，取消尚未完成的 SOCKS5 探测连接，并在 DNS 超时时保留已知的 SOCKS5 阶段。升级会重启映射，请安排维护窗口。",
+		}
 	case "1.0.7":
 		result.ReleaseNotes = map[string]string{
 			"en":    "1.0.7: Restore TCP DNS preference after two successful live TCP answers when DoH fails or stalls. Keep local pool waits and caller deadlines out of upstream failure diagnostics. Upgrade during a maintenance window because mappings restart.",

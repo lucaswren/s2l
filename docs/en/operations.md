@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.7 on a clean, dedicated server.**
+**Install S2L 1.0.8 on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
