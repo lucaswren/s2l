@@ -33,6 +33,12 @@ func Current() Info {
 		}
 	}
 	switch strings.TrimPrefix(result.Version, "v") {
+	case "1.0.11":
+		result.ReleaseNotes = map[string]string{
+			"en":    "1.0.11: Stream SSH upgrade progress and show the final exit status. Reconnect to follow the detached upgrade.",
+			"zh-TW": "1.0.11：在 SSH 顯示升級進度和最終結果。重新連線後可繼續查看背景升級。",
+			"zh-CN": "1.0.11：在 SSH 显示升级进度和最终结果。重连后可继续查看后台升级。",
+		}
 	case "1.0.10":
 		result.ReleaseNotes = map[string]string{
 			"en":    "1.0.10: Restore gVisor download throughput under bandwidth limits with bounded Linux IFB queues. Existing bandwidth settings apply automatically. Upgrade during a maintenance window because mappings restart.",

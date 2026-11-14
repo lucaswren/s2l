@@ -6,7 +6,7 @@ func TestBuildIdentityNeverGuessesStableVersionFromBranch(t *testing.T) {
 	version, revision := Version, Revision
 	t.Cleanup(func() { Version, Revision = version, revision })
 	Revision = "0123456789012345678901234567890123456789"
-	for _, requested := range []string{"main", "development", "source", "1.0.0", "1.0.5", "v1.0.5", "1.0.6", "v1.0.6", "1.0.7", "v1.0.7", "1.0.8", "v1.0.8", "1.0.9", "v1.0.9", "1.0.10", "v1.0.10", "v1.3.6", "v1.3.6/untrusted"} {
+	for _, requested := range []string{"main", "development", "source", "1.0.0", "1.0.5", "v1.0.5", "1.0.6", "v1.0.6", "1.0.7", "v1.0.7", "1.0.8", "v1.0.8", "1.0.9", "v1.0.9", "1.0.10", "v1.0.10", "1.0.11", "v1.0.11", "v1.3.6", "v1.3.6/untrusted"} {
 		Version = requested
 		got := Current()
 		if got.Version != requested || got.Revision != Revision {
@@ -14,7 +14,7 @@ func TestBuildIdentityNeverGuessesStableVersionFromBranch(t *testing.T) {
 		}
 		hasNotes := false
 		switch requested {
-		case "1.0.5", "v1.0.5", "1.0.6", "v1.0.6", "1.0.7", "v1.0.7", "1.0.8", "v1.0.8", "1.0.9", "v1.0.9", "1.0.10", "v1.0.10":
+		case "1.0.5", "v1.0.5", "1.0.6", "v1.0.6", "1.0.7", "v1.0.7", "1.0.8", "v1.0.8", "1.0.9", "v1.0.9", "1.0.10", "v1.0.10", "1.0.11", "v1.0.11":
 			hasNotes = true
 		}
 		if (len(got.ReleaseNotes) == 3) != hasNotes {

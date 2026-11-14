@@ -26,6 +26,60 @@ S2L_REF="${S2L_REF:-${S2L_COMMIT:-}}"
 [[ -z "${S2L_COMMIT:-}" || "$S2L_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "$(text "[ERROR] Invalid S2L_COMMIT" "[ERROR] 無效的 S2L_COMMIT" "[ERROR] 无效的 S2L_COMMIT")" >&2; exit 1; }
 [[ -z "${S2L_VERSION:-}" || "$S2L_VERSION" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$ ]] || { echo "$(text "[ERROR] Invalid S2L_VERSION" "[ERROR] 無效的 S2L_VERSION" "[ERROR] 无效的 S2L_VERSION")" >&2; exit 1; }
 job_root=/var/lib/s2l/cli-update
+show_update() {
+  python3 - "$job_root" "$1" "${_S2L_INSTALL_LANG:-en}" <<'PYFOLLOW'
+import json, os, pathlib, subprocess, sys, time
+
+root, mode, lang = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+def message(en, tw, cn):
+    return {'zh-Hant': tw, 'zh-Hans': cn}.get(lang, en)
+
+def status():
+    return json.loads((root / 'result.json').read_text())
+
+try:
+    result = status()
+except (OSError, ValueError):
+    sys.exit(message('No saved CLI upgrade result.', '找不到已儲存的 CLI 升級結果。', '找不到已保存的 CLI 升级结果。'))
+if mode == '--status':
+    print(json.dumps(result, indent=2))
+    sys.exit(result['exit_code'] if result['status'] == 'failed' else 0)
+
+inactive = 0
+with (root / 'update.log').open('rb') as log:
+    log_inode = os.fstat(log.fileno()).st_ino
+    while True:
+        result = status()
+        if (root / 'update.log').stat().st_ino != log_inode or result.get('log_inode', log_inode) != log_inode:
+            sys.exit(message('A newer upgrade started. Run --follow again.',
+                             '已有較新的升級，請重新執行 --follow。', '已有更新的升级任务，请重新执行 --follow。'))
+        while chunk := log.read(65536):
+            sys.stdout.buffer.write(chunk)
+            sys.stdout.buffer.flush()
+        state = result['status']
+        if state in ('succeeded', 'failed'):
+            code = result['exit_code']
+            label = {
+                'succeeded': message('Upgrade succeeded', '升級成功', '升级成功'),
+                'failed': message('Upgrade failed', '升級失敗', '升级失败'),
+            }[state]
+            print(f"[S2L] {label} | {result['version'] or '-'} | {code}", flush=True)
+            sys.exit(code if state == 'failed' else 0)
+        unit = subprocess.run(['systemctl', 'show', '-p', 'ActiveState', '--value', 's2l-cli-update.service'],
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout.strip()
+        active = unit in ('activating', 'active', 'reloading', 'deactivating')
+        inactive = 0 if active else inactive + 1
+        if inactive >= 4 and status()['status'] not in ('succeeded', 'failed'):
+            sys.exit(message('Upgrade worker stopped without a final result.',
+                             '升級程序已停止，未留下最終結果。', '升级进程已停止，未留下最终结果。'))
+        time.sleep(0.5)
+PYFOLLOW
+}
+case "${1:-}" in
+  --follow|--status) show_update "$1"; exit ;;
+  ''|--detach) ;;
+  *) echo "Usage: bash remote_update.sh [--detach|--follow|--status]" >&2; exit 2 ;;
+esac
 write_status() {
   [[ "${S2L_CLI_UPDATE:-0}" == 1 ]] || return 0
   python3 - "$job_root" "$1" "$2" "${S2L_VERSION:-}" "${S2L_COMMIT:-}" <<'PY'
@@ -34,7 +88,7 @@ root=pathlib.Path(sys.argv[1]);stamp=datetime.datetime.now(datetime.timezone.utc
 fd,name=tempfile.mkstemp(prefix='.result-',dir=root)
 try:
  with os.fdopen(fd,'w') as f:
-  json.dump(dict(status=sys.argv[2],exit_code=int(sys.argv[3]),version=sys.argv[4],commit=sys.argv[5],updated_at=stamp),f);f.flush();os.fsync(f.fileno())
+  json.dump(dict(status=sys.argv[2],exit_code=int(sys.argv[3]),version=sys.argv[4],commit=sys.argv[5],updated_at=stamp,log_inode=(root/'update.log').stat().st_ino),f);f.flush();os.fsync(f.fileno())
  os.replace(name,root/'result.json')
 finally:
  if os.path.exists(name):os.unlink(name)
@@ -61,8 +115,8 @@ PY
   # complete runner rather than relying on a source path or the SSH stdin.
   { printf '%s\n' '#!/usr/bin/env bash'; declare -f run_update; printf '%s\n' 'run_update "$@"'; } > "$job_root/runner.sh"
   chmod 700 "$job_root/runner.sh"
-  : > "$job_root/update.log"
-  chmod 600 "$job_root/update.log"
+  log_tmp="$(mktemp "$job_root/.log.XXXXXXXX")"
+  mv -f -- "$log_tmp" "$job_root/update.log"
   S2L_CLI_UPDATE=1 write_status queued 0
   systemctl reset-failed s2l-cli-update.service >/dev/null 2>&1 || true
   if ! systemd-run --quiet --collect --unit=s2l-cli-update.service --property=Type=exec --property=User=root --property=WorkingDirectory=/opt/s2l --property=KillMode=control-group --property=UMask=0077 --property=RuntimeMaxSec=3600 --property=TimeoutStopSec=120 --property="StandardOutput=append:$job_root/update.log" --property=StandardError=inherit /usr/bin/env S2L_CLI_UPDATE=1 HOME=/root "S2L_REF=$S2L_REF" "S2L_VERSION=${S2L_VERSION:-}" "S2L_COMMIT=${S2L_COMMIT:-}" /bin/bash "$job_root/runner.sh"; then
@@ -73,7 +127,10 @@ PY
   echo "$(text "[INFO] Background upgrade started; SSH disconnection does not cancel it. Service replacement disconnects L2TP and SSH carried by its mappings." "[INFO] 背景升級已啟動，SSH 中斷不會停止任務。服務切換會中斷 L2TP 及經映射連線的 SSH。" "[INFO] 后台升级已启动，SSH 断开不会中止任务。服务切换会断开 L2TP 及经映射连接的 SSH。")"
   echo "$(text "[INFO] Progress: tail -f $job_root/update.log" "[INFO] 進度：tail -f $job_root/update.log" "[INFO] 进度：tail -f $job_root/update.log")"
   echo "$(text "[INFO] Result: cat $job_root/result.json (only succeeded means success)" "[INFO] 結果：cat $job_root/result.json（succeeded 才表示成功）" "[INFO] 结果：cat $job_root/result.json（succeeded 才表示成功）")"
-  exit 0
+  exec 8>&-
+  [[ "${1:-}" == --detach ]] && exit 0
+  show_update --follow
+  exit
 fi
 work="$(mktemp -d /tmp/s2l-download.XXXXXXXX)"
 finish() {

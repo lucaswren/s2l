@@ -62,9 +62,8 @@ def main():
                 script=script.replace('https://api.github.com/repos/lucaswren/s2l',base+'/api').replace('https://codeload.github.com/lucaswren/s2l',base+'/source')
                 env=dict(os.environ)
                 for key in ('S2L_CLI_UPDATE','S2L_WEB_UPDATE_ID','S2L_REF','S2L_COMMIT','S2L_VERSION'):env.pop(key,None)
-                # Keep a session leader alive after the launcher exits, then
-                # send the same process-group hangup as a lost SSH terminal.
-                process=subprocess.Popen(['bash','-c','bash; sleep 60'],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True,env=env)
+                # Hang up the process group while the SSH follower is attached.
+                process=subprocess.Popen(['bash'],stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True,env=env)
                 try:
                     process.stdin.write(script.encode());process.stdin.close()
                     wait_result(job/'result.json',lambda r:r.get('status')=='running' and r.get('commit')==sha)
@@ -75,6 +74,10 @@ def main():
                     os.killpg(process.pid,signal.SIGHUP);process.wait(timeout=10)
                     assert not marker.exists(), 'worker finished before the hangup injection'
                     permit.touch()
+                    resumed=subprocess.run(['bash','-s','--','--follow'],input=script,text=True,env=env,
+                                           capture_output=True,timeout=30)
+                    assert resumed.returncode==exit_code,resumed
+                    assert 'fixture-building' in resumed.stdout and ('Upgrade succeeded' if exit_code==0 else 'Upgrade failed') in resumed.stdout,resumed
                     result=wait_result(job/'result.json',lambda r:r.get('status') in ('succeeded','failed'))
                     assert result['exit_code']==exit_code,result
                     assert result['status']==('succeeded' if exit_code==0 else 'failed'),result

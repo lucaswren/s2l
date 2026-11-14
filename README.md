@@ -32,7 +32,7 @@ Three tabs keep daily operation separate: **Lines**, **Monitoring** and **Settin
 
 ## Installation
 
-**Install S2L 1.0.10 on a clean, dedicated server.**
+**Install S2L 1.0.11 on a clean, dedicated server.**
 
 Review the scripts before running them as root. Installation changes packages, forwarding, PPP/L2TP, firewall rules and services; use a new, dedicated host and apply security updates in maintenance windows. New installs default to [manual APT maintenance](docs/en/operations.md#system-update-policy). The installer selects the latest stable release by default.
 

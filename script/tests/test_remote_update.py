@@ -54,9 +54,9 @@ class RemoteUpdateTests(unittest.TestCase):
         p.write_text(text)
         p.chmod(0o700)
 
-    def launch(self):
+    def launch(self, *args):
         # No source file exists: exercise the documented curl | bash contract.
-        return subprocess.run(['bash'], input=self.source, text=True, env=self.env,
+        return subprocess.run(['bash', '-s', '--', *args], input=self.source, text=True, env=self.env,
                               capture_output=True, start_new_session=True, timeout=10)
 
     def result(self):
@@ -72,7 +72,7 @@ class RemoteUpdateTests(unittest.TestCase):
         self.fail('worker did not finish: '+(self.job/'update.log').read_text())
 
     def test_piped_launcher_exits_before_worker_and_pins_stable_identity(self):
-        result = self.launch()
+        result = self.launch('--detach')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('result.json', result.stdout)
         # The launching shell is gone while the copied runner is still building.
@@ -90,7 +90,7 @@ class RemoteUpdateTests(unittest.TestCase):
 
     def test_build_failure_remains_a_persisted_failure(self):
         self.env['TEST_BUILD_CODE'] = '9'
-        self.assertEqual(self.launch().returncode, 0)
+        self.assertEqual(self.launch('--detach').returncode, 0)
         result = self.result()
         self.assertEqual((result['status'], result['exit_code']), ('failed', 9))
         self.assertIn('exit 0', (self.app/'s2l').read_text())
@@ -103,7 +103,7 @@ class RemoteUpdateTests(unittest.TestCase):
 
     def test_prerelease_is_rejected_before_source_download(self):
         self.env['TEST_BAD_RELEASE'] = '1'
-        self.assertEqual(self.launch().returncode, 0)
+        self.assertEqual(self.launch('--detach').returncode, 0)
         self.assertEqual(self.result()['status'], 'failed')
         self.assertNotIn('/tar.gz/', self.log.read_text())
         self.assertFalse(self.marker.exists())
@@ -114,3 +114,19 @@ class RemoteUpdateTests(unittest.TestCase):
         self.assertFalse(self.job.exists())
         self.assertEqual(self.marker.read_text(), '1.0.2|'+SHA)
         self.assertNotIn('/releases/latest', self.log.read_text())
+
+    def test_foreground_returns_worker_exit_and_can_reopen_result(self):
+        (self.root/'allow').touch()
+        self.env['TEST_BUILD_CODE'] = '9'
+        result = self.launch()
+        self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertIn('Downloading S2L 1.0.2', result.stdout)
+        self.assertIn('Upgrade failed', result.stdout)
+        requests = self.log.read_text()
+        resumed = self.launch('--follow')
+        self.assertEqual(resumed.returncode, 9, resumed.stderr)
+        self.assertIn('Upgrade failed', resumed.stdout)
+        status = self.launch('--status')
+        self.assertEqual(status.returncode, 9, status.stderr)
+        self.assertEqual(json.loads(status.stdout)['status'], 'failed')
+        self.assertEqual(self.log.read_text(), requests)

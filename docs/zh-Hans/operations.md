@@ -10,7 +10,7 @@
 
 ## 安装与管理
 
-**请在干净的专用服务器上全新安装 S2L 1.0.10。**
+**请在干净的专用服务器上全新安装 S2L 1.0.11。**
 
 新安装优先使用下方一键脚本。执行前审阅脚本；其默认获取最新稳定 Release，明确指定 `BRANCH` 时使用该版本，并以 root 执行下载代码。安装会修改系统软件包、转发、PPP/L2TP、防火墙与服务。需要从已审阅源码工作副本安装时，参阅[开发指南](development.md)；现有安装请使用下方更新流程。
 
@@ -222,7 +222,7 @@ journalctl -k -b --no-pager | grep -Ei 'refcount|use-after-free|l2tp|lockup|pani
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
-SSH 命令会启动独立后台任务，断开 SSH 不会中止升级；映射切换仍会中断 L2TP 及经其连接的 SSH。使用 `tail -f /var/lib/s2l/cli-update/update.log` 查看进度，使用 `cat /var/lib/s2l/cli-update/result.json` 核对结果，只有 `succeeded` 表示成功。编译按包串行执行并显示进度。直接执行 `script/update.sh` 仍是前台操作，请使用独立管理连接或终端复用工具。
+SSH 命令会直接显示升级日志和最终结果，并返回升级退出码。SSH 断开后升级继续。重连后运行 `sudo bash /opt/s2l/remote_update.sh --follow` 可继续查看，使用 `--status` 可查看已保存的结果。启动时传入 `--detach` 可立即返回。 映射重启会断开经该映射连接的 SSH。 首次升级时，如果服务器上的脚本还是旧版，用上面的下载命令，把末尾换成 `sudo bash -s -- --follow` 即可继续查看。
 
 更新脚本仅接受本安装器生成的依赖归属记录，并在停止服务前检查 conntrack 和 nftables。
 

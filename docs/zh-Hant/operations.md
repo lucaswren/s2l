@@ -10,7 +10,7 @@
 
 ## 新安裝
 
-**請在乾淨的專用伺服器上全新安裝 S2L 1.0.10。**
+**請在乾淨的專用伺服器上全新安裝 S2L 1.0.11。**
 
 新安裝優先使用一鍵腳本。請使用專用 Ubuntu/Debian 主機，執行前審閱腳本：
 
@@ -150,7 +150,7 @@ dpkg-query -W -f='${Depends}\n' linux-image-generic-hwe-24.04
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
-SSH 命令會啟動獨立背景任務，中斷 SSH 不會停止升級；映射切換仍會中斷 L2TP 及經其連線的 SSH。使用 `tail -f /var/lib/s2l/cli-update/update.log` 查看進度，使用 `cat /var/lib/s2l/cli-update/result.json` 核對結果，只有 `succeeded` 表示成功。編譯按套件依序執行並顯示進度。直接執行 `script/update.sh` 仍是前景操作，請使用獨立管理連線或終端多工工具。
+SSH 命令會直接顯示升級日誌和最終結果，並回傳升級結束碼。SSH 中斷後升級繼續。重新連線後執行 `sudo bash /opt/s2l/remote_update.sh --follow` 可繼續查看，使用 `--status` 可查看已儲存的結果。啟動時傳入 `--detach` 可立即返回。 映射重新啟動會中斷經該映射連線的 SSH。 首次升級時，如果伺服器上的指令碼仍是舊版，使用上方下載指令，將末尾改成 `sudo bash -s -- --follow` 即可繼續查看。
 
 更新腳本僅接受本安裝程式產生的相依套件歸屬記錄，並在停止服務前檢查 conntrack 和 nftables。
 

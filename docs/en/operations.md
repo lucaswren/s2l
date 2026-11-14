@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.10 on a clean, dedicated server.**
+**Install S2L 1.0.11 on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
@@ -150,7 +150,7 @@ For an existing default `/opt/s2l` installation, run:
 curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_update.sh | sudo bash
 ```
 
-The CLI command starts a background systemd task. SSH disconnection does not cancel it; restarting mappings still interrupts L2TP and any SSH connection carried by them. Track `tail -f /var/lib/s2l/cli-update/update.log` and inspect `cat /var/lib/s2l/cli-update/result.json`; only `succeeded` means completion. Package compilation is serialized and prints progress. Direct `script/update.sh` execution stays in the foreground and needs an independent management connection or terminal multiplexer.
+The SSH command streams upgrade logs and exits with the worker result. The upgrade continues if SSH disconnects. Reconnect and run `sudo bash /opt/s2l/remote_update.sh --follow` to resume viewing, use `--status` to print the saved result, or pass `--detach` to launch without waiting. Restarting mappings can disconnect SSH sessions that use those mappings. If the installed script is still from an older version, repeat the download command with `sudo bash -s -- --follow` to reconnect.
 
 The updater requires the dependency receipt created by this installer and checks that conntrack and nftables are available before stopping services.
 
