@@ -97,11 +97,11 @@ python3 "${SCRIPT_DIR}/dependencies.py" record
 # Package post-install scripts can start an unconfigured daemon. It was verified
 # inactive before package installation; keep it stopped until guards are ready.
 systemctl stop xl2tpd
-if ! modprobe l2tp_ppp; then
+if ! modprobe l2tp_ppp || ! modprobe ifb; then
   if [[ "$(. /etc/os-release; echo "$ID")" == ubuntu ]]; then
     apt_get install -y --no-install-recommends "linux-modules-extra-$(uname -r)"
   else
-    error "$(s2l_text "The running kernel lacks L2TP modules; install matching modules and retry" "目前核心缺少 L2TP 模組；請安裝相符的模組後重試" "当前内核缺少 L2TP 模块；请安装与运行内核匹配的模块并重试")"
+    error "$(s2l_text "The running kernel lacks required L2TP or IFB modules; install matching modules and retry" "目前核心缺少 L2TP 或 IFB 模組；請安裝相符的模組後重試" "当前内核缺少 L2TP 或 IFB 模块；请安装与运行内核匹配的模块并重试")"
   fi
 fi
 python3 "${SCRIPT_DIR}/install_preflight.py" capabilities

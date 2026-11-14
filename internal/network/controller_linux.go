@@ -79,10 +79,10 @@ func (c *Controller) Setup(m model.TunnelMapping) error {
 		return errors.Join(fmt.Errorf("bandwidth: %w", err), DelFirewall(m), DelPolicyRoute(m))
 	}
 	if err := TunePeers(m); err != nil {
-		return errors.Join(fmt.Errorf("tune connected PPP interfaces: %w", err), DelFirewall(m), DelPolicyRoute(m))
+		return errors.Join(fmt.Errorf("tune connected PPP interfaces: %w", err), DelFirewall(m), DelPolicyRoute(m), removeDownloadQueue(m))
 	}
 	if err := AddFirewall(m); err != nil {
-		return errors.Join(fmt.Errorf("firewall: %w", err), DelPolicyRoute(m))
+		return errors.Join(fmt.Errorf("firewall: %w", err), DelPolicyRoute(m), removeDownloadQueue(m))
 	}
 	c.active[mappingKey(m)] = m
 	return nil
@@ -100,7 +100,7 @@ func (c *Controller) Teardown(m model.TunnelMapping) error {
 	if _, admitted := c.admitted[m.ID]; c.sessionGuard && (active || admitted) {
 		revokeErr = c.revokeSessionAdmission(m.ID)
 	}
-	return errors.Join(revokeErr, DelFirewall(m), DelPolicyRoute(m))
+	return errors.Join(revokeErr, DelFirewall(m), DelPolicyRoute(m), removeDownloadQueue(m))
 }
 
 // Caller holds the controller lock.
@@ -117,7 +117,7 @@ func (c *Controller) TeardownAll() error {
 	c.rulesRevision++
 	var errs []error
 	for _, m := range c.active {
-		errs = append(errs, DelFirewall(m), DelPolicyRoute(m))
+		errs = append(errs, DelFirewall(m), DelPolicyRoute(m), removeDownloadQueue(m))
 	}
 	c.active = make(map[string]model.TunnelMapping)
 	if c.sessionGuard {

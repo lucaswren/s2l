@@ -80,7 +80,7 @@ def check_listener_port(port, kind):
 
 def capabilities():
     import fcntl
-    for module in ('tun', 'ppp_generic', 'l2tp_ppp'):
+    for module in ('tun', 'ppp_generic', 'l2tp_ppp', 'ifb'):
         command('modprobe', module)
     fd = os.open('/dev/net/tun', os.O_RDWR)
     try:

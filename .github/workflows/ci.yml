@@ -58,11 +58,12 @@ jobs:
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y xl2tpd ppp curl strongswan strongswan-starter conntrack
           # Hosted Azure kernels can omit L2TP from their base module package.
           # Install modules for the running kernel; never skip the real dial test.
-          if ! modinfo l2tp_ppp >/dev/null 2>&1; then
+          if ! modinfo l2tp_ppp >/dev/null 2>&1 || ! modinfo ifb >/dev/null 2>&1; then
             sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y "linux-modules-extra-$(uname -r)"
           fi
           sudo modprobe ppp_generic
           sudo modprobe l2tp_ppp
+          sudo modprobe ifb
           sudo modprobe xfrm_user
       - name: Verify explicit WAN egress cannot use another default exit
         run: |

@@ -33,6 +33,12 @@ func Current() Info {
 		}
 	}
 	switch strings.TrimPrefix(result.Version, "v") {
+	case "1.0.10":
+		result.ReleaseNotes = map[string]string{
+			"en":    "1.0.10: Restore gVisor download throughput under bandwidth limits with bounded Linux IFB queues. Existing bandwidth settings apply automatically. Upgrade during a maintenance window because mappings restart.",
+			"zh-TW": "1.0.10：使用有界的 Linux IFB 佇列恢復 gVisor 限速下載的吞吐量。既有頻寬設定會自動套用。升級會重啟映射，請安排維護時段。",
+			"zh-CN": "1.0.10：使用有界的 Linux IFB 队列恢复 gVisor 限速下载的吞吐量。已有带宽设置会自动应用。升级会重启映射，请安排维护窗口。",
+		}
 	case "1.0.9":
 		result.ReleaseNotes = map[string]string{
 			"en":    "1.0.9: Use the gVisor TUN stack to keep TCP connections to different destinations separate when they share a source port. Upgrade during a maintenance window because mappings restart.",

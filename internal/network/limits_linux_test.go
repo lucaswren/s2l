@@ -2,16 +2,21 @@
 
 package network
 
-import (
-	"testing"
-)
+import "testing"
 
-func TestPolicerDetectsRateAndMatchDrift(t *testing.T) {
-	text := "match 00000000/00000000 at 0\n police 0x1 rate 20Mbit burst 25000b action drop overhead 0b"
-	if !validPolicer(text, 20000) || validPolicer(text, 10000) || validPolicer(text+"\n"+text, 20000) {
-		t.Fatal("rate mismatch not detected")
-	}
-	if validPolicer("police 0x1 rate 20Mbit action drop", 20000) || validPolicer("match 00000000/00000000 at 0\n police 0x1 rate 20Mbit action pipe", 20000) {
-		t.Fatal("changed filter accepted")
+func TestDownloadRedirectMustTargetItsOwnQueue(t *testing.T) {
+	redirect := "match 00000000/00000000 at 0\n action order 1: mirred (Egress Redirect to device s2lifb101) stolen"
+	for _, row := range []struct {
+		text string
+		ok   bool
+	}{
+		{redirect, true},
+		{redirect + "\n" + redirect, false},
+		{"match 00000000/00000000 at 0\n action order 1: mirred (Egress Redirect to device s2lifb102) stolen", false},
+		{"match 00000000/00000000 at 0\n police 0x1 rate 20Mbit action drop", false},
+	} {
+		if got := validDownloadRedirect(row.text, "s2lifb101"); got != row.ok {
+			t.Fatalf("redirect acceptance = %t for %q", got, row.text)
+		}
 	}
 }

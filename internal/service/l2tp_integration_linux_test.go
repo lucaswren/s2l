@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -306,6 +307,8 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 		if transport == "ipsec-shared-nat-1701" {
 			assertNoDirectEgress()
 			integrationIPsecLifecycle(t, root, caPath, run, assertNoDirectEgress)
+			integrationDownloadThroughput(t, caPath)
+			assertNoDirectEgress()
 		}
 	}
 	node1 := proxyState["node1"]
@@ -528,9 +531,15 @@ probe('198.18.0.9','/',f'node{client}'.encode(),
 		t.Fatal("upload rate drift was not detected")
 	}
 	run("tc", "qdisc", "replace", "dev", first.TunName, "root", "handle", "1:", "tbf", "rate", "20000kbit", "burst", "25000", "latency", "100ms")
-	run("tc", "filter", "replace", "dev", first.TunName, "parent", "ffff:", "protocol", "ip", "pref", "10", "handle", "800::800", "u32", "match", "u32", "0", "0", "police", "rate", "10000kbit", "burst", "25000", "drop", "flowid", ":1")
+	downloadDev := fmt.Sprintf("s2lifb%d", first.TableID)
+	run("tc", "qdisc", "replace", "dev", downloadDev, "root", "handle", "1:", "tbf", "rate", "10000kbit", "burst", "25000", "latency", "100ms")
 	if controller.Verify(first) == nil {
 		t.Fatal("download rate drift was not detected")
+	}
+	// Upgrade may encounter the ingress policer from an earlier version.
+	run("tc", "filter", "replace", "dev", first.TunName, "parent", "ffff:", "protocol", "ip", "pref", "10", "handle", "800::800", "u32", "match", "u32", "0", "0", "police", "rate", "20000kbit", "burst", "25000", "drop", "flowid", ":1")
+	if controller.Verify(first) == nil {
+		t.Fatal("legacy download policer was accepted")
 	}
 	// Missing rules are repaired even when PPP collection is unavailable.
 	svc.peerMu.Lock()
@@ -560,8 +569,8 @@ probe('198.18.0.9','/',f'node{client}'.encode(),
 	svc.peersError = ""
 	svc.peerMu.Unlock()
 	filters := run("tc", "filter", "show", "dev", first.TunName, "parent", "ffff:", "pref", "10")
-	if strings.Count(filters, "police ") != 1 {
-		t.Fatal("repair accumulated policers", filters)
+	if strings.Count(filters, "mirred (Egress Redirect to device "+downloadDev+")") != 1 {
+		t.Fatal("repair produced the wrong download redirect", filters)
 	}
 	if sb.PID(first.TunName) != pid || sb.PID(second.TunName) != before {
 		t.Fatal("rule repair restarted a process")
@@ -604,6 +613,9 @@ probe('198.18.0.9','/',f'node{client}'.encode(),
 		<-sessionDone
 		if err := svc.Stop(first.ID); err != nil {
 			t.Fatal(err)
+		}
+		if _, err := net.InterfaceByName(downloadDev); err == nil {
+			t.Fatal("stopped mapping retained its download shaper")
 		}
 		peers, err := network.ReadPeers(st.ListMappings())
 		if err != nil || len(peers) != 2 {
@@ -666,6 +678,58 @@ func integrationWait(t *testing.T, budget time.Duration, check func() bool) {
 	t.Fatal("fixture readiness timed out")
 }
 
+// Measure each client's delivered bytes while both mappings have four active
+// downloads. The 20 Mbps limits should hold without stalling the gVisor streams.
+func integrationDownloadThroughput(t *testing.T, caPath string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			cmd := exec.CommandContext(ctx, "ip", "netns", "exec", fmt.Sprintf("s2l-dial-%d", i), "python3", "-c", `import concurrent.futures, http.client, ssl, sys, time
+
+tls = ssl.create_default_context(cafile=sys.argv[1])
+expected = sys.argv[2]
+start = time.monotonic() + 0.5
+duration = 6
+end = start + duration
+
+def download():
+    time.sleep(max(0, start - time.monotonic()))
+    conn = http.client.HTTPSConnection('198.18.0.9', timeout=3, context=tls)
+    total = 0
+    try:
+        conn.request('GET', '/bandwidth-test')
+        response = conn.getresponse()
+        assert response.status == 200 and response.getheader('X-Fixture-Exit') == expected
+        while time.monotonic() < end:
+            data = response.read1(65536)
+            if not data or time.monotonic() >= end:
+                break
+            total += len(data)
+    finally:
+        conn.close()
+    return total
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    mbps = 8 * sum(pool.map(lambda _: download(), range(4))) / duration / 1e6
+print(f'{expected} download throughput {mbps:.2f} Mbps with 20 Mbps configured', flush=True)
+assert 10 <= mbps <= 21, mbps
+`, caPath, fmt.Sprintf("node%d", i))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Errorf("shared NAT download: %v %s", err, out)
+				return
+			}
+			t.Log(strings.TrimSpace(string(out)))
+		}(i)
+	}
+	wg.Wait()
+}
+
 func integrationCertificate(t *testing.T) (tls.Certificate, []byte) {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -691,6 +755,17 @@ func integrationSOCKS(t *testing.T, id string, cert tls.Certificate, bind ...str
 	state := &integrationProxyState{online: true, connections: make(map[net.Conn]bool), dnsTargets: make(map[string]int)}
 	holdDone := make(chan struct{})
 	target := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/bandwidth-test" {
+			w.Header().Set("X-Fixture-Exit", id)
+			w.Header().Set("Content-Length", strconv.Itoa(64*1024*1024))
+			chunk := make([]byte, 64*1024)
+			for i := 0; i < 1024; i++ {
+				if _, err := w.Write(chunk); err != nil {
+					break
+				}
+			}
+			return
+		}
 		if r.URL.Path == "/custom-dns" {
 			state.dohQueries.Add(1)
 			q, err := io.ReadAll(io.LimitReader(r.Body, 65536))
