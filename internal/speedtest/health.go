@@ -54,7 +54,7 @@ func probeHTTPSTargets(ctx context.Context, node model.SocksNode, targets []stri
 		if u != nil {
 			host = u.Hostname()
 		}
-		report.Attempts = append(report.Attempts, model.ProbeAttempt{Target: host, Stage: r.Stage, StatusCode: r.StatusCode, DurationMS: r.DurationMS, SOCKSReply: r.SOCKSReply})
+		report.Attempts = append(report.Attempts, model.ProbeAttempt{Target: host, Stage: r.Stage, StatusCode: r.StatusCode, DurationMS: r.DurationMS, SOCKSReply: r.SOCKSReply, AuthReply: r.AuthReply})
 		if r.State == "healthy" {
 			r.Attempts = report.Attempts
 			r.DurationMS = time.Since(started).Milliseconds()
@@ -64,7 +64,7 @@ func probeHTTPSTargets(ctx context.Context, node model.SocksNode, targets []stri
 			copy := r
 			response = &copy
 		}
-		report.Stage, report.Error, report.DurationMS, report.SOCKSReply = r.Stage, r.Error, r.DurationMS, r.SOCKSReply
+		report.Stage, report.Error, report.DurationMS, report.SOCKSReply, report.AuthReply = r.Stage, r.Error, r.DurationMS, r.SOCKSReply, r.AuthReply
 	}
 	if response != nil {
 		response.Attempts = report.Attempts
@@ -130,6 +130,7 @@ func probeHTTPS(ctx context.Context, target string, dial func(context.Context, s
 	stage := phase.Load().(string)
 	if err != nil {
 		r.SOCKSReply = SOCKSReplyCode(err)
+		r.AuthReply = AuthReplyCode(err)
 		var se *StageError
 		if errors.As(err, &se) {
 			stage = se.Stage
@@ -142,7 +143,7 @@ func probeHTTPS(ctx context.Context, target string, dial func(context.Context, s
 				stage = "target-connect"
 			}
 		}
-		descriptions := map[string]string{"proxy-connect": "节点连接失败或超时", "socks-auth": "SOCKS5 协商或认证失败", "target-connect": "目标连接失败或超时", "tls": "TLS 握手或证书校验失败", "http": "HTTP 响应读取失败", "cancelled": "检测超时或已取消，连接阶段未确认"}
+		descriptions := map[string]string{"proxy-connect": "节点连接失败或超时", "socks-auth-rejected": "上游拒绝 SOCKS5 账号密码", "socks-auth": "SOCKS5 协商或认证失败或超时", "target-connect": "目标连接失败或超时", "tls": "TLS 握手或证书校验失败", "http": "HTTP 响应读取失败", "cancelled": "检测超时或已取消，连接阶段未确认"}
 		r.Error = descriptions[stage]
 	}
 	r.Stage = stage

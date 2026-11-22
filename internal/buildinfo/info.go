@@ -33,6 +33,12 @@ func Current() Info {
 		}
 	}
 	switch strings.TrimPrefix(result.Version, "v") {
+	case "1.0.12":
+		result.ReleaseNotes = map[string]string{
+			"en":    "1.0.12: Distinguish SOCKS5 authentication rejection from negotiation failures and timeouts, retain authentication reply codes, and persist credential-free incident cause summaries after mapping deletion or restart.",
+			"zh-TW": "1.0.12：區分 SOCKS5 認證拒絕與協商失敗、逾時，保留認證回覆碼，並持久保存不含憑據的故障原因摘要，供映射刪除或重新啟動後追溯。",
+			"zh-CN": "1.0.12：区分 SOCKS5 认证拒绝与协商失败、超时，保留认证返回码，并持久保存不含凭据的故障原因摘要，供映射删除或重启后追溯。",
+		}
 	case "1.0.11":
 		result.ReleaseNotes = map[string]string{
 			"en":    "1.0.11: Stream SSH upgrade progress and show the final exit status. Reconnect to follow the detached upgrade.",

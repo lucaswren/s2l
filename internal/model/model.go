@@ -98,6 +98,7 @@ type DNSAttemptFailure struct {
 	Endpoint   string    `json:"endpoint"`
 	Stage      string    `json:"stage"`
 	SOCKSReply byte      `json:"socks_reply,omitempty"`
+	AuthReply  byte      `json:"auth_reply,omitempty"`
 }
 
 type ProcessStatus struct {
@@ -139,6 +140,7 @@ type ProtocolHealth struct {
 	Stage         string         `json:"stage,omitempty"`
 	StatusCode    int            `json:"status_code,omitempty"`
 	SOCKSReply    byte           `json:"socks_reply,omitempty"`
+	AuthReply     byte           `json:"auth_reply,omitempty"`
 	DurationMS    int64          `json:"duration_ms,omitempty"`
 	Attempts      []ProbeAttempt `json:"attempts,omitempty"`
 }
@@ -147,6 +149,7 @@ type ProbeAttempt struct {
 	Target     string `json:"target"`
 	Method     string `json:"method,omitempty"`
 	SOCKSReply byte   `json:"socks_reply,omitempty"`
+	AuthReply  byte   `json:"auth_reply,omitempty"`
 	Stage      string `json:"stage"`
 	StatusCode int    `json:"status_code,omitempty"`
 	DurationMS int64  `json:"duration_ms"`

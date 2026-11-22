@@ -44,6 +44,20 @@ func (e *socksReplyError) Error() string {
 	return fmt.Sprintf("SOCKS request rejected: code %d", e.code)
 }
 
+type authReplyError struct{ code byte }
+
+func (e *authReplyError) Error() string {
+	return fmt.Sprintf("SOCKS authentication rejected: code %d", e.code)
+}
+
+func AuthReplyCode(err error) byte {
+	var reply *authReplyError
+	if errors.As(err, &reply) {
+		return reply.code
+	}
+	return 0
+}
+
 func SOCKSReplyCode(err error) byte {
 	var reply *socksReplyError
 	if errors.As(err, &reply) {
@@ -127,8 +141,12 @@ func dialSOCKSCommand(ctx context.Context, proxyAddr, username, password string,
 		if _, err := io.ReadFull(conn, resp); err != nil {
 			return nil, "", fmt.Errorf("socks auth: %w", err)
 		}
-		if resp[0] != 1 || resp[1] != 0x00 {
-			return nil, "", fmt.Errorf("socks auth rejected")
+		if resp[0] != 1 {
+			return nil, "", fmt.Errorf("invalid SOCKS authentication response version")
+		}
+		if resp[1] != 0 {
+			stage = "socks-auth-rejected"
+			return nil, "", &authReplyError{code: resp[1]}
 		}
 	case 0xff:
 		return nil, "", fmt.Errorf("socks: no acceptable auth method")

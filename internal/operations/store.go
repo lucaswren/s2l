@@ -29,6 +29,7 @@ type Event struct {
 	Detail   string    `json:"detail"`
 }
 type Incident struct {
+	Summary  string    `json:"summary,omitempty"`
 	Key      string    `json:"key"`
 	Scope    string    `json:"scope"`
 	State    string    `json:"state"`
@@ -198,6 +199,42 @@ func (s *Store) Observe(status model.SystemStatus, now time.Time) {
 		sort.Strings(ids)
 		desired["shared:upstream"] = Incident{Key: "shared:upstream", Scope: "server-suspected", State: "shared-upstream", Affected: ids}
 	}
+	for key, incident := range desired {
+		parts := []string{}
+		for _, id := range incident.Affected {
+			h := status.UpstreamHealth[id]
+			for _, leg := range []struct {
+				name   string
+				health model.ProtocolHealth
+			}{{"TCP", h.TCP}, {"DNS", h.DNS}} {
+				p := leg.health
+				if p.State != "unavailable" && p.State != "unstable" {
+					continue
+				}
+				stage, auth, reply := p.Stage, p.AuthReply, p.SOCKSReply
+				if stage == "" && len(p.Attempts) > 0 {
+					last := p.Attempts[len(p.Attempts)-1]
+					stage, auth, reply = last.Stage, last.AuthReply, last.SOCKSReply
+				}
+				label := failureStageLabel(stage)
+				if label == "" {
+					continue
+				}
+				part := fmt.Sprintf("%s %s %s", id, leg.name, label)
+				if auth != 0 {
+					part += fmt.Sprintf(" auth=0x%02x", auth)
+				}
+				if reply != 0 {
+					part += fmt.Sprintf(" socks=0x%02x", reply)
+				}
+				if len(parts) < 8 {
+					parts = append(parts, part)
+				}
+			}
+		}
+		incident.Summary = strings.Join(parts, "; ")
+		desired[key] = incident
+	}
 	for i := range s.data.Incidents {
 		v := &s.data.Incidents[i]
 		if !v.Resolved.IsZero() {
@@ -259,6 +296,11 @@ func (s *Store) Observe(status model.SystemStatus, now time.Time) {
 			}
 		}
 		if d, ok := desired[v.Key]; ok {
+			if d.Summary != "" && d.Summary != v.Summary {
+				v.Summary = d.Summary
+				s.dirty = true
+				s.add(now, "incident-detail", v.Key, d.Summary)
+			}
 			if !same(v.Affected, d.Affected) {
 				v.Affected = d.Affected
 				s.dirty = true
@@ -287,7 +329,7 @@ func (s *Store) Observe(status model.SystemStatus, now time.Time) {
 		v.Started = now
 		v.Updated = now
 		s.data.Incidents = append(s.data.Incidents, v)
-		s.add(now, "incident-open", v.Key, v.State)
+		s.add(now, "incident-open", v.Key, strings.TrimSpace(v.State+" "+v.Summary))
 	}
 	s.trimIncidents()
 	if now.Sub(s.lastFlush) >= time.Minute {
@@ -519,4 +561,28 @@ func decided(state string) bool {
 		return true
 	}
 	return false
+}
+
+// Use fixed labels only. Probe errors and endpoints can contain private input.
+func failureStageLabel(stage string) string {
+	switch stage {
+	case "socks-auth-rejected":
+		return "上游拒绝 SOCKS5 账号密码"
+	case "socks-auth":
+		return "SOCKS5 协商或认证失败或超时"
+	case "proxy-connect":
+		return "节点连接失败或超时"
+	case "target-connect":
+		return "目标连接失败或超时"
+	case "tls":
+		return "TLS 握手失败"
+	case "http":
+		return "HTTP 响应失败"
+	case "cancelled", "timeout", "timeout-or-cancelled":
+		return "检测超时或取消"
+	case "dns-response", "exchange", "exchange-or-response":
+		return "DNS 交换或响应异常"
+	default:
+		return ""
+	}
 }

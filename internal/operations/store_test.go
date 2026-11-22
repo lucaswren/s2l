@@ -263,3 +263,35 @@ func TestFirstSuccessfulProbeDoesNotPrematurelyResolveIncident(t *testing.T) {
 		t.Fatal("confirmed recovery missing")
 	}
 }
+
+func TestFailureSummarySurvivesDeletionAndReloadWithoutPrivateErrors(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.json")
+	s := New(path)
+	now := time.Now()
+	st := model.SystemStatus{Mappings: []model.TunnelMapping{{ID: "m", NodeID: "n", Status: "running"}}, UpstreamHealth: map[string]model.UpstreamHealth{
+		"m": {LocalState: "healthy", TCP: model.ProtocolHealth{State: "unavailable", Stage: "socks-auth-rejected", AuthReply: 1, CheckedAt: now, Error: "private-password"}}}}
+	s.Observe(st, now)
+	st.UpstreamHealth["m"] = model.UpstreamHealth{LocalState: "healthy", TCP: model.ProtocolHealth{State: "unavailable", Stage: "proxy-connect", CheckedAt: now.Add(time.Second)}}
+	s.Observe(st, now.Add(time.Second))
+	s.Observe(model.SystemStatus{}, now.Add(2*time.Second))
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	view := New(path).View()
+	b, _ := json.Marshal(view)
+	if strings.Contains(string(b), "private-password") || !strings.Contains(string(b), "auth=0x01") || !strings.Contains(string(b), "节点连接失败或超时") || view.Incidents[0].Resolved.IsZero() {
+		t.Fatal(string(b))
+	}
+}
+
+func TestLatestFailureStageDoesNotBorrowEarlierAuthenticationReply(t *testing.T) {
+	s := New(filepath.Join(t.TempDir(), "events.json"))
+	now := time.Now()
+	st := model.SystemStatus{Mappings: []model.TunnelMapping{{ID: "m", NodeID: "n", Status: "running"}}, UpstreamHealth: map[string]model.UpstreamHealth{
+		"m": {LocalState: "healthy", TCP: model.ProtocolHealth{State: "unavailable", Stage: "proxy-connect", CheckedAt: now, Attempts: []model.ProbeAttempt{{Stage: "socks-auth-rejected", AuthReply: 1}, {Stage: "proxy-connect"}}}}}}
+	s.Observe(st, now)
+	summary := s.View().Incidents[0].Summary
+	if !strings.Contains(summary, "节点连接失败或超时") || strings.Contains(summary, "auth=") {
+		t.Fatal(summary)
+	}
+}

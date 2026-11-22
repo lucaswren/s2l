@@ -29,3 +29,11 @@ test('history and mapping diagnostics pass cancellation and encode identifiers',
 });
 
 test('Go zero timestamps are not resolved incidents',()=>{assert.equal(isResolved({resolved:'0001-01-01T00:00:00Z'}),false);assert.equal(isResolved({}),false);assert.equal(isResolved({resolved:'not-a-date'}),false);assert.equal(isResolved({resolved:'2026-10-20T12:00:00Z'}),true)});
+
+test('authentication rejection is distinct from CONNECT rejection and negotiation timeout',()=>{
+ assert.equal(protocolSummary({stage:'socks-auth-rejected',auth_reply:1}),
+  '上游拒绝 SOCKS5 账号密码 · SOCKS5 认证拒绝码 1');
+ assert.equal(protocolSummary({stage:'socks-auth'}),'SOCKS5 认证');
+ assert.equal(protocolSummary({stage:'target-connect',socks_reply:1}),
+  '目标连接 · SOCKS5 拒绝码 1');
+});

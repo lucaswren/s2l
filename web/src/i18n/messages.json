@@ -3502,5 +3502,7 @@
   "另有 {0} 条故障等待取证": {
     "en": "{0} more faults waiting for evidence collection",
     "tw": "另有 {0} 條故障等待取證"
-  }
+  },
+  "上游拒绝 SOCKS5 账号密码": {"en": "Upstream rejected SOCKS5 credentials", "tw": "上游拒絕 SOCKS5 帳號密碼"},
+  "SOCKS5 认证拒绝码 {0}": {"en": "SOCKS5 authentication rejection code {0}", "tw": "SOCKS5 認證拒絕碼 {0}"}
 }

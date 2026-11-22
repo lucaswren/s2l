@@ -96,12 +96,19 @@ func checkDNSHealthTargets(ctx context.Context, node model.SocksNode, dohTarget,
 				target = endpoint.Host
 			}
 		}
-		attempts = append(attempts, model.ProbeAttempt{Target: target, Method: method, Stage: stage, SOCKSReply: SOCKSReplyCode(err), DurationMS: time.Since(start).Milliseconds()})
+		attempts = append(attempts, model.ProbeAttempt{Target: target, Method: method, Stage: stage, SOCKSReply: SOCKSReplyCode(err), AuthReply: AuthReplyCode(err), DurationMS: time.Since(start).Milliseconds()})
 		return err
 	}
 	finish := func(method string, err error) model.ProtocolHealth {
 		result := protocolResult(method, err)
 		result.Attempts = attempts
+		if err != nil && len(attempts) > 0 {
+			last := attempts[len(attempts)-1]
+			result.Stage, result.AuthReply, result.SOCKSReply = last.Stage, last.AuthReply, last.SOCKSReply
+			if result.AuthReply != 0 {
+				result.Error = "上游拒绝 SOCKS5 账号密码"
+			}
+		}
 		return result
 	}
 	if mode == "doh" {
@@ -215,7 +222,12 @@ func checkUDPHealth(ctx context.Context, node model.SocksNode) model.ProtocolHea
 			result.SOCKSReply = reply.code
 			return result
 		}
-		return protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association failed"))
+		result := protocolResult("udp-associate", fmt.Errorf("SOCKS5 UDP association failed"))
+		result.Stage, result.AuthReply = ErrorStage(err), AuthReplyCode(err)
+		if result.AuthReply != 0 {
+			result.Error = "上游拒绝 SOCKS5 账号密码"
+		}
+		return result
 	}
 	defer control.Close()
 	host, port, err := net.SplitHostPort(relay)

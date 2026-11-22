@@ -438,7 +438,7 @@ func (p *protocolRecord) observe(result model.ProtocolHealth, now time.Time) {
 	} else {
 		p.CheckedAt = now
 	}
-	p.Method, p.ExitIP, p.SOCKSReply = result.Method, result.ExitIP, result.SOCKSReply
+	p.Method, p.ExitIP, p.SOCKSReply, p.AuthReply = result.Method, result.ExitIP, result.SOCKSReply, result.AuthReply
 	p.MeasuredState = result.State
 	p.Stage, p.StatusCode, p.DurationMS = result.Stage, result.StatusCode, result.DurationMS
 	p.Attempts = append([]model.ProbeAttempt(nil), result.Attempts...)

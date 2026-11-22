@@ -135,7 +135,7 @@ func (r *Resolver) attempt(parent context.Context, method string, query []byte) 
 			stage = "timeout"
 		}
 		r.mu.Lock()
-		failure := &model.DNSAttemptFailure{At: time.Now(), Stage: stage, SOCKSReply: speedtest.SOCKSReplyCode(err)}
+		failure := &model.DNSAttemptFailure{At: time.Now(), Stage: stage, SOCKSReply: speedtest.SOCKSReplyCode(err), AuthReply: speedtest.AuthReplyCode(err)}
 		if method == "doh" {
 			if failure.SOCKSReply != 0 {
 				r.status.DoHProxyRejections++
