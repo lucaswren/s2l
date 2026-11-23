@@ -66,7 +66,17 @@ func TestProbeDirections(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			result := probeDirections(context.Background(), model.SocksNode{ID: "n1"}, 1, server.Client(), server.URL+"/down", server.URL+"/up")
+			node := model.SocksNode{ID: "n1"}
+			expectedEgress := "socks5"
+			if test.upStatus != 200 {
+				node.Egress, node.WANInterface = "wan", "eth0"
+				expectedEgress = "wan"
+			}
+			result := probeDirections(context.Background(), node, 1, server.Client(), server.URL+"/down", server.URL+"/up")
+			if result.Egress != expectedEgress || result.WANInterface != node.WANInterface || result.SampleBytes != MinBytes ||
+				result.DownloadURL != server.URL+"/down" || result.UploadURL != server.URL+"/up" {
+				t.Fatalf("unexpected test metadata: %+v", result)
+			}
 			if result.Download.OK != (test.downStatus == 200) || result.Upload.OK != (test.upStatus == 200) {
 				t.Fatalf("unexpected direction results: %+v", result)
 			}

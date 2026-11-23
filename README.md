@@ -2,7 +2,7 @@
 
 [English](README.md) · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
-**Web-managed L2TP gateway for Linux with fixed SOCKS5 exits, per-mapping bandwidth limits and automatic outage diagnostics.**
+**Web-managed L2TP gateway for Linux with SOCKS5 or Local WAN egress, per-mapping bandwidth limits and automatic outage diagnostics.**
 
 [![CI](https://github.com/lucaswren/s2l/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lucaswren/s2l/actions/workflows/ci.yml) · [Latest release](https://github.com/lucaswren/s2l/releases/latest) · [Questions](https://github.com/lucaswren/s2l/discussions) · [Contributing](CONTRIBUTING.md) · [Apache-2.0](LICENSE)
 
@@ -10,7 +10,7 @@
 
 Actual interface rendered from isolated test fixtures; the addresses and accounts are examples. [Mapping and bandwidth settings](docs/assets/showcase-mapping.png) · [Automatic outage evidence](docs/assets/showcase-evidence.png) · [Monitoring](docs/assets/showcase-monitoring.png)
 
-- Give each dialing device its own mapping and fixed SOCKS5 exit; one PPP session per account.
+- Give each dialing device its own mapping and selected egress; one PPP session per account.
 - Set upload/download limits per mapping; keep DNS failover on that same exit.
 - Save bounded fault status, logs and IPv4 packet headers before restarting a mapping.
 
@@ -18,21 +18,29 @@ S2L runs on a dedicated Linux server. A Go backend and embedded Vue / Element Pl
 
 Three tabs keep daily operation separate: **Lines**, **Monitoring** and **Settings**. [Monitoring](docs/en/operations.md#runtime-monitoring) shows PPP upload/download rates, new and cumulative errors, sample freshness and recent events.
 
+## Deployment choices
+
+| Scenario | Select | Behavior |
+|---|---|---|
+| Direct internet access | Local WAN | Bind the exit to a server interface. New WAN mappings allow UDP by default. |
+| Access through an existing proxy | SOCKS5 | Use an authorized TCP CONNECT upstream. DNS uses the same exit and non-DNS UDP is rejected. |
+| Encrypt the client-to-gateway link | L2TP/IPsec | Enable IKEv1 with a shared PSK if supported by the client. Works with either egress. |
+
 ## Requirements and limits
 
 | Item | Scope |
 |---|---|
 | Host | Dedicated Ubuntu/Debian with systemd, root, reachable public IPv4 and TUN/PPP/L2TP kernel support |
-| Validation | Ubuntu 24.04 and Debian 12 amd64 fresh-install VM tests; arm64 cross-build checks |
-| Upstream | Authorized SOCKS5 service with working TCP CONNECT and access to application and DoH/TCP DNS destinations |
-| Client traffic | IPv4; one PPP session per account; non-DNS UDP rejected; PPP IPv6 blocked |
+| Validation | Ubuntu 24.04 and Debian 12 amd64 fresh-install VM tests; Ubuntu 24.04 GA/HWE dial tests on ARM64 and emulated x86_64 |
+| Egress | A selected Local WAN interface or an authorized SOCKS5 service with TCP CONNECT. The selected egress must reach application and DNS destinations. |
+| Client traffic | IPv4; one PPP session per account; SOCKS5 rejects non-DNS UDP; new Local WAN mappings allow UDP; PPP IPv6 blocked |
 | Languages | English, Traditional Chinese and Simplified Chinese |
 
 **Plain L2TP is unencrypted and is the default.** Optional L2TP/IPsec uses IKEv1 with a shared PSK; verify client compatibility. Management HTTPS and SOCKS5 do not encrypt the complete tunnel path. Use only authorized systems and services; read the [client requirements](docs/en/clients.md) and [legal notes](docs/en/legal.md) before deployment. Client routing and other network adapters remain outside the server's protection.
 
 ## Installation
 
-**Install S2L 1.0.12 on a clean, dedicated server.**
+**Install S2L on a clean, dedicated server.**
 
 Review the scripts before running them as root. Installation changes packages, forwarding, PPP/L2TP, firewall rules and services; use a new, dedicated host and apply security updates in maintenance windows. New installs default to [manual APT maintenance](docs/en/operations.md#system-update-policy). The installer selects the latest stable release by default.
 
@@ -42,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 Restrict the printed HTTPS TCP port to trusted administrator IPs. The installer generates a self-signed certificate and random admin password; verify its printed SHA-256 fingerprint through a trusted channel before trusting it. The backend stays on `127.0.0.1:8080`. For a fixed management port, replace `sudo bash` with `sudo env HTTPS_PORT=8443 bash`; otherwise an unused port in 10000–60000 is selected. Use `PUBLIC_IP` if public IPv4 detection needs an override.
 
-Open the printed URL, add a SOCKS5 node, create and start a mapping, then follow [client setup and acceptance checks](docs/en/clients.md). Plain L2TP uses UDP 1701; IPsec uses UDP 500/4500 with enforced NAT-T. Installation options, firewall ownership and recovery are in the [operations guide](docs/en/operations.md).
+Open the printed URL, add a SOCKS5 or Local WAN node, create and start a mapping, then follow [client setup and acceptance checks](docs/en/clients.md). Plain L2TP uses UDP 1701; IPsec uses UDP 500/4500 with enforced NAT-T. Installation options, firewall ownership and recovery are in the [operations guide](docs/en/operations.md).
 
 ## Upgrade
 

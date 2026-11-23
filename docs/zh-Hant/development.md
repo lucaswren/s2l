@@ -4,7 +4,12 @@
 
 [用戶端接入、DNS 與驗收](clients.md)
 
-L2TP/PPP 用戶端連至 xl2tpd；S2L 將映射帳密與 IPv4 子網連結至 sing-box TUN、策略路由表及防火牆規則，再由 sing-box 連至 SOCKS5 上游。管理介面的 Nginx HTTPS 代理與此資料路徑分開。
+## 架構與流量路徑
+
+- **撥號接入**。一般 L2TP 透過 UDP 1701 接入 xl2tpd。啟用 IPsec 時，strongSwan 在 UDP 500/4500 處理 IKEv1 和 NAT-T，再把受保護的 L2TP 交給 xl2tpd。
+- **映射與出口**。PPP 驗證映射帳號並分配對端 IPv4。Linux 執行工作階段准入和策略路由，流量經映射的 sing-box TUN 進入所選 SOCKS5 節點或綁定的本機 WAN 介面，DNS 走同一出口。
+- **網頁管理**。Vue 透過 Nginx HTTPS 呼叫 Go API。映射設定與狀態持久保存，通訊端等執行階段檔案獨立存放。VPN 撥號位址獨立於管理網址。
+- **診斷與驗收**。撥號時間線讀取 journal 中已識別的事件，節點測速衡量伺服器到目標的路徑，映射實測模擬 PPP 轉送。完整路徑使用實際用戶端驗證。見[診斷與驗收](operations.md#診斷與驗收)。
 
 `cmd/s2l/` 負責啟動與關閉；`internal/api/` 提供網頁與指令碼工作階段驗證及管理 API；`internal/service/` 編排映射生命週期。`internal/singbox/`、`network/`、`l2tp/` 負責程序、路由、防火牆與 PPP；`store/`、`model/`、`config/` 處理狀態、模型與設定。`web/src/` 是前端原始碼，`web/dist/` 是需提交的內嵌資源；`script/` 與 `deploy/systemd/` 管理安裝及服務。
 
@@ -13,6 +18,8 @@ L2TP/PPP 用戶端連至 xl2tpd；S2L 將映射帳密與 IPv4 子網連結至 si
 原始碼發佈須保留 `web/dist/`、依賴鎖定檔、第三方授權聲明與各平台 Go 實作。`bin/`、`tmp/`、`.test-tmp/`、`web/node_modules/` 及 Python 快取屬於本機產物，清理前先結束相關測試程序，保留仍需分析的診斷資料。瀏覽器測試共用 `script/ui_test_helpers.mjs`，每次結束後停止自己的子程序並刪除暫存設定與後端資料，截圖則保留在 `tmp/`。
 
 ## 設定
+
+`vpn_address` 為選填欄位，指定用戶端指南顯示的撥號位址。管理 HTTPS 使用自己的網址及連接埠。
 
 未指定 `-config` 時使用預設設定；明確指定的檔案必須存在且內容為 JSON 物件。檔案不存在或內容為 `null` 時會停止啟動，不會悄悄改用預設值。
 
@@ -62,6 +69,14 @@ go test -c -o /tmp/s2l-l2tp.test ./internal/service
 sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
 for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
   sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --transport "$transport"
+done
+```
+
+另行執行本機 WAN 案例，使用同樣五種傳輸條件檢查 WAN 隔離和 DNS，涵蓋普通 L2TP、直連 IPsec、獨立 NAT，以及來源埠不同或相同的共用 NAT。
+
+```bash
+for transport in plain ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+  sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --egress wan --transport "$transport"
 done
 ```
 

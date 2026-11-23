@@ -34,6 +34,14 @@ func (s *Server) handleNodeSpeedTest(w http.ResponseWriter, r *http.Request, id 
 		}
 	}
 
+	select {
+	case s.networkTests <- struct{}{}:
+		defer func() { <-s.networkTests }()
+	default:
+		writeError(w, 429, "检测忙，请稍后重试")
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), speedtest.DefaultTimeout)
 	defer cancel()
 	writeJSON(w, http.StatusOK, speedtest.Probe(ctx, node, body.Bytes))

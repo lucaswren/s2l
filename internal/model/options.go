@@ -5,11 +5,18 @@ import (
 	"strings"
 )
 
-// ManagedLineSettings applies the fixed forwarding policy.
+// ManagedLineSettings applies the forwarding policy for the selected egress.
 // Bandwidth, node identity, credentials and connection observation are preserved.
-func (m TunnelMapping) ManagedLineSettings() TunnelMapping {
+func (m TunnelMapping) ManagedLineSettings(node SocksNode) TunnelMapping {
 	m.MaxSessions = 1
 	m.MTU, m.MSS, m.QueueLength = 1400, 1200, 1000
+	if node.IsWAN() {
+		// Preserve the configured WAN policy and DNS settings.
+		if m.UDPPolicy == "" {
+			m.UDPPolicy = "allow"
+		}
+		return m
+	}
 	m.UDPPolicy, m.DNSMode = "reject", "auto"
 	m.DNSDoHURL, m.DNSTCPAddress = "", ""
 	return m

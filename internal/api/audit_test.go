@@ -83,7 +83,7 @@ func TestTextImportPreservesBandwidthAndUsesManagedNetworkSettings(t *testing.T)
 	if got.Group != m.Group {
 		t.Fatal("text import replaced the mapping group")
 	}
-	want := m.ManagedLineSettings()
+	want := m.ManagedLineSettings(model.SocksNode{})
 	want.L2TPPass = "new-password"
 	if w.Code != 200 || got != want {
 		t.Fatalf("import did not retain bandwidth/identity and normalize retired options: %+v, %s", got, w.Body.String())

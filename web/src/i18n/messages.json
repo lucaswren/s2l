@@ -1,4 +1,165 @@
 {
+  "日志记录到入站 IKE UDP": {
+    "en": "Incoming IKE UDP recorded in the journal",
+    "tw": "日誌記錄到入站 IKE UDP"
+  },
+  "当前 UDP 监听：{0}": {
+    "en": "Current UDP listeners: {0}",
+    "tw": "目前 UDP 監聽：{0}"
+  },
+  "独立出口探测：{0} · {1} · {2}": {
+    "en": "Separate egress probe: {0} · {1} · {2}",
+    "tw": "獨立出口探測：{0} · {1} · {2}"
+  },
+  "诊断与验收": {
+    "en": "Diagnostics & setup",
+    "tw": "診斷與驗收"
+  },
+  "客户端验收": {
+    "en": "Client checks",
+    "tw": "用戶端驗收"
+  },
+  "路径检测": {
+    "en": "Path tests",
+    "tw": "路徑檢測"
+  },
+  "拨号时间线": {
+    "en": "Dial timeline",
+    "tw": "撥號時間線"
+  },
+  "VPN 拨号地址": {
+    "en": "VPN dial address",
+    "tw": "VPN 撥號位址"
+  },
+  "请在系统设置填写 VPN 拨号地址": {
+    "en": "Set the VPN dial address in Settings",
+    "tw": "請在系統設定填寫 VPN 撥號位址"
+  },
+  "保存拨号地址": {
+    "en": "Save dial address",
+    "tw": "儲存撥號位址"
+  },
+  "VPN 拨号地址已保存": {
+    "en": "VPN dial address saved",
+    "tw": "VPN 撥號位址已儲存"
+  },
+  "填写客户端可达的 IPv4 或域名。此地址供接入指南使用，留空可清除。": {
+    "en": "Enter an IPv4 address or hostname reachable by clients. This address is used in the client guide. Leave it blank to clear it.",
+    "tw": "填寫用戶端可達的 IPv4 或網域。此位址供接入指南使用，留空可清除。"
+  },
+  "请输入 IPv4 地址或域名，不含协议或端口": {
+    "en": "Enter an IPv4 address or hostname without a scheme or port",
+    "tw": "請輸入 IPv4 位址或網域，不含協定或連接埠"
+  },
+  "服务器经所选出口向 Cloudflare 测速。": {
+    "en": "The server tests throughput to Cloudflare through the selected egress.",
+    "tw": "伺服器經所選出口向 Cloudflare 測速。"
+  },
+  "服务器模拟 PPP 入口，经映射策略与 TUN 转发。": {
+    "en": "The server simulates PPP ingress and forwards through the mapping policy and TUN.",
+    "tw": "伺服器模擬 PPP 入口，經映射政策與 TUN 轉送。"
+  },
+  "IKE 安全关联已建立": {
+    "en": "IKE security association established",
+    "tw": "IKE 安全關聯已建立"
+  },
+  "IKE 协商或认证失败": {
+    "en": "IKE negotiation or authentication failed",
+    "tw": "IKE 協商或驗證失敗"
+  },
+  "IPsec 数据安全关联已建立": {
+    "en": "IPsec data security association established",
+    "tw": "IPsec 資料安全關聯已建立"
+  },
+  "L2TP 控制隧道已建立": {
+    "en": "L2TP control tunnel established",
+    "tw": "L2TP 控制隧道已建立"
+  },
+  "L2TP 会话已建立": {
+    "en": "L2TP session established",
+    "tw": "L2TP 工作階段已建立"
+  },
+  "PPP 认证成功": {
+    "en": "PPP authentication succeeded",
+    "tw": "PPP 驗證成功"
+  },
+  "PPP 认证失败": {
+    "en": "PPP authentication failed",
+    "tw": "PPP 驗證失敗"
+  },
+  "PPP 已分配对端地址": {
+    "en": "PPP peer address assigned",
+    "tw": "PPP 已分配對端位址"
+  },
+  "PPP 会话已结束": {
+    "en": "PPP session ended",
+    "tw": "PPP 工作階段已結束"
+  },
+  "显示本次启动最近 30 分钟的拨号日志。多条会话可能交错。没有记录时，仍需用入站抓包确认 UDP 是否到达。": {
+    "en": "Shows dial events from the current boot in the last 30 minutes. Sessions may be interleaved. If no event appears, use ingress packet capture to check UDP reachability.",
+    "tw": "顯示本次啟動最近 30 分鐘的撥號日誌。多條工作階段可能交錯。沒有記錄時，仍需用入站封包擷取確認 UDP 是否到達。"
+  },
+  "拨号日志不可用": {
+    "en": "Dial logs unavailable",
+    "tw": "撥號日誌無法讀取"
+  },
+  "暂无拨号事件": {
+    "en": "No dial events",
+    "tw": "暫無撥號事件"
+  },
+  "计划重启": {
+    "en": "Planned restarts",
+    "tw": "計畫重啟"
+  },
+  "异常退出": {
+    "en": "Unexpected exits",
+    "tw": "異常退出"
+  },
+  "服务器经本机 WAN（{0}）": {
+    "en": "Server via local WAN ({0})",
+    "tw": "伺服器經本機 WAN（{0}）"
+  },
+  "服务器经 SOCKS5（{0}）": {
+    "en": "Server via SOCKS5 ({0})",
+    "tw": "伺服器經 SOCKS5（{0}）"
+  },
+  "不经过 L2TP 客户端": {
+    "en": "Excludes the L2TP client path",
+    "tw": "不經過 L2TP 用戶端"
+  },
+  "测速目标": {
+    "en": "Test endpoints",
+    "tw": "測速目標"
+  },
+  "每方向样本 {0} MB": {
+    "en": "{0} MB per direction",
+    "tw": "每方向樣本 {0} MB"
+  },
+  "，计划重启 ": {
+    "en": ", planned restarts ",
+    "tw": "，計畫重啟 "
+  },
+  "，异常退出 ": {
+    "en": ", unexpected exits ",
+    "tw": "，異常退出 "
+  },
+  "最近异常退出": {
+    "en": "Last unexpected exit",
+    "tw": "最近異常退出"
+  },
+  "接入设置已提交，实际状态未确认，请检查系统设置。": {
+    "en": "Access settings submitted. Check Settings to verify the active access mode.",
+    "tw": "接入設定已送出，實際狀態尚未確認，請檢查系統設定。"
+  },
+  "接入方式": {
+    "en": "Access mode",
+    "tw": "接入方式"
+  },
+  "允许 UDP": {"en": "Allow UDP", "tw": "允許 UDP"},
+  "拒绝 QUIC": {"en": "Reject QUIC", "tw": "拒絕 QUIC"},
+  "拒绝非 DNS UDP": {"en": "Reject non-DNS UDP", "tw": "拒絕非 DNS UDP"},
+  "本机 WAN 默认允许 TCP/UDP；DNS 使用所选 WAN，不切换出口。每账号仅允许一条拨号会话，IPv6 不转发。": {"en": "Local WAN allows TCP/UDP by default. DNS uses the selected WAN without changing exits. Each account permits one dial-up session; IPv6 is not forwarded.", "tw": "本機 WAN 預設允許 TCP/UDP；DNS 使用所選 WAN，不切換出口。每帳號僅允許一條撥號工作階段，IPv6 不轉送。"},
+
   "DNS 回退来自独立健康探测。": {
     "en": "DNS fallback is measured by independent health probes.",
     "tw": "DNS 回退來自獨立健康探測。"
@@ -3359,17 +3520,17 @@
     "en": "Automatic mode switches DoH/TCP only within the same node, without switching nodes or connecting directly. Custom DNS does not change the addresses offered to clients; port 53 requests entering the tunnel use these resolvers.",
     "tw": "自動模式僅在同一節點內切換 DoH/TCP，不切換節點或直連。自訂 DNS 不改變用戶端收到的 DNS 位址；進入隧道的 53 連接埠請求會使用這裡的解析器。"
   },
-  "允许 UDP 后，还需放行 SOCKS5 协商返回的 UDP 中继地址和端口，可能不同于代理 TCP 端口。协商成功不等于有回包；DNS 可继续经 DoH/TCP 使用固定出口。": {
-    "en": "After allowing UDP, also permit the UDP relay address and port returned by SOCKS5; these may differ from its TCP endpoint. Association success does not prove replies work. DNS can still use DoH/TCP through the fixed exit.",
-    "tw": "允許 UDP 後，還需放行 SOCKS5 協商回傳的 UDP 中繼位址及連接埠，可能不同於代理 TCP 埠。協商成功不等於有回包；DNS 可繼續經 DoH/TCP 使用固定出口。"
+  "SOCKS5 映射拒绝非 DNS UDP。使用本机 WAN 时，核对映射的 UDP 策略，再从实际客户端测试所需的应用。": {
+    "en": "SOCKS5 mappings reject non-DNS UDP. For local WAN, check the mapping’s UDP policy and test the application from the actual client.",
+    "tw": "SOCKS5 映射拒絕非 DNS UDP。使用本機 WAN 時，核對映射的 UDP 政策，再從實際用戶端測試所需的應用程式。"
   },
   "启用后仅接受通过 IPsec 加密的 L2TP 连接，统一使用 NAT-T。请放行 UDP 500、4500，客户端填写相同的预共享密钥。现有连接需要重新拨号。": {
     "en": "Accepts only IPsec-encrypted L2TP connections using NAT-T. Allow UDP 500/4500 and configure the same client pre-shared key. Existing clients must reconnect.",
     "tw": "啟用後僅接受透過 IPsec 加密的 L2TP 連線，統一使用 NAT-T。請放行 UDP 500、4500，用戶端填寫相同的預先共用金鑰。現有連線需要重新撥號。"
   },
-  "查看映射中的错误详情，核对 SOCKS5 地址和凭据。普通 L2TP 需放行 UDP 1701；IPsec 统一使用 NAT-T，需放行 UDP 500/4500。客户端预共享密钥须与服务器一致。SSH 中执行 s2l 可查看服务状态和日志。": {
-    "en": "Check mapping error details and SOCKS5 credentials. Plain L2TP needs UDP 1701; IPsec enforces NAT-T and needs UDP 500/4500. Match the client pre-shared key to the server. Run s2l over SSH for service status and logs.",
-    "tw": "查看映射錯誤詳情，核對 SOCKS5 位址和憑據。普通 L2TP 需放行 UDP 1701；IPsec 統一使用 NAT-T，需放行 UDP 500/4500。用戶端預先共用金鑰須與伺服器一致。SSH 中執行 s2l 可查看服務狀態和日誌。"
+  "查看映射的错误详情。SOCKS5 出口需核对地址和凭据，本机 WAN 需核对网卡与上联。普通 L2TP 使用 UDP 1701，L2TP/IPsec 使用 UDP 500/4500 和相同的 PSK。SSH 中执行 s2l 可查看服务状态和日志。": {
+    "en": "Check the mapping error details. For SOCKS5, verify its address and credentials. For local WAN, verify the interface and uplink. Plain L2TP uses UDP 1701. L2TP/IPsec uses UDP 500/4500 and a matching PSK. Run s2l over SSH for service status and logs.",
+    "tw": "查看映射錯誤詳情。SOCKS5 出口須核對位址和憑據，本機 WAN 須核對介面與上聯。普通 L2TP 使用 UDP 1701，L2TP/IPsec 使用 UDP 500/4500 和相同的 PSK。SSH 中執行 s2l 可查看服務狀態和日誌。"
   },
   "同一 NAT 下多个 IPsec 客户端可使用 L2TP 源端口 1701，服务器按会话隔离回包。Linux 双客户端已实测；原生 Windows、macOS 和路由器仍需按版本验证。每台独立拨号设备使用自己的映射账号。": {
     "en": "Multiple IPsec clients behind one NAT may use L2TP source port 1701; the server isolates their replies by session. Two Linux clients have been tested. Validate native Windows, macOS and router versions separately. Each independently dialing device needs its own mapping account.",

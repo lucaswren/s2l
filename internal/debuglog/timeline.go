@@ -138,9 +138,12 @@ func (c *Collector) RecordSession(session uint64, status model.SystemStatus, res
 			if h.Resolver.Active != old.Health.Resolver.Active {
 				event("dns-switch", old.Health.Resolver.Active+" → "+h.Resolver.Active)
 			}
-			reset := h.TunName != old.Health.TunName || status.SingboxPIDs[h.TunName] != old.PID || h.Process.Exits != old.Health.Process.Exits || h.Process.LogBytes < old.Health.Process.LogBytes
+			reset := h.TunName != old.Health.TunName || status.SingboxPIDs[h.TunName] != old.PID || h.Process.Exits != old.Health.Process.Exits || h.Process.Restarts != old.Health.Process.Restarts || h.Process.LogBytes < old.Health.Process.LogBytes
 			if n := counterDelta(h.Process.Exits, old.Health.Process.Exits); n > 0 {
-				event("process-exit", fmt.Sprintf("退出计数增加 %d", n))
+				event("process-exit", fmt.Sprintf("异常退出增加 %d", n))
+			}
+			if n := counterDelta(h.Process.Restarts, old.Health.Process.Restarts); n > 0 {
+				event("process-restart", fmt.Sprintf("计划重启增加 %d", n))
 			}
 			// A new process owns fresh resolver/error counters; don't attribute its
 			// lifetime totals to the previous process's sampling interval.

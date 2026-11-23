@@ -77,6 +77,12 @@ jobs:
           for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
             sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox "$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" --transport "$transport"
           done
+      - name: Verify the Local WAN L2TP and IPsec transport matrix
+        timeout-minutes: 18
+        run: |
+          for transport in plain ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+            sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox "$RUNNER_TEMP/sing-box-1.11.15-linux-amd64/sing-box" --egress wan --transport "$transport"
+          done
       - name: Verify upgrade preservation and failure recovery
         run: sudo env S2L_TEST_GOROOT="$(go env GOROOT)" unshare --mount --net --propagation private /usr/bin/python3 script/test_update_integration.py
       - name: Verify detached CLI upgrade survives an SSH hangup

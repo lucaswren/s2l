@@ -37,14 +37,19 @@ type TransferResult struct {
 
 // Result 包含独立的上下行结果。
 type Result struct {
-	OK        bool           `json:"ok"`
-	NodeID    string         `json:"node_id"`
-	Name      string         `json:"name"`
-	Addr      string         `json:"addr"`
-	LatencyMs int64          `json:"latency_ms"`
-	Download  TransferResult `json:"download"`
-	Upload    TransferResult `json:"upload"`
-	Error     string         `json:"error,omitempty"`
+	OK           bool           `json:"ok"`
+	NodeID       string         `json:"node_id"`
+	Name         string         `json:"name"`
+	Addr         string         `json:"addr"`
+	Egress       string         `json:"egress"`
+	WANInterface string         `json:"wan_interface,omitempty"`
+	DownloadURL  string         `json:"download_url"`
+	UploadURL    string         `json:"upload_url"`
+	SampleBytes  int64          `json:"sample_bytes"`
+	LatencyMs    int64          `json:"latency_ms"`
+	Download     TransferResult `json:"download"`
+	Upload       TransferResult `json:"upload"`
+	Error        string         `json:"error,omitempty"`
 }
 
 // Probe measures both directions through the selected egress, with independent timeouts.
@@ -83,7 +88,14 @@ func probeDirections(ctx context.Context, node model.SocksNode, size int64, clie
 	size = max(MinBytes, min(MaxBytes, size))
 	ctx, cancel := context.WithTimeout(ctx, DefaultTimeout)
 	defer cancel()
-	result := Result{NodeID: node.ID, Name: node.Name, Addr: node.Addr}
+	result := Result{
+		NodeID: node.ID, Name: node.Name, Addr: node.Addr,
+		Egress: "socks5", DownloadURL: downURL, UploadURL: upURL, SampleBytes: size,
+	}
+	if node.IsWAN() {
+		result.Egress = "wan"
+		result.WANInterface = node.WANInterface
+	}
 	downCtx, cancelDown := context.WithTimeout(ctx, directionTimeout)
 	result.Download = download(downCtx, client, fmt.Sprintf("%s?bytes=%d", downURL, size), size)
 	cancelDown()

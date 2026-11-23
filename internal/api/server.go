@@ -86,6 +86,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/settings/web-port", s.handleWebPort)
 	mux.HandleFunc("/api/settings/ssh-password", s.handleSSHPassword)
 	mux.HandleFunc("/api/settings/ipsec", s.handleIPsec)
+	mux.HandleFunc("/api/settings/vpn-address", s.handleVPNAddress)
+	mux.HandleFunc("/api/dial-timeline", s.handleDialTimeline)
 
 	if s.webFS != nil {
 		fileServer := http.FileServer(http.FS(s.webFS))

@@ -348,8 +348,15 @@ func (s *Store) RestoreContext(ctx context.Context, state model.AppState, expect
 // appear to be restored when the installed policy will actually replace them.
 func RestoreTarget(state model.AppState) model.AppState {
 	state = stoppedState(state)
+	nodes := make(map[string]model.SocksNode, len(state.Nodes))
+	for _, n := range state.Nodes {
+		nodes[n.ID] = n
+	}
 	for i, m := range state.Mappings {
-		state.Mappings[i] = m.ManagedLineSettings()
+		// An omitted policy in an old backup meant reject, even for WAN.
+		// Restoring it must not silently open UDP on an existing account.
+		m.UDPPolicy = m.EffectiveUDPPolicy()
+		state.Mappings[i] = m.ManagedLineSettings(nodes[m.NodeID])
 	}
 	return state
 }

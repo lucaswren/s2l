@@ -132,11 +132,17 @@ func (s *Server) createOrUpdateMapping(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	m = m.ManagedLineSettings()
-	if _, ok := s.store.GetNode(m.NodeID); !ok {
+	node, ok := s.store.GetNode(m.NodeID)
+	if !ok {
 		writeError(w, http.StatusBadRequest, "node not found")
 		return
 	}
+	if node.IsWAN() && m.UDPPolicy == "" {
+		if previous, exists := s.store.GetMapping(m.ID); exists {
+			m.UDPPolicy = previous.EffectiveUDPPolicy()
+		}
+	}
+	m = m.ManagedLineSettings(node)
 	if err := checkMappingConflicts(s.store, m); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

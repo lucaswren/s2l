@@ -3,10 +3,20 @@ import { tr } from '../i18n/index.js';
 
 import {computed,onMounted,ref,watch} from 'vue';
 import {api} from '../api/client';
-import {clientAccessText} from '../utils/client-access.js';
-const props=defineProps({mappings:{type:Array,default:()=>[]},health:{type:Object,default:()=>({})}});
-const host = location.hostname;
-const selected=ref('');
+import PathDiagnostics from './PathDiagnostics.vue';
+import DialTimeline from './DialTimeline.vue';
+import {clientAccessLabel, clientAccessText} from '../utils/client-access.js';
+const props=defineProps({mappings:{type:Array,default:()=>[]},health:{type:Object,default:()=>({})},nodes:{type:Array,default:()=>[]},launch:Object});
+const emit = defineEmits(["speed-result"]);
+const tab = ref(props.launch ? "path" : "client");
+const pathLaunch = ref(props.launch);
+watch(() => props.launch, launch => {
+  pathLaunch.value = launch;
+  tab.value = launch ? "path" : "client";
+  if (launch?.kind === "mapping" && props.mappings.some(m => m.id === launch.id)) selected.value = launch.id;
+});
+const host = computed(() => settings.value?.vpn_address || "");
+const selected=ref(props.launch?.kind === 'mapping' ? props.launch.id : '');
 const settings=ref(null);
 const error=ref('');
 const copied=ref(false);
@@ -24,12 +34,14 @@ const readiness=computed(()=>{
 });
 onMounted(async()=>{try{settings.value=await api.settings();}catch(e){error.value=e.message;}});
 async function copy(){
-  if(!mapping.value)return;
-  const text=clientAccessText(host,mapping.value,settings.value,tr);
+  if(!mapping.value || !host.value)return;
+  const text=clientAccessText(host.value,mapping.value,settings.value,tr);
   try{await navigator.clipboard.writeText(text);copied.value=true;error.value='';}catch{error.value=tr("浏览器不允许复制，请手动选中连接参数");}
 }
 </script>
 <template>
+ <el-tabs v-model="tab">
+  <el-tab-pane :label='tr("客户端验收")' name="client">
   <div class="section-head">
     <div>
       <h2>{{ tr("快速接入") }}</h2>
@@ -42,14 +54,13 @@ async function copy(){
       <el-option v-for="m in mappings" :key="m.id" :value="m.id" :label="m.tun_name + ' · ' + m.l2tp_user" />
     </el-select>
     <p>{{ readiness }}</p>
-    <p v-if="settings?.ipsec">IPsec：{{ settings.ipsec.enabled ? (settings.ipsec.active ? tr("已启用，服务活动") : tr("已启用，服务未活动")) : tr("未启用") }}</p>
-    <p v-else>{{ tr("IPsec 状态尚未获取，请在系统设置中确认。") }}</p>
+    <p>{{ tr("接入方式") }}：{{ clientAccessLabel(settings?.ipsec, tr) }}</p>
     <el-alert v-if="error" :title="error" type="warning" :closable="false" />
-    <el-button :disabled="!mapping" @click="copy">{{ copied ? tr("连接参数已复制") : tr("复制连接参数（不含密码）") }}</el-button>
+    <el-button :disabled="!mapping || !host" @click="copy">{{ copied ? tr("连接参数已复制") : tr("复制连接参数（不含密码）") }}</el-button>
     <p class="muted">{{ tr("此检查不代表客户端已经连接，不检测客户端防火墙和运营商网络。") }}</p>
   </el-card>
-  <el-descriptions :column="1" border>
-    <el-descriptions-item :label='tr("服务器")'>{{ host }}</el-descriptions-item>
+  <el-descriptions :column="1" :label-width="88" border>
+    <el-descriptions-item :label='tr("服务器")'>{{ host || tr("请在系统设置填写 VPN 拨号地址") }}</el-descriptions-item>
     <el-descriptions-item :label='tr("协议")'
       >{{ tr("普通 L2TP 或 L2TP/IPsec，接入方式由“系统设置”统一配置。") }}</el-descriptions-item
     >
@@ -63,7 +74,7 @@ async function copy(){
       ><p> {{ tr("先添加出口节点，选择 SOCKS5 或本机 WAN，再新建 L2TP 映射并选择节点。路由表编号自动选择未被占用的值。填写 L2TP 账号与密码后保存并启动。批量导入格式见对应窗口。") }} </p></el-collapse-item
     >
     <el-collapse-item :title='tr("启动或拨号失败")' name="trouble"
-      ><p> {{ tr("查看映射中的错误详情，核对 SOCKS5 地址和凭据。普通 L2TP 需放行 UDP 1701；IPsec 统一使用 NAT-T，需放行 UDP 500/4500。客户端预共享密钥须与服务器一致。SSH 中执行 s2l 可查看服务状态和日志。") }} </p></el-collapse-item
+      ><p> {{ tr("查看映射的错误详情。SOCKS5 出口需核对地址和凭据，本机 WAN 需核对网卡与上联。普通 L2TP 使用 UDP 1701，L2TP/IPsec 使用 UDP 500/4500 和相同的 PSK。SSH 中执行 s2l 可查看服务状态和日志。") }} </p></el-collapse-item
     >
     <el-collapse-item :title='tr("L2TP 客户端配置")' name="client"
       ><p> {{ tr("服务器地址填写部署 S2L 的服务器公网 IPv4 地址，用户名和密码填写对应映射的 L2TP 凭据。服务器启用 IPsec 时填写相同的预共享密钥，关闭时留空。若客户端同时配置其他 IPsec VPN，请检查预共享密钥冲突。具体兼容性需以客户端版本和实际协商结果为准。") }} </p></el-collapse-item
@@ -82,7 +93,7 @@ async function copy(){
       <p>{{ tr("重新拨号后核对分配地址、DNS 和路由；从客户端解析域名并访问 HTTPS，确认使用所选出口。面板测速不能替代客户端验证。") }}</p>
       <p>{{ tr("同一账号仅允许一条拨号会话；多设备可共享网关。") }}</p>
       <p>{{ tr("同一 NAT 下多个 IPsec 客户端可使用 L2TP 源端口 1701，服务器按会话隔离回包。Linux 双客户端已实测；原生 Windows、macOS 和路由器仍需按版本验证。每台独立拨号设备使用自己的映射账号。") }}</p>
-      <p>{{ tr("允许 UDP 后，还需放行 SOCKS5 协商返回的 UDP 中继地址和端口，可能不同于代理 TCP 端口。协商成功不等于有回包；DNS 可继续经 DoH/TCP 使用固定出口。") }}</p>
+      <p>{{ tr("SOCKS5 映射拒绝非 DNS UDP。使用本机 WAN 时，核对映射的 UDP 策略，再从实际客户端测试所需的应用。") }}</p>
       <p>{{ tr("在维护窗口验证上游中断时业务失败而不改走服务器公网出口；再验证恢复和重新拨号。普通 L2TP 需要 UDP 1701，IPsec 使用 NAT-T，需要 UDP 500/4500。仅能访问 HTTPS 的网络不能据此判断可拨号。") }}</p>
     </el-collapse-item>
   </el-collapse>
@@ -92,4 +103,12 @@ async function copy(){
     show-icon
     :closable="false"
   />
+  </el-tab-pane>
+  <el-tab-pane :label='tr("路径检测")' name="path">
+    <PathDiagnostics v-if="tab === 'path'" :nodes="nodes" :mappings="mappings" :mapping="mapping" :launch="pathLaunch" @launched="pathLaunch = null" @mapping-selected="selected = $event; copied = false" @speed-result="(id, result) => emit('speed-result', id, result)" />
+  </el-tab-pane>
+  <el-tab-pane :label='tr("拨号时间线")' name="timeline">
+    <DialTimeline v-if="tab === 'timeline'" :mapping="mapping" :probe="local?.tcp" />
+  </el-tab-pane>
+ </el-tabs>
 </template>

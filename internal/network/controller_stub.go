@@ -51,6 +51,7 @@ func (c *Controller) ActiveCount() int {
 }
 
 func (c *Controller) EnsureGuard() error                     { return fmt.Errorf("PPP guards require Linux") }
+func (c *Controller) EnableWANResetGuard() error             { return fmt.Errorf("WAN reset guard requires Linux") }
 func (c *Controller) EnableSessionGuard() error              { return nil }
 func (c *Controller) SyncSessionGuard(context.Context) error { return nil }
 func (c *Controller) VerifyAdmittedPeerRoutes(ctx context.Context, m model.TunnelMapping, peers []model.PPPSession) error {

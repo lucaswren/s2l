@@ -1,8 +1,24 @@
+export function clientAccessMode(ipsec) {
+  if (ipsec?.available !== true || typeof ipsec.enabled !== 'boolean' ||
+      typeof ipsec.active !== 'boolean' || typeof ipsec.protected !== 'boolean') {
+    return 'unknown';
+  }
+  if (ipsec.enabled) return ipsec.active && ipsec.protected ? 'ipsec' : 'error';
+  return ipsec.active || ipsec.protected ? 'error' : 'plain';
+}
+
+export function clientAccessLabel(ipsec, tr) {
+  switch (clientAccessMode(ipsec)) {
+    case 'ipsec': return 'L2TP/IPsec';
+    case 'plain': return tr("普通 L2TP");
+    case 'error': return tr("IPsec 状态异常");
+    default: return tr("请在系统设置确认");
+  }
+}
+
 // Copy only connection parameters and routing guidance, never credentials.
 export function clientAccessText(host, mapping, settings, tr) {
-  const mode = settings?.ipsec
-    ? (settings.ipsec.enabled ? 'L2TP/IPsec' : tr("普通 L2TP"))
-    : tr("请在系统设置确认");
+  const mode = clientAccessLabel(settings?.ipsec, tr);
   const dns = settings?.client_dns?.join(', ') || tr("等待服务端 DNS 参数");
   return [
     tr("服务器：{0}（请确认是客户端可达的服务器地址）\n映射：{1}\n用户名：{2}\n接入方式：{3}\n密码和预共享密钥请另行填写。", host, mapping.tun_name, mapping.l2tp_user, mode),

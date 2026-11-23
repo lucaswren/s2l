@@ -35,7 +35,7 @@ func TestMappingManagedOptionsAndRunningProtection(t *testing.T) {
 		t.Fatal(code)
 	}
 	saved, ok := st.GetMapping("m")
-	want := m.ManagedLineSettings()
+	want := m.ManagedLineSettings(model.SocksNode{})
 	want.Status = model.StatusStopped
 	if !ok || saved != want {
 		t.Fatal("network options not normalized during persistence", saved)

@@ -1,7 +1,7 @@
 <script setup>
 import { tr } from '../i18n/index.js';
 
-defineProps({ node: Object, testingId: String });
+defineProps({ node: Object });
 defineEmits(["speed", "network", "edit", "remove"]);
 </script>
 <template>
@@ -10,8 +10,6 @@ defineEmits(["speed", "network", "edit", "remove"]);
     <el-button
       type="primary"
       plain
-      :loading="testingId === node.id"
-      :disabled="!!testingId && testingId !== node.id"
       @click="$emit('speed', node)"
       >{{ tr("上下行测速") }}</el-button
     ><el-button @click="$emit('edit', node)">{{ tr("编辑") }}</el-button

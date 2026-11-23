@@ -4,6 +4,7 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from datetime import datetime, timezone
 now=datetime.now(timezone.utc).isoformat()
+vpn_address=""
 node={"id":"n","name":"SOCKS A","addr":"192.0.2.5:1080"}
 mapping={"observe_connections":True,"id":"m","node_id":"n","tun_name":"tun101","table_id":101,"subnet":"10.0.101.0/24","l2tp_user":"account-a","status":"running","udp_policy":"reject","dns_mode":"auto"}
 healthy={"state":"healthy","method":"https","checked_at":now,"duration_ms":123,"stage":"http","status_code":204}
@@ -16,7 +17,8 @@ class Handler(SimpleHTTPRequestHandler):
  def do_GET(self):
   if self.path=='/api/auth/status':return self.reply(dict(enabled=False,authenticated=True))
   if self.path=='/api/settings/ppp-management':return self.reply(dict(available=True,access=dict(enabled=False,destination_ip='',source_cidrs=[],tcp_ports=[]),sources=[dict(id='m',subnet='10.0.101.0/24',name='account-a')],detected_ports=[38866,51234],configured_ports=[38866,51234],port_check_available=True,local_ipv4=['203.0.113.10']))
-  if self.path=='/api/settings':return self.reply(dict(client_dns=["8.8.8.8","1.1.1.1"],account_enabled=False,ssh_enabled=False,ssh_ports=[51234],ipsec=dict(available=False)))
+  if self.path=='/api/dial-timeline':return self.reply(dict(available=True,events=[dict(at=now,stage='l2tp-control'),dict(at=now,stage='ppp-auth-failed'),dict(at=now,stage='ppp-address')]))
+  if self.path=='/api/settings':return self.reply(dict(vpn_address=vpn_address,client_dns=["8.8.8.8","1.1.1.1"],account_enabled=False,ssh_enabled=False,ssh_ports=[51234],ipsec=dict(available=False)))
   if self.path=='/api/settings/time':return self.reply(dict(available=True,timezone='Asia/Shanghai',timezones=['UTC','Asia/Shanghai','America/New_York'],server_time=now,auto_sync=True,synchronized=False,mode='system',custom_available=True,servers=[]))
   if self.path=='/api/backups':return self.reply([dict(id='backup-2-2.json',created_at=now,nodes=1,mappings=1),dict(id='backup-1-1.json',created_at=now,nodes=1,mappings=1)])
   if self.path=='/api/debug':return self.reply(dict(enabled=False))
@@ -31,6 +33,13 @@ class Handler(SimpleHTTPRequestHandler):
   return super().do_GET()
  def do_POST(self):
   body=json.loads(self.rfile.read(int(self.headers.get('Content-Length','0'))) or '{}')
+  if self.path=='/api/settings/vpn-address':
+   global vpn_address
+   vpn_address=body['address']
+   return self.reply(dict(vpn_address=vpn_address))
+  if self.path.endswith('/speedtest'):
+   transfer=dict(ok=True,bytes=5000000,speed_mbps=10)
+   return self.reply(dict(ok=True,name=node['name'],egress='socks5',sample_bytes=5000000,download_url='https://speed.cloudflare.com/__down',upload_url='https://speed.cloudflare.com/__up',download=transfer,upload=transfer))
   if self.path=='/api/settings/ppp-management':return self.reply(dict(access=body,message='PPP 管理访问已更新'))
   if body.get('kind')=='google':
    def report(n):

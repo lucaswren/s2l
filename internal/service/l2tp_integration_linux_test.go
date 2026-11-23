@@ -79,6 +79,7 @@ func TestRealL2TPFixedExitsAndRecovery(t *testing.T) {
 	}
 	transport := os.Getenv("S2L_FIXTURE_TRANSPORT")
 	ipsec := strings.HasPrefix(transport, "ipsec")
+	wan := os.Getenv("S2L_FIXTURE_EGRESS") == "wan"
 	root := t.TempDir()
 	t.Cleanup(func() {
 		if t.Failed() {
@@ -145,37 +146,6 @@ exec "$S2L_TEST_REAL_SB" "$@"
 	go func() { defer close(eventDone); svc.listenPPP(eventCtx) }()
 	defer func() { eventCancel(); <-eventDone; <-sessionDone }()
 	integrationWait(t, 3*time.Second, func() bool { _, e := os.Stat(pppSocket); return e == nil })
-	faults := map[string]func(bool){}
-	proxyState := map[string]*integrationProxyState{}
-	for i := 0; i < 2; i++ {
-		id := fmt.Sprintf("node%d", i)
-		addr, setOnline, state := integrationSOCKS(t, id, cert)
-		faults[id] = setOnline
-		proxyState[id] = state
-		n := model.SocksNode{ID: id, Addr: addr}
-		if err := st.UpsertNode(n); err != nil {
-			t.Fatal(err)
-		}
-		m := model.TunnelMapping{ID: fmt.Sprintf("m%d", i), NodeID: id, TunName: fmt.Sprintf("tun%d", 101+i), TableID: 101 + i, Subnet: fmt.Sprintf("10.0.%d.0/24", 101+i), L2TPUser: fmt.Sprintf("user%d", i), L2TPPass: "fixture-secret", Status: model.StatusStopped, DNSMode: "tcp", UDPPolicy: "reject", UploadKbps: 20000, DownloadKbps: 20000, MaxSessions: 1, ObserveConnections: true}
-		if ipsec {
-			m.UDPPolicy = "allow"
-			if i == 1 {
-				m.UDPPolicy = "reject-quic"
-			}
-		}
-		if i == 1 {
-			m.DNSMode = "auto"
-			m.DNSDoHURL = "https://resolver.fixture.invalid:8443/custom-dns"
-			m.DNSTCPAddress = "dns.fixture.invalid:5353"
-		}
-		if err := st.UpsertMapping(m); err != nil {
-			t.Fatal(err)
-		}
-		if err := svc.Start(m.ID); err != nil {
-			t.Fatal(err)
-		}
-		t.Setenv("S2L_TEST_CHAP_UNPUBLISHED", "0")
-	}
 	start := func(name string, args ...string) {
 		cmd := exec.Command(name, args...)
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -205,6 +175,44 @@ exec "$S2L_TEST_REAL_SB" "$@"
 			}
 		})
 	}
+	faults := map[string]func(bool){}
+	proxyState := map[string]*integrationProxyState{}
+	for i := 0; i < 2; i++ {
+		id := fmt.Sprintf("node%d", i)
+		addr, setOnline, state := integrationSOCKS(t, id, cert)
+		faults[id] = setOnline
+		proxyState[id] = state
+		n := model.SocksNode{ID: id, Addr: addr}
+		if wan {
+			n = integrationWANExit(t, root, cert, caPath, start, i)
+		}
+		if err := st.UpsertNode(n); err != nil {
+			t.Fatal(err)
+		}
+		m := model.TunnelMapping{ID: fmt.Sprintf("m%d", i), NodeID: id, TunName: fmt.Sprintf("tun%d", 101+i), TableID: 101 + i, Subnet: fmt.Sprintf("10.0.%d.0/24", 101+i), L2TPUser: fmt.Sprintf("user%d", i), L2TPPass: "fixture-secret", Status: model.StatusStopped, DNSMode: "tcp", UDPPolicy: "reject", UploadKbps: 20000, DownloadKbps: 20000, MaxSessions: 1, ObserveConnections: true}
+		if ipsec {
+			m.UDPPolicy = "allow"
+			if i == 1 {
+				m.UDPPolicy = "reject-quic"
+			}
+		}
+		if i == 1 {
+			m.DNSMode = "auto"
+			m.DNSDoHURL = "https://resolver.fixture.invalid:8443/custom-dns"
+			m.DNSTCPAddress = "dns.fixture.invalid:5353"
+		}
+		if wan {
+			m.UDPPolicy = "allow"
+			m.DNSMode, m.DNSDoHURL, m.DNSTCPAddress = "auto", "https://1.1.1.1/dns-query", "8.8.8.8:53"
+		}
+		if err := st.UpsertMapping(m); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Start(m.ID); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("S2L_TEST_CHAP_UNPUBLISHED", "0")
+	}
 	assertNoDirectEgress := integrationDirectUplink(t, root, cert, caPath, start)
 	access := integrationIPsecAccess(t, root, transport, start, run)
 	if ipsec {
@@ -225,7 +233,8 @@ exec "$S2L_TEST_REAL_SB" "$@"
 		t.Fatal(err, closeErr)
 	}
 	start("xl2tpd", "-D", "-c", filepath.Join(root, "server.conf"), "-p", filepath.Join(root, "server.pid"), "-C", filepath.Join(root, "l2tp-control"))
-	for i := 0; i < 2; i++ {
+	var udpPolicies [2]string
+	for i := range udpPolicies {
 		ns := fmt.Sprintf("s2l-dial-%d", i)
 		server := access(i, ns)
 		options := filepath.Join(root, fmt.Sprintf("client%d.options", i))
@@ -286,7 +295,8 @@ q=b'\x12\x35\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00'+b''.join(bytes([len(x)])+x
 s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sys.argv[2],53));r,_=s.recvfrom(4096);assert r[:2]==q[:2] and r[3]&15==0 and r[6:8]==b'\x00\x01' and r.endswith(b'\x00\x01\x00\x00\x01\x00\x06\x02h2\x02h3'),'Google HTTPS record was altered or suppressed';s.close()
 `, dnsAddresses[0], dnsAddresses[1])
 		mapping, _ := st.GetMapping(fmt.Sprintf("m%d", i))
-		integrationClientUDP(t, ns, fmt.Sprintf("node%d", i), mapping.UDPPolicy, true)
+		udpPolicies[i] = mapping.EffectiveUDPPolicy()
+		integrationClientUDP(t, ns, fmt.Sprintf("node%d", i), udpPolicies[i], true)
 		// A client that retries over TCP after UDP rejection keeps this exit.
 		output := run("ip", "netns", "exec", ns, "curl", "--noproxy", "*", "--silent", "--fail", "--max-time", "5", "--cacert", caPath, "https://198.18.0.9/")
 		if strings.TrimSpace(output) != fmt.Sprintf("node%d", i) {
@@ -306,10 +316,14 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 		}
 		if transport == "ipsec-shared-nat-1701" {
 			assertNoDirectEgress()
-			integrationIPsecLifecycle(t, root, caPath, run, assertNoDirectEgress)
+			integrationIPsecLifecycle(t, root, caPath, udpPolicies, run, assertNoDirectEgress)
 			integrationDownloadThroughput(t, caPath)
 			assertNoDirectEgress()
 		}
+	}
+	if wan {
+		integrationWANLifecycle(t, svc, st, sb, caPath, run, assertNoDirectEgress, stopSessionGuard, sessionDone)
+		return
 	}
 	node1 := proxyState["node1"]
 	if sb.ResolverStatus("tun102").Active != "tcp" || node1.tcpQueries.Load() == 0 {
@@ -682,7 +696,7 @@ func integrationWait(t *testing.T, budget time.Duration, check func() bool) {
 // downloads. The 20 Mbps limits should hold without stalling the gVisor streams.
 func integrationDownloadThroughput(t *testing.T, caPath string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 22*time.Second)
 	defer cancel()
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
@@ -699,14 +713,21 @@ end = start + duration
 
 def download():
     time.sleep(max(0, start - time.monotonic()))
-    conn = http.client.HTTPSConnection('198.18.0.9', timeout=3, context=tls)
+    conn = http.client.HTTPSConnection('198.18.0.9', timeout=duration + 2, context=tls)
     total = 0
     try:
         conn.request('GET', '/bandwidth-test')
         response = conn.getresponse()
         assert response.status == 200 and response.getheader('X-Fixture-Exit') == expected
         while time.monotonic() < end:
-            data = response.read1(65536)
+            try:
+                data = response.read1(65536)
+            except TimeoutError:
+                # An in-flight read can outlast the sampling window. Keep only
+                # bytes observed before its deadline, as for a late response.
+                if time.monotonic() >= end:
+                    break
+                raise
             if not data or time.monotonic() >= end:
                 break
             total += len(data)

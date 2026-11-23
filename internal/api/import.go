@@ -204,11 +204,15 @@ func importMappings(st *store.Store, req importMappingsReq) importResult {
 				m.DNSDoHURL, m.DNSTCPAddress = existing.DNSDoHURL, existing.DNSTCPAddress
 			}
 			m.Status = existing.Status
+			if node, _ := st.GetNode(m.NodeID); node.IsWAN() && m.UDPPolicy == "" {
+				m.UDPPolicy = existing.EffectiveUDPPolicy()
+			}
 		} else {
 			isNew = true
 			m.Status = model.StatusStopped
 		}
-		m = m.ManagedLineSettings()
+		node, _ := st.GetNode(m.NodeID)
+		m = m.ManagedLineSettings(node)
 		if err := st.UpsertMapping(m); err != nil {
 			res.Skipped++
 			res.Errors = append(res.Errors, fmt.Sprintf("row %d: %v", i+1, err))

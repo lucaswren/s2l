@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--singbox", required=True, type=Path)
     parser.add_argument("--transport", choices=("plain", "ipsec", "ipsec-nat", "ipsec-shared-nat", "ipsec-shared-nat-1701"), default="plain",
                         help="IPsec modes require strongSwan starter and XFRM kernel support")
+    parser.add_argument("--egress", choices=("socks5", "wan"), default="socks5")
     parser.add_argument("--inner", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if sys.platform != "linux" or os.geteuid() != 0:
@@ -30,7 +31,7 @@ def main():
             "unshare", "--mount", "--net", "--pid", "--fork", "--propagation", "private",
             sys.executable, str(Path(__file__).resolve()), "--inner",
             "--test-binary", str(binary), "--singbox", str(singbox),
-            "--transport", args.transport,
+            "--transport", args.transport, "--egress", args.egress,
         ], check=False).returncode
     if any(os.readlink(f"/proc/self/ns/{kind}") == os.readlink(f"/proc/1/ns/{kind}")
            for kind in ("mnt", "net")):
@@ -75,7 +76,7 @@ def main():
             # in which the original /sys was mounted.
             mount("-t", "sysfs", "-o", "ro", "sysfs", "/sys")
             env = dict(os.environ, TMPDIR=str(root), S2L_L2TP_INTEGRATION="1", **{"S2L_FIXTURE_HOST_" + kind.upper() + "_FD": str(fd) for kind, fd in host_fds.items()},
-                       S2L_SINGBOX_CHECK_BIN=str(singbox), S2L_FIXTURE_TRANSPORT=args.transport,
+                       S2L_SINGBOX_CHECK_BIN=str(singbox), S2L_FIXTURE_TRANSPORT=args.transport, S2L_FIXTURE_EGRESS=args.egress,
                        S2L_FIXTURE_SCRIPT_DIR=str(Path(__file__).resolve().parent))
             return subprocess.run([str(binary), "-test.run", "^TestRealL2TPFixedExitsAndRecovery$",
                                    "-test.v", "-test.timeout", "600s"], env=env,
@@ -84,7 +85,7 @@ def main():
             for fd in locals().get("host_fds", {}).values():
                 os.close(fd)
             for target in reversed(mounted):
-                subprocess.run(["umount", "--lazy", target], check=False)
+                subprocess.run(["umount", "-l", target], check=False)
 
 
 if __name__ == "__main__":

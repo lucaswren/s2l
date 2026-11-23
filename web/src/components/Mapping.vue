@@ -66,6 +66,8 @@ async function copyErrors() {
 }
 const form = reactive({
   node_id: "",
+  udp_policy: "",
+  dns_mode: "", dns_doh_url: "", dns_tcp_address: "",
   tun_name: "tun101",
   table_id: 101,
   subnet: "10.0.101.0/24",
@@ -117,6 +119,8 @@ function resetForm() {
   const id = nextTable.value;
   Object.assign(form, {
     node_id: props.nodes[0]?.id || "",
+    udp_policy: "",
+    dns_mode: "", dns_doh_url: "", dns_tcp_address: "",
     table_id: id,
     tun_name: `tun${id}`,
     subnet: `10.0.${id % 256}.0/24`,
@@ -146,6 +150,8 @@ async function openEdit(m) {
   Object.assign(form, {
     observe_connections:!!m.observe_connections,node_id: m.node_id,group:m.group||"",upload_kbps:m.upload_kbps||0,download_kbps:m.download_kbps||0,
     tun_name: m.tun_name,
+    udp_policy: m.udp_policy || "reject",
+    dns_mode: m.dns_mode || "", dns_doh_url: m.dns_doh_url || "", dns_tcp_address: m.dns_tcp_address || "",
     table_id: m.table_id,
     subnet: m.subnet,
     l2tp_user: m.l2tp_user || "",
@@ -173,6 +179,9 @@ async function save() {
       ...form,
       table_id: Number(form.table_id),
     };
+    if (props.nodes.find(n => n.id === form.node_id)?.egress !== 'wan') {
+      for (const key of ['udp_policy', 'dns_mode', 'dns_doh_url', 'dns_tcp_address']) delete body[key];
+    }
     if (editingId.value) body.id = editingId.value;
     const preview=await api.previewMapping(body,editRevision.value);
     const labels={get dns_doh_url(){return tr("DoH 地址")},get dns_tcp_address(){return tr("TCP DNS 地址")},get observe_connections(){return tr("连接观测")},get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); },get max_sessions() { return tr("PPP 会话上限"); }};
@@ -418,7 +427,7 @@ const editingActive = computed(() => {
               ><el-option
                 v-for="n in nodes"
                 :key="n.id"
-                :label="n.name + ' (' + n.addr + ')'"
+                :label="n.name + ' (' + (n.egress === 'wan' ? n.wan_interface : n.addr) + ')'"
                 :value="n.id" /></el-select></el-form-item
           ><el-form-item
             :label='tr("路由表编号（1–252）")'
@@ -460,7 +469,9 @@ const editingActive = computed(() => {
  <el-form-item :label='tr("拨号保护")'><span>{{tr("同一账号仅允许一条拨号会话；多设备可共享网关。")}}</span></el-form-item>
  <el-form-item :label='tr("连接观测")'><el-switch v-model="form.observe_connections" :disabled="editingActive"/></el-form-item>
  <p class="muted form-wide">{{ tr("0 表示不限；限额按整条映射合计。下载超额采用丢弃控制速率，非平滑整形。") }}</p>
-          <p class="muted form-wide">{{ tr("网络参数自动管理：MTU 1400、MSS 1200、队列 1000，不限制 TCP 连接数。非 DNS UDP 主动拒绝；DNS 经所选出口自动选择 DoH/TCP，不切换出口。") }}</p>
+          <el-form-item v-if="nodes.find(n => n.id === form.node_id)?.egress === 'wan'" :label='tr("UDP 策略")'><el-select :model-value="form.udp_policy || 'allow'" @update:model-value="form.udp_policy = $event"><el-option :label='tr("允许 UDP")' value="allow"/><el-option :label='tr("拒绝 QUIC")' value="reject-quic"/><el-option :label='tr("拒绝非 DNS UDP")' value="reject"/></el-select></el-form-item>
+          <p v-if="nodes.find(n => n.id === form.node_id)?.egress === 'wan'" class="muted form-wide">{{ tr("本机 WAN 默认允许 TCP/UDP；DNS 使用所选 WAN，不切换出口。每账号仅允许一条拨号会话，IPv6 不转发。") }}</p>
+          <p v-else class="muted form-wide">{{ tr("网络参数自动管理：MTU 1400、MSS 1200、队列 1000，不限制 TCP 连接数。非 DNS UDP 主动拒绝；DNS 经所选出口自动选择 DoH/TCP，不切换出口。") }}</p>
           </div></details></div></el-form
       ><template #footer
         ><el-button v-if="!editingId" :disabled="busy" @click="applyPreset"

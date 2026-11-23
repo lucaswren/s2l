@@ -2,8 +2,9 @@
 import { tr } from '../i18n/index.js';
 
 import PPPManagement from "./PPPManagement.vue";
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { ElMessageBox } from "element-plus";
+import { clientAccessLabel, clientAccessMode } from "../utils/client-access.js";
 import { api } from "../api/client";
 import { mergeSettingsDraft } from "../utils/settings-draft";
 import { generatePassword } from "../utils/password";
@@ -26,6 +27,8 @@ const settings = ref({
     protected: false,
   },
 });
+const accessMode = computed(() => clientAccessMode(settings.value.ipsec));
+const vpn = reactive({ address: "" });
 const loading = ref(false);
 const busy = ref("");
 const error = ref("");
@@ -93,6 +96,7 @@ async function load() {
     Object.assign(ssh, mergeSettingsDraft(ssh, previous && {port:previous.ssh_ports?.[0] || 22}, {port:next.ssh_ports?.[0] || 22}));
     Object.assign(webPort, mergeSettingsDraft(webPort, previous && {port:previous.web_port || 443}, {port:next.web_port || 443}));
     Object.assign(ipsec, mergeSettingsDraft(ipsec, previous && {enabled:!!previous.ipsec?.enabled}, {enabled:!!next.ipsec?.enabled}));
+    Object.assign(vpn, mergeSettingsDraft(vpn, previous && {address: previous.vpn_address ?? ""}, {address: next.vpn_address ?? ""}));
     settings.value = next;
     loaded = true;
     error.value = "";
@@ -100,6 +104,20 @@ async function load() {
     error.value = e.message;
   } finally {
     loading.value = false;
+  }
+}
+async function saveVPNAddress() {
+  if (busy.value || !settings.value.account_enabled) return;
+  busy.value = "vpn-address";
+  try {
+    const result = await api.saveVPNAddress(vpn.address);
+    if (typeof result.vpn_address !== "string") throw new Error(tr("服务器返回了无效数据，请刷新后重试"));
+    vpn.address = settings.value.vpn_address = result.vpn_address;
+    emit("toast", { type: "ok", message: tr("VPN 拨号地址已保存") });
+  } catch (e) {
+    emit("toast", { type: "err", message: e.message });
+  } finally {
+    busy.value = "";
   }
 }
 async function saveAccount() {
@@ -200,9 +218,14 @@ async function saveIPsec() {
   }
   busy.value = "ipsec";
   try {
+    const expected = ipsec.enabled ? 'ipsec' : 'plain';
     const res = await api.saveIPsec({ ...ipsec });
     ipsec.psk = ipsec.current_password = "";
-    emit("toast", { type: "ok", message: tr(res.message) });
+    if (clientAccessMode(res) !== expected) {
+      emit("toast", { type: "err", message: tr("接入设置已提交，实际状态未确认，请检查系统设置。") });
+    } else {
+      emit("toast", { type: "ok", message: tr(expected === 'ipsec' ? "IPsec 已启用" : "普通 L2TP") });
+    }
     await load();
   } catch (e) {
     emit("toast", { type: "err", message: e.message });
@@ -262,19 +285,9 @@ onMounted(load);
         <span>{{ tr("L2TP 接入") }}</span
         ><el-tag
           :type="
-            settings.ipsec?.enabled
-              ? settings.ipsec?.active && settings.ipsec?.protected
-                ? 'success'
-                : 'danger'
-              : 'info'
+            accessMode === 'ipsec' ? 'success' : accessMode === 'error' ? 'danger' : 'info'
           "
-          >{{
-            settings.ipsec?.enabled
-              ? settings.ipsec?.active && settings.ipsec?.protected
-                ? tr("IPsec 已启用")
-                : tr("IPsec 状态异常")
-              : tr("普通 L2TP")
-          }}</el-tag
+          >{{ clientAccessLabel(settings.ipsec, tr) }}</el-tag
         >
       </div></template
     >
@@ -285,6 +298,13 @@ onMounted(load);
       :closable="false"
       class="section-gap"
     />
+    <el-form label-position="top" :disabled="!!busy || loading || !settings.account_enabled" @submit.prevent="saveVPNAddress">
+      <el-form-item :label='tr("VPN 拨号地址")'>
+        <el-input v-model="vpn.address" :aria-label='tr("VPN 拨号地址")' maxlength="254" />
+      </el-form-item>
+      <p class="muted">{{ tr("填写客户端可达的 IPv4 或域名。此地址供接入指南使用，留空可清除。") }}</p>
+      <el-button native-type="submit" :loading="busy === 'vpn-address'">{{ tr("保存拨号地址") }}</el-button>
+    </el-form>
     <el-form
       ref="ipsecRef"
       :model="ipsec"

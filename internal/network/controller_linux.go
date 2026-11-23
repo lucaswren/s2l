@@ -20,6 +20,7 @@ type Controller struct {
 	mu               sync.Mutex
 	active           map[string]model.TunnelMapping // key: mapping.ID 或 tun_name
 	sessionGuard     bool
+	wanResetGuard    bool
 	admitted         map[string]model.PPPSession
 	guardSnapshot    string
 	rulesRevision    uint64

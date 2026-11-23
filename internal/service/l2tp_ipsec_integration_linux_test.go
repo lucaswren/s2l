@@ -233,7 +233,7 @@ assert counts==[0],'server sent bare L2TP instead of ESP'
 	}
 }
 
-func integrationIPsecLifecycle(t *testing.T, root, caPath string, run func(...string) string, assertNoDirectEgress func()) {
+func integrationIPsecLifecycle(t *testing.T, root, caPath string, udpPolicies [2]string, run func(...string) string, assertNoDirectEgress func()) {
 	t.Helper()
 	pid := func(peer string) string {
 		b, err := os.ReadFile(filepath.Join(root, "ipsec-"+peer, "pid"))
@@ -399,7 +399,7 @@ assert r.returncode==0 and not r.stdout.strip(),'retired zone retained connectio
 	healthy(0)
 	healthy(1)
 	integrationClientDNS(t, "s2l-dial-0", "reconnected.fixture.test", "1.1.1.1", true)
-	integrationClientUDP(t, "s2l-dial-0", "node0", "allow", true)
+	integrationClientUDP(t, "s2l-dial-0", "node0", udpPolicies[0], true)
 	integrationAssertIPsecTraffic(t, "s2l-dial-0")
 	run("python3", "-c", `import subprocess,sys
 rows=subprocess.check_output(['iptables','-nvxL','S2L-IPSEC'],text=True).splitlines()
@@ -408,5 +408,5 @@ assert int(sys.argv[1])+sum(int(p[0]) for r in rows if len(p:=r.split())>2 and p
 `, droppedBeforeRepair)
 	t.Log("shared NAT with identical 1701: response-mark failure blocked, other peer unaffected, CHILD_SA rekey and redial passed, retired conntrack zone removed")
 	assertNoDirectEgress()
-	integrationIPsecRecycling(t, root, caPath, run, assertNoDirectEgress)
+	integrationIPsecRecycling(t, root, caPath, udpPolicies, run, assertNoDirectEgress)
 }

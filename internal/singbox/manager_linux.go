@@ -45,14 +45,21 @@ func (m *Manager) DNSProbe(name string) (func(context.Context, []byte) ([]byte, 
 }
 
 type managedProc struct {
-	apiAddress string
-	apiSecret  string
-	cmd        *exec.Cmd
-	pid        int
-	done       chan struct{}
-	resolver   *dnsproxy.Server
-	log        *processLog
-	exits      uint64
+	apiAddress           string
+	apiSecret            string
+	cmd                  *exec.Cmd
+	pid                  int
+	done                 chan struct{}
+	resolver             *dnsproxy.Server
+	log                  *processLog
+	lifecycleMu          sync.Mutex
+	stopRequested        bool
+	forcedStop           bool
+	plannedExit          bool
+	exits                uint64
+	restarts             uint64
+	lastUnexpectedExitAt time.Time
+	lastUnexpectedExit   string
 }
 
 func NewManager(binPath string) *Manager {
@@ -125,7 +132,7 @@ func (m *Manager) start(node model.SocksNode, mapping model.TunnelMapping) error
 	}
 	p := &managedProc{apiAddress: apiAddress, apiSecret: apiSecret, cmd: cmd, pid: cmd.Process.Pid, done: make(chan struct{}), resolver: resolver, log: writer}
 	if previous != nil {
-		p.exits = previous.exits + 1
+		p.inheritLifecycle(previous)
 	}
 	m.mu.Lock()
 	m.procs[mapping.TunName] = p
@@ -150,14 +157,25 @@ func (m *Manager) stop(name string) error {
 	p := m.procs[name]
 	m.mu.Unlock()
 	if p != nil && p.cmd != nil && p.cmd.Process != nil && p.running() {
-		if err := syscall.Kill(-p.pid, syscall.SIGTERM); err != nil {
-			_ = p.cmd.Process.Signal(syscall.SIGTERM)
+		p.lifecycleMu.Lock()
+		err := syscall.Kill(-p.pid, syscall.SIGTERM)
+		if err != nil {
+			err = p.cmd.Process.Signal(syscall.SIGTERM)
 		}
+		if err == nil {
+			p.stopRequested = true
+		}
+		p.lifecycleMu.Unlock()
 		select {
 		case <-p.done:
 		case <-time.After(5 * time.Second):
-			_ = syscall.Kill(-p.pid, syscall.SIGKILL)
-			_ = p.cmd.Process.Kill()
+			p.lifecycleMu.Lock()
+			err := syscall.Kill(-p.pid, syscall.SIGKILL)
+			if err != nil {
+				err = p.cmd.Process.Kill()
+			}
+			p.forcedStop = err == nil
+			p.lifecycleMu.Unlock()
 			select {
 			case <-p.done:
 			case <-time.After(2 * time.Second):
@@ -231,15 +249,36 @@ func (m *Manager) ProcessStatus(name string) model.ProcessStatus {
 	if p == nil {
 		return model.ProcessStatus{}
 	}
-	var s model.ProcessStatus
+	return p.processStatus()
+}
+
+func (p *managedProc) inheritLifecycle(previous *managedProc) {
+	previous.lifecycleMu.Lock()
+	defer previous.lifecycleMu.Unlock()
+	p.exits = previous.exits
+	p.restarts = previous.restarts
+	p.lastUnexpectedExitAt = previous.lastUnexpectedExitAt
+	p.lastUnexpectedExit = previous.lastUnexpectedExit
+	if previous.plannedExit {
+		p.restarts++
+	}
+}
+
+func (p *managedProc) processStatus() model.ProcessStatus {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+	var status model.ProcessStatus
 	if p.log != nil {
-		s = p.log.Status()
+		status = p.log.Status()
 	}
-	s.Exits = p.exits
-	if !p.running() {
-		s.Exits++
+	status.Exits = p.exits
+	status.Restarts = p.restarts
+	if !p.lastUnexpectedExitAt.IsZero() {
+		at := p.lastUnexpectedExitAt
+		status.LastUnexpectedExitAt = &at
 	}
-	return s
+	status.LastUnexpectedExit = p.lastUnexpectedExit
+	return status
 }
 
 // Snapshot binds PID, resolver and counters to the same managed process.
@@ -261,20 +300,34 @@ func (m *Manager) RuntimeSnapshot() map[string]RuntimeStats {
 		if p.resolver != nil {
 			stats.Resolver = p.resolver.Resolver.Status()
 		}
-		if p.log != nil {
-			stats.Process = p.log.Status()
-		}
-		stats.Process.Exits = p.exits
-		if !alive {
-			stats.Process.Exits++
-		}
+		stats.Process = p.processStatus()
 		out[name] = stats
 	}
 	return out
 }
 func (m *Manager) reap(_ string, p *managedProc) {
-	_ = p.cmd.Wait()
+	err := p.cmd.Wait()
+	p.lifecycleMu.Lock()
+	if p.cmd.ProcessState != nil {
+		waitStatus, ok := p.cmd.ProcessState.Sys().(syscall.WaitStatus)
+		p.plannedExit = (p.stopRequested && (p.cmd.ProcessState.Success() ||
+			(ok && waitStatus.Signal() == syscall.SIGTERM))) ||
+			(p.forcedStop && ok && waitStatus.Signal() == syscall.SIGKILL)
+	}
+	if !p.plannedExit {
+		p.exits++
+		p.lastUnexpectedExitAt = time.Now()
+		switch {
+		case p.cmd.ProcessState != nil:
+			p.lastUnexpectedExit = p.cmd.ProcessState.String()
+		case err != nil:
+			p.lastUnexpectedExit = "wait failed"
+		default:
+			p.lastUnexpectedExit = "process ended"
+		}
+	}
 	close(p.done)
+	p.lifecycleMu.Unlock()
 	if p.resolver != nil {
 		p.resolver.Close()
 	}

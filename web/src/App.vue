@@ -8,6 +8,7 @@ import {
   defineAsyncComponent,
   onMounted,
   onUnmounted,
+  reactive,
   ref,
 } from "vue";
 import { api } from "./api/client";
@@ -29,6 +30,15 @@ const nodesError = ref("");
 const error = computed(() => statusError.value || nodesError.value);
 const activeTab = ref("lines");
 const helpVisible = ref(false);
+const diagnosticsLaunch = ref(null);
+const speedResults = reactive({});
+function openDiagnostics(kind, id) {
+  diagnosticsLaunch.value = kind ? {kind, id} : null;
+  helpVisible.value = true;
+}
+function rememberSpeed(id, result) {
+  speedResults[id] = result;
+}
 const signingOut = ref(false);
 async function signOut() {
  if(signingOut.value)return; signingOut.value=true;
@@ -173,7 +183,7 @@ onUnmounted(() => {
           />
           <div class="toolbar-buttons">
             <LanguageSelector persist />
-            <el-button @click="helpVisible = true">{{ tr("帮助") }}</el-button>
+            <el-button @click="openDiagnostics()">{{ tr("诊断与验收") }}</el-button>
             <el-button v-if="authEnabled" class="header-signout" :loading="signingOut" @click="signOut">{{tr("退出登录")}}</el-button>
           </div>
         </div>
@@ -226,21 +236,24 @@ onUnmounted(() => {
             />
             </section><section class="content-section"><Node
               :nodes="filteredNodes"
+              :speed-results="speedResults"
+              @speed="id => openDiagnostics('speed', id)"
+              @forget-speed="id => delete speedResults[id]"
               @changed="refresh"
               @toast="pushToast"
             />
             </section>
           </el-tab-pane>
           <el-tab-pane :label='tr("运行监控")' name="monitoring" lazy>
-            <Status :active="activeTab === 'monitoring'" :status="status" @changed="refresh" @toast="pushToast" />
+            <Status @diagnose="id => openDiagnostics('mapping', id)" :active="activeTab === 'monitoring'" :status="status" @changed="refresh" @toast="pushToast" />
           </el-tab-pane>
           <el-tab-pane :label='tr("系统设置")' name="settings" lazy
             ><Settings :active="activeTab === 'settings'" @toast="pushToast" @changed="refresh"
           /></el-tab-pane>
         </el-tabs>
       </section>
-      <el-drawer v-model="helpVisible" :title='tr("使用说明")' size="min(540px, 100vw)" destroy-on-close
-        ><Guide :mappings="mappings" :health="status.upstream_health"
+      <el-drawer v-model="helpVisible" :title='tr("诊断与验收")' size="min(540px, 100vw)" destroy-on-close
+        ><Guide :mappings="mappings" :nodes="nodes" :health="status.upstream_health" :launch="diagnosticsLaunch" @speed-result="rememberSpeed"
       /></el-drawer>
       <footer class="muted"> {{ tr("运行") }} {{ formatUptime(status.uptime_sec) }}
        <span v-if="status.build?.version"> · {{status.build.version}}<span v-if="status.build.revision"> · {{status.build.revision.slice(0,12)}}</span><span v-if="status.build.modified"> {{tr('· 含本地修改')}}</span></span>

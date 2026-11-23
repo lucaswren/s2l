@@ -30,9 +30,11 @@ async function stopChild(child) {
       clearTimeout(force);
       reject(Error(`UI fixture process ${child.pid} did not stop`));
     }, 10000);
-    child.once('close', () => {
+    child.once('exit', () => {
       clearTimeout(force);
       clearTimeout(timeout);
+      child.stdout?.destroy();
+      child.stderr?.destroy();
       resolve();
     });
     child.kill();

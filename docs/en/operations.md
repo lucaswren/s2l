@@ -10,7 +10,7 @@ Read the [legal notes](legal.md) and README security limits first. Apply securit
 
 ## New installation
 
-**Install S2L 1.0.12 on a clean, dedicated server.**
+**Install S2L on a clean, dedicated server.**
 
 Use the one-command installer on a new, dedicated Ubuntu/Debian host after reviewing the scripts:
 
@@ -90,11 +90,11 @@ Mapping `running` and upstream health are separate. The monitor reports TCP, UDP
 
 | Check | Actual probe | Interpretation |
 |---|---|---|
-| TCP | A small HTTPS response through SOCKS5 authentication and forwarding; Cloudflare and Google are alternate targets | Successful web forwarding to a probe target |
-| UDP | SOCKS5 `UDP ASSOCIATE`, followed by a DNS datagram to `1.1.1.1:53` or `8.8.8.8:53` through the negotiated relay | A valid reply must match its source, query ID and question; fragmented/invalid replies are ignored. Only explicit SOCKS reply code 7 is classified as unsupported |
-| DNS | A validated response from the configured TCP DNS endpoint through SOCKS5. Auto mode falls back to the configured DoH endpoint. Defaults are `8.8.8.8:53` and `https://1.1.1.1/dns-query` | Working primary TCP DNS is healthy. If only DoH succeeds, the UI reports backup-only availability; this probe does not control live DNS; automatic mode switches based on real query failures |
+| TCP | A small HTTPS response via the selected SOCKS5 or bound Local WAN interface; Cloudflare and Google are alternate targets | Successful web forwarding to a probe target |
+| UDP | A DNS datagram to `1.1.1.1:53` or `8.8.8.8:53`, sent through the SOCKS5 negotiated relay or the bound WAN interface | A valid reply must match its source, query ID and question; fragmented/invalid replies are ignored. Only explicit SOCKS reply code 7 is classified as unsupported |
+| DNS | A validated response from the configured TCP DNS endpoint through the selected egress. Auto mode falls back to the configured DoH endpoint. Defaults are `8.8.8.8:53` and `https://1.1.1.1/dns-query` | Working primary TCP DNS is healthy. If only DoH succeeds, the UI reports backup-only availability; this probe does not control live DNS; automatic mode switches based on real query failures |
 
-DNS probes query the public name `example.com`. Target traffic always uses the selected proxy; there is no direct DNS-target fallback. Proxy/relay hostnames may still require the server's own resolver to establish the upstream connection. Providers receive these probe connections and queries. The health checker does not read or upload client DNS history.
+DNS probes query the public name `example.com`. Probes stay on the selected egress. Proxy/relay hostnames may still require the server's own resolver to establish the upstream connection. Providers receive these probe connections and queries. The health checker does not read or upload client DNS history.
 
 An initial protocol failure is unstable; three consecutive failures are unavailable. Healthy recovery needs two consecutive successful checks. Explicit UDP non-support and DNS backup-only availability are reported separately. Working TCP with a UDP/DNS problem is partial availability, rather than a whole-node outage; remaining successful checks also prevent a blanket unavailable result. L2TP stays connected and these protocol failures do not trigger a sing-box restart.
 
@@ -142,6 +142,19 @@ The [official HWE track](https://ubuntu.com/kernel/lifecycle) supplies supported
 
 </details>
 
+### Ubuntu 24.04 GA and HWE dial testing
+
+For each architecture, both kernels used the same isolated Ubuntu 24.04 VM and S2L configuration. The x86_64 VM ran under QEMU software emulation. Each kernel runs 10 connect, disconnect and redial cycles per protocol with plain L2TP and with L2TP/IPsec. Check for PPP addresses and actual kernel sessions on both peers with `ip l2tp show session`, then check that the PPP interfaces and server kernel session are removed after disconnect. IPsec also requires successful IKE and CHILD_SA negotiation in every round and removal of the XFRM states afterward. Compare boot IDs and inspect the kernel journal for faults.
+
+| Architecture and kernel tested on 2026-11-23 | Plain L2TP | L2TP/IPsec |
+| --- | --- | --- |
+| ARM64 GA `6.8.0-151-generic` | 10/10 | 10/10 |
+| ARM64 HWE `7.0.0-43-generic` | 10/10 | 10/10 |
+| x86_64 GA `6.8.0-151-generic` | 10/10 | 10/10 |
+| x86_64 HWE `7.0.0-43-generic` | 10/10 | 10/10 |
+
+Both kernels completed the runs on each architecture without reproducing the PPPoL2TP panic seen on `6.8.0-147-generic`. The x86_64 test also verified removal of the kernel data session on the client. HWE is optional for this workload when the target host passes the same checks on a supported GA build. These results cover the listed builds and the tested workload. Verify the exact kernel and client path on the target host before deployment, and keep the existing block on the affected 146/147 builds.
+
 ## Upgrade
 
 For an existing default `/opt/s2l` installation, run:
@@ -166,7 +179,7 @@ For the default managed layout, run `sudo bash script/update.sh` from the review
 
 ## Access and client setup
 
-The installation prints the HTTPS URL, username and initial password. Restrict the management TCP port to trusted source IPs in both host firewall and cloud security groups. Keep backend TCP 8080 private. Add an authorized SOCKS5 node and an L2TP mapping, then start it. A `running` status is not an end-to-end connectivity or security test: verify the intended egress, DNS, IPv6 handling and failure behavior from an actual client.
+The installation prints the HTTPS URL, username and initial password. Restrict the management TCP port to trusted source IPs in both host firewall and cloud security groups. Keep backend TCP 8080 private. Add an authorized SOCKS5 node or a Local WAN interface, create an L2TP mapping, and start it. A `running` status is not an end-to-end connectivity or security test: verify the intended egress, DNS, IPv6 handling and failure behavior from an actual client.
 
 | Mode | Network access | Protection |
 |---|---|---|
@@ -188,7 +201,7 @@ The updater preserves the IPsec enabled/running state and refreshes generated se
 
 On Ubuntu hosts with the packaged charon AppArmor profile, IPsec startup adds only read permission for `/opt/s2l/ipsec.secrets` to `/etc/apparmor.d/local/usr.lib.ipsec.charon` and reloads the profile. Other administrator rules and enforcement are retained. An unsupported local profile or reload failure prevents IPsec startup; the narrow read rule remains for retries and older deployed versions.
 
-Node speed tests use Cloudflare through the selected SOCKS5 upstream, transferring 5 MB per direction by default. They consume bandwidth and do not measure the full L2TP client path; one direction's failure can coexist with the other's successful result.
+Node speed tests use a single HTTPS transfer per direction from the server to Cloudflare through the selected SOCKS5 or Local WAN egress. The result shows the path, endpoints, and requested sample size (5 MB per direction by default). Test the real client separately to include its L2TP path. One direction can succeed while the other fails.
 
 ## Management and credentials
 
@@ -264,7 +277,7 @@ ip route show table all
 - Dial succeeds but traffic fails: check upstream, assigned subnet conflicts, policy routes, firewall and client DNS/route selection.
 - SSH access changes fail: retain the current connection and use a provider console or approved recovery route; inspect backup metadata before restoring.
 
-For failed Telegram, WeChat or web images, inspect the failed request and separate TCP/UDP/DNS health results. S2L preserves the client's destination IP instead of replacing CDN addresses with sniffed domains. By default, TCP SYN MSS is capped at 1200 in `mangle/FORWARD` for both PPP directions. Non-DNS UDP is actively rejected by default; DNS uses DoH/TCP. TCP fallback requires application support; UDP-only applications require a separately reviewed deployment because managed mappings reject non-DNS UDP. Automatic DNS mode can use the first valid DoH or TCP DNS response. A faster DoH response triggers a rate-limited background check of TCP DNS. Two confirmed primary failures with evidence that DoH can answer are required to change the preference. After switching, queries can trigger a background recovery check after 60 seconds. Checks run at least 30 seconds apart. Two successful checks restore the TCP DNS preference. A live TCP DNS answer counts toward recovery when DoH fails or stalls. Caller cancellation and local TCP connection pool timeouts do not count as upstream failures.
+For failed Telegram, WeChat or web images, inspect the failed request and separate TCP/UDP/DNS health results. S2L preserves the client's destination IP instead of replacing CDN addresses with sniffed domains. By default, TCP SYN MSS is capped at 1200 in `mangle/FORWARD` for both PPP directions. SOCKS5 mappings reject non-DNS UDP. New Local WAN mappings allow UDP by default. DNS uses DoH or TCP DNS through the configured egress. Automatic DNS mode can use the first valid DoH or TCP DNS response. A faster DoH response triggers a rate-limited background check of TCP DNS. Two confirmed primary failures with evidence that DoH can answer are required to change the preference. After switching, queries can trigger a background recovery check after 60 seconds. Checks run at least 30 seconds apart. Two successful checks restore the TCP DNS preference. A live TCP DNS answer counts toward recovery when DoH fails or stalls. Caller cancellation and local TCP connection pool timeouts do not count as upstream failures.
 
 Updating restarts the service and automatically regenerates configurations for previously running mappings; reconnect L2TP and recreate application connections if needed. Inspect `s2l-tcpmss` with `sudo iptables -t mangle -S FORWARD`. If images still fail, compare the same failing image host through SOCKS5 and the client path, and inspect a log ZIP collected with Debug enabled in Settings to distinguish upstream, DNS and tunnel failures.
 
@@ -280,9 +293,9 @@ Evidence collection does not restart mappings or switch exits. Application paylo
 
 ## Mapping options and Debug
 
-Mappings retain upload/download bandwidth limits, groups and optional connection observation. MTU 1400, MSS 1200, queue 1000, one PPP session per account, non-DNS UDP rejection and automatic DNS are managed internally. TCP connection caps and custom network/DNS settings are retired. Zero bandwidth means unlimited; stop a running mapping before changing its limits.
+Mappings retain upload/download bandwidth limits, groups and optional connection observation. MTU 1400, MSS 1200, queue 1000, and one PPP session per account are managed internally. SOCKS5 uses automatic DNS and rejects non-DNS UDP. Local WAN mappings allow per-mapping UDP policy and DNS configuration. Zero bandwidth means unlimited; stop a running mapping before changing its limits.
 
-Each mapping has a private loopback TCP resolver using Cloudflare DoH and Google TCP DNS through the same SOCKS5 exit. An error starts the alternate immediately; after 300 ms without an answer, it races the alternate and accepts the first valid answer. Fallback works in both directions; losing requests are cancelled. Valid NXDOMAIN does not trigger fallback. Both failing returns SERVFAIL, never direct DNS or a different node. sing-box owns caching. Live resolver counters and independent health probes remain separate. See [client DNS setup](clients.md).
+Each mapping has a private loopback TCP resolver using Cloudflare DoH and Google TCP DNS through the mapping’s selected SOCKS5 node or bound Local WAN interface. An error starts the alternate immediately; after 300 ms without an answer, it races the alternate and accepts the first valid answer. Fallback works in both directions; losing requests are cancelled. Valid NXDOMAIN does not trigger fallback. Both failing returns SERVFAIL, never direct DNS or a different node. sing-box owns caching. Live resolver counters and independent health probes remain separate. See [client DNS setup](clients.md).
 
 The network test dialog supports a separate HTTPS host:port check; its results do not update automatic node health. Enable Debug, reproduce the real client issue, then inspect the timeline or export a ZIP. Debug is off by default: troubleshooting logs and resource samples are not retained while off. Node/mapping backups retain the latest 10 versions; stop all mappings before rollback. Local recovery allows three attempts per ten minutes, then a five-minute cooldown and a trial; two stable minutes reset the budget. See the [detailed stability notes (Simplified Chinese)](../../DEBUG-AND-STABILITY.zh-Hans.md).
 
@@ -298,11 +311,13 @@ Mappings use the managed policy from creation. Backups restore nodes and mapping
 
 Unsupported or persistently unavailable UDP is retried every ten minutes; the first success triggers confirmation after ten seconds. Automatic probes share short-lived results for identical node credentials, DNS modes and endpoints; manual node probes update TCP/UDP health and only matching default-DNS health. Debug includes protocol transitions, 256 recent connection observations and 20 failed-target summaries. Logs do not prove transfer success or original pre-NAT client identity.
 
+On the dedicated S2L host, starting a Local WAN mapping arms an IPv4 TCP reset guard. It drops local-source resets routed out through an interface that does not own their source address, while allowing loopback and resets on the owning interface. The guard stays active when individual mappings stop so late packets remain covered.
+
 ## Runtime monitoring
 
 Use the **Monitoring** tab for mapping health, PPP sessions, traffic, the last 24 hours and operational events. **Lines** manages nodes and mappings; **Settings** manages the host and maintenance. Leaving Monitoring pauses its history/event polling.
 
-Client upload/download rates use consecutive PPP byte samples and show the entire session in Mbps. A reconnect, process restart, counter reset or sampling gap shows **—** until two valid samples are available. Classified errors count each matching log line once; category counts can overlap and are not failed-request counts. New errors, cumulative errors and the latest error time are shown separately. Host TCP retransmissions and conntrack usage cover the whole server, not one mapping.
+Client upload/download rates use consecutive PPP byte samples and show the entire session in Mbps. A reconnect, process restart, counter reset or sampling gap shows **—** until two valid samples are available. Classified errors count each matching log line once; category counts can overlap and are not failed-request counts. New errors, cumulative errors and the latest error time are shown separately. Host TCP retransmissions and conntrack usage cover the whole server, not one mapping. Planned sing-box restarts and unexpected exits are counted separately. The latest unexpected exit includes its timestamp and process exit status.
 
 A snapshot older than 30 seconds is marked stale. Status requests time out after 12 seconds so polling can recover. A blocked UDP policy is shown as **Blocked by policy** even if an older node test succeeded. Successful upstream or simulated forwarding tests do not validate the full client/iWAN/L2TP path or guarantee throughput.
 
@@ -324,7 +339,7 @@ Managed pppd up/down wrappers emit events through a root-only Unix socket and pr
 
 The monitoring panel includes bounded incidents (500) and operations (1000), with node and multi-node correlation. Multi-node failures indicate a shared path to investigate, not a proven server-network cause. `operations.json` is private and includes optional notification credentials; protect it like other credentials. Notifications use administrator-configured HTTPS webhooks, with optional Bearer authorization, one-minute delivery cooldown, at most five delivery attempts per batch and maintenance suppression. Events remain local unless notifications are explicitly enabled.
 
-Mapping upload/download limits are in Kbit/s; TCP connection caps are retired. Bandwidth limits apply to the whole mapping. Zero means unlimited. Fixed-address PPP accounts allow one session; only newly connected duplicates are rejected. Upload uses TBF shaping; download uses ingress policing and can drop excess traffic. These limits do not change the fixed upstream, DNS transport or UDP policy. Connection details are read on demand from each sing-box process over an authenticated loopback API, limited to 500 displayed entries, and are not stored in history.
+Mapping upload/download limits are in Kbit/s. Bandwidth limits apply to the whole mapping. Zero means unlimited. Fixed-address PPP accounts allow one session; only newly connected duplicates are rejected. Upload uses TBF shaping. Download uses IFB redirection and shaping with a bounded queue. These limits do not change the fixed upstream, DNS transport or UDP policy. Connection details are read on demand from each sing-box process over an authenticated loopback API, limited to 500 displayed entries, and are not stored in history.
 
 Configuration forms preview changed field names without credential values and use resource revisions to reject stale edits. Active runtime settings still require a clean stop; existing automatic backups provide undo. Mapping groups filter batch operations. The authenticated `/api/metrics` endpoint exposes bounded operational gauges and counters without destination labels.
 
@@ -368,7 +383,7 @@ Local liveness inspection is read-only. Confirmed missing routing, firewall, MSS
 
 Mappings rejecting UDP skip automatic UDP probes; manual protocol tests still measure node capability. Each mapping has a private TCP DNS pool limited to four concurrent connections, with one retry for an expired idle connection. DoH supports HTTP/2 reuse. Broad protocol sniffing is removed; port 53 interception and HTTPS DNS record passthrough remain. Process logs use warning level and Debug retains bounded temporary in-memory output.
 
-Connection observation defaults off. Enable it in advanced options while the mapping is stopped to use connection inspection and individual connection closure. Per-mapping bandwidth limits are preserved; TCP connection caps are removed; fixed-address PPP accounts allow one session. Google diagnostics test one selectable mapping per selected node, release lifecycle locks before network I/O and discard results after runtime replacement. Collapsed monitoring and hidden pages pause ordinary polling; active software upgrades continue polling.
+Connection observation defaults off. Enable it in advanced options while the mapping is stopped to use connection inspection and individual connection closure. Bandwidth limits apply per mapping. Fixed-address PPP accounts allow one session. Google diagnostics test one selectable mapping per selected node, release lifecycle locks before network I/O and discard results after runtime replacement. Collapsed monitoring and hidden pages pause ordinary polling; active software upgrades continue polling.
 
 ## Installation checks and recovery
 
@@ -383,3 +398,11 @@ CI boots fresh Ubuntu 24.04 and Debian 12 amd64 QEMU guests, exercises incompati
 The fresh-system fixture also tests two gateways with independent accounts and mappings sharing one SOCKS node: concurrent forwarding, duplicate-account rejection, fail-closed upstream outages, and repair or stop of one mapping without disrupting the other. These checks repeat after a full OS reboot.
 
 Installation preflight rejects Ubuntu 6.8.0-146-generic and 6.8.0-147-generic because of the known PPPoL2TP regression (Ubuntu bug 2169477). See kernel preparation above for fresh hosts and the manual procedure for production. The full-system fixture exercises preparation, exit 20/reuse and deliberate reboot when the image needs it; unaffected images continue directly. Real dialing runs on the kernel actually booted.
+
+## Diagnostics and client checks
+
+Open **Diagnostics & setup** from the page header. **Path tests** runs server-side node speed tests and simulated mapping forwarding tests. A node test takes the selected egress to Cloudflare and reports the endpoints and requested sample size. A mapping test enters through a simulated PPP interface and checks policy routing, forwarding, and the observed exit. Use **Client checks** to verify the full path from the actual device after dialing. The speed and forwarding shortcuts open the same workspace with the selected target.
+
+In **Settings → Access & account**, set the **VPN dial address** to the IPv4 address or DNS hostname clients can reach, without a scheme or port. It is stored in `vpn_address`, separate from the management URL. Saving it updates the guide and copied connection parameters immediately. Clearing it prompts the operator to configure an address before copying.
+
+**Dial timeline** queries the Linux system journal on demand for xl2tpd, PPP and S2L strongSwan events. It returns up to 60 recognized events from the current boot and the last 30 minutes. Log messages, peers, usernames and credentials are omitted. Multiple sessions can be interleaved. The same tab shows the current local UDP listeners and the selected mapping’s latest independent TCP egress probe. Listener status alone cannot establish public reachability. If the journal is unavailable or shows no events, use an authorized ingress capture to check UDP reachability. Verify exit reachability separately with Path tests and the actual client.

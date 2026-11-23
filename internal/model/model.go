@@ -102,17 +102,20 @@ type DNSAttemptFailure struct {
 }
 
 type ProcessStatus struct {
-	StartedAt       time.Time `json:"started_at"`
-	LastErrorAt     time.Time `json:"last_error_at"`
-	ErrorLines      uint64    `json:"error_lines"`
-	DNSParseErrors  uint64    `json:"dns_parse_errors"`
-	ProxyRejections uint64    `json:"proxy_rejections"`
-	LogBytes        uint64    `json:"log_bytes"`
-	Timeouts        uint64    `json:"timeouts"`
-	Refused         uint64    `json:"refused"`
-	TLSFailures     uint64    `json:"tls_failures"`
-	NetworkErrors   uint64    `json:"network_errors"`
-	Exits           uint64    `json:"exits"`
+	StartedAt            time.Time  `json:"started_at"`
+	LastErrorAt          time.Time  `json:"last_error_at"`
+	ErrorLines           uint64     `json:"error_lines"`
+	DNSParseErrors       uint64     `json:"dns_parse_errors"`
+	ProxyRejections      uint64     `json:"proxy_rejections"`
+	LogBytes             uint64     `json:"log_bytes"`
+	Timeouts             uint64     `json:"timeouts"`
+	Refused              uint64     `json:"refused"`
+	TLSFailures          uint64     `json:"tls_failures"`
+	NetworkErrors        uint64     `json:"network_errors"`
+	Exits                uint64     `json:"exits"`
+	Restarts             uint64     `json:"restarts"`
+	LastUnexpectedExitAt *time.Time `json:"last_unexpected_exit_at,omitempty"`
+	LastUnexpectedExit   string     `json:"last_unexpected_exit,omitempty"`
 }
 
 // TunTraffic 单个 TUN 网卡流量快照（供 /api/status 使用）

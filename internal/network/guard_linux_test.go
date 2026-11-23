@@ -101,7 +101,7 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	}
 	ping("198.18.0.2", false)
 	peers := map[string]model.PPPSession{"line": {Interface: "ppp0", PeerIP: "10.0.101.2", Index: iface.Index}}
-	if err := replaceSessionGuard(context.Background(), peers); err != nil {
+	if err := replaceSessionGuard(context.Background(), peers, false); err != nil {
 		t.Fatal(err)
 	}
 	ping("198.18.0.2", true)
@@ -114,7 +114,7 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	ping("198.18.0.2", false)
 	mark[2] = "-D"
 	must("iptables", mark...)
-	if err := replaceSessionGuard(context.Background(), peers); err != nil {
+	if err := replaceSessionGuard(context.Background(), peers, false); err != nil {
 		t.Fatal(err)
 	}
 	ping("198.18.0.2", true)
@@ -123,7 +123,7 @@ func TestLeakGuardsIntegration(t *testing.T) {
 	}
 	// Even a valid peer IP must not work under a different interface index.
 	peers["line"] = model.PPPSession{Interface: "ppp0", PeerIP: "10.0.101.2", Index: iface.Index + 100}
-	if err := replaceSessionGuard(context.Background(), peers); err != nil {
+	if err := replaceSessionGuard(context.Background(), peers, false); err != nil {
 		t.Fatal(err)
 	}
 	ping("198.18.0.2", false)

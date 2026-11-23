@@ -36,6 +36,27 @@ func (c *Controller) EnableSessionGuard() error {
 	return nil
 }
 
+// EnableWANResetGuard keeps late kernel-generated TCP resets off other
+// uplinks after a device-bound WAN socket has closed. Keep it armed for the
+// lifetime of the controller so stopping one mapping cannot expose late replies.
+func (c *Controller) EnableWANResetGuard() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.wanResetGuard {
+		return nil
+	}
+	if !c.sessionGuard {
+		return fmt.Errorf("WAN reset guard requires PPP session protection")
+	}
+	c.wanResetGuard = true
+	c.rulesRevision++
+	if err := c.commitSessionGuard(context.Background(), c.admitted); err != nil {
+		c.wanResetGuard = false
+		return err
+	}
+	return nil
+}
+
 // Reconcile from actual point-to-point PPP interfaces, independently of the
 // advisory datagram hooks. Keep the first live owner until it disappears.
 func (c *Controller) SyncSessionGuard(ctx context.Context) error {
@@ -172,7 +193,7 @@ func selectSessionPeers(mappings []model.TunnelMapping, rows []model.PPPSession,
 // Capture the kernel's normalized representation after an atomic replacement.
 // Verification compares both base chains, rule expressions and admitted peers.
 func (c *Controller) commitSessionGuard(ctx context.Context, peers map[string]model.PPPSession) error {
-	if err := replaceSessionGuard(ctx, peers); err != nil {
+	if err := replaceSessionGuard(ctx, peers, c.wanResetGuard); err != nil {
 		return err
 	}
 	c.admitted = peers
@@ -260,7 +281,7 @@ func (c *Controller) inspectSessionGuard(ctx context.Context) error {
 	return nil
 }
 
-func replaceSessionGuard(parent context.Context, peers map[string]model.PPPSession) error {
+func replaceSessionGuard(parent context.Context, peers map[string]model.PPPSession, wanResetGuard bool) error {
 	var rules strings.Builder
 	fmt.Fprintf(&rules, "add table ip %[1]s\ndelete table ip %[1]s\nadd table ip %[1]s\n", sessionTable)
 	fmt.Fprintf(&rules, "add set ip %s peers { type ipv4_addr . iface_index; }\n", sessionTable)
@@ -277,6 +298,10 @@ func replaceSessionGuard(parent context.Context, peers map[string]model.PPPSessi
 	// The disposable root-owned proof interfaces use the same handshake.
 	for _, direction := range []string{"iifname", "oifname"} {
 		fmt.Fprintf(&rules, "add rule ip %s forward %s \"ppp*\" meta mark set meta mark | %s\n", sessionTable, direction, sessionMark)
+	}
+	if wanResetGuard {
+		fmt.Fprintf(&rules, "add chain ip %s output { type filter hook output priority -10; policy accept; }\n", sessionTable)
+		fmt.Fprintf(&rules, "add rule ip %s output oifname != \"lo\" tcp flags & rst == rst fib saddr type local fib saddr . oif type != local drop\n", sessionTable)
 	}
 	return applySessionGuard(parent, rules.String())
 }

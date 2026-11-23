@@ -4,7 +4,12 @@
 
 [客户端接入、DNS 与验收](clients.md)
 
-L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联至 sing-box TUN、策略路由表及防火墙规则，再由 sing-box 连接 SOCKS5 上游。管理界面的 Nginx HTTPS 代理与此数据路径分开。
+## 架构与流量路径
+
+- **拨号接入**。普通 L2TP 通过 UDP 1701 接入 xl2tpd。启用 IPsec 时，strongSwan 在 UDP 500/4500 处理 IKEv1 和 NAT-T，再把受保护的 L2TP 交给 xl2tpd。
+- **映射与出口**。PPP 验证映射账号并分配对端 IPv4。Linux 执行会话准入和策略路由，流量经映射的 sing-box TUN 进入所选 SOCKS5 节点或绑定的本机 WAN 网卡，DNS 走同一出口。
+- **网页管理**。Vue 通过 Nginx HTTPS 调用 Go API。映射配置与状态持久化，套接字等运行文件单独存放。VPN 拨号地址独立于管理 URL。
+- **诊断与验收**。拨号时间线读取 journal 中的已识别事件，节点测速衡量服务器到目标的路径，映射实测模拟 PPP 转发。完整路径使用真实客户端验证。见[诊断与验收](operations.md#诊断与验收)。
 
 `cmd/s2l/` 负责启动与关闭；`internal/api/` 提供网页与脚本会话鉴权及管理 API；`internal/service/` 编排映射生命周期。`internal/singbox/`、`network/`、`l2tp/` 负责进程、路由、防火墙与 PPP；`store/`、`model/`、`config/` 处理状态、模型与配置。`web/src/` 是前端源码，`web/dist/` 是须提交的内嵌资源；`script/` 与 `deploy/systemd/` 管理安装及服务。
 
@@ -13,6 +18,8 @@ L2TP/PPP 客户端连接 xl2tpd；S2L 将映射账号密码与 IPv4 子网关联
 源码发布须保留 `web/dist/`、依赖锁定文件、第三方许可证声明与各平台 Go 实现。`bin/`、`tmp/`、`.test-tmp/`、`web/node_modules/` 及 Python 缓存属于本地产物，清理前先结束相关测试进程，保留仍需分析的诊断资料。浏览器测试共用 `script/ui_test_helpers.mjs`，每次结束后停止自己的子进程并删除临时配置与后端数据，截图则保留在 `tmp/`。
 
 ## 配置
+
+`vpn_address` 为可选字段，指定客户端指南显示的拨号地址。管理 HTTPS 使用独立的 URL 和端口。
 
 未指定 `-config` 时使用默认配置；明确指定的文件必须存在且内容为 JSON 对象。文件不存在或内容为 `null` 时会停止启动，不会悄悄改用默认值。
 
@@ -62,6 +69,14 @@ go test -c -o /tmp/s2l-l2tp.test ./internal/service
 sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
 for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
   sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --transport "$transport"
+done
+```
+
+另行运行本机 WAN 用例，使用同样五种传输条件检查 WAN 隔离和 DNS，覆盖普通 L2TP、直连 IPsec、独立 NAT，以及源端口不同或相同的共享 NAT。
+
+```bash
+for transport in plain ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+  sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --egress wan --transport "$transport"
 done
 ```
 

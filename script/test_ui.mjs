@@ -117,17 +117,47 @@ chrome.on('error',error=>{chromeError=error});
   if(previewBounds.left<0||previewBounds.right>previewBounds.viewport+2)throw Error('configuration preview overflow '+width);
   await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(b=>b.innerText==='返回编辑').click()`);await pause(350);
   await evaluate(`document.querySelector('.el-dialog .el-dialog__headerbtn').click()`);await pause(350);
-  await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='帮助').click()`);
+  await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='诊断与验收').click()`);
   await wait(`document.querySelector('.el-drawer')?.innerText.includes('8.8.8.8, 1.1.1.1')`);
+  if (width === 1440 && !(await evaluate(`[...document.querySelectorAll('.el-drawer button')].find(b=>b.innerText.includes('复制连接参数'))?.disabled`))) {
+   throw Error('connection parameters were copyable before setting a dial address');
+  }
   await evaluate(`for(const e of document.querySelectorAll('.el-drawer .el-collapse-item__header'))if(['DNS 与客户端路由','接入验收'].includes(e.innerText.trim()))e.click()`);
   await pause(350);
   for(const locale of ['en','zh-TW','zh-CN']) {
    await evaluate(`(()=>{const e=document.querySelector('.language-selector');e.value=${JSON.stringify(locale)};e.dispatchEvent(new Event('change',{bubbles:true}))})()`);await pause(100);
    await checkLayout(width+' '+locale+' client guide');
+   if (await evaluate(`[...document.querySelectorAll('.el-drawer .el-descriptions__label')].some(label => label.getBoundingClientRect().width < 80)`)) {
+    throw Error('client guide labels are too narrow '+width+' '+locale);
+   }
    if(await evaluate(`!document.querySelector('.el-drawer').innerText.includes('usepeerdns')||!document.querySelector('.el-drawer').innerText.includes('NAT-T')`))throw Error('client guide missing DNS or network instructions '+width);
+  }
+  if (width === 1440 || width === 320) {
+   const openTab = (label) => evaluate(`[...document.querySelectorAll('.el-drawer [role="tab"]')].find(e=>e.innerText===${JSON.stringify(label)}).click()`);
+   const startPath = () => evaluate(`document.querySelector('.path-diagnostics button[type="submit"]').click()`);
+   await openTab('拨号时间线');
+   await wait(`document.querySelector('.dial-timeline')?.innerText.includes('PPP 认证失败') && document.querySelector('.dial-timeline').innerText.includes('PPP 已分配对端地址')`);
+   await checkLayout(width+' dial timeline');
+   await openTab('路径检测');
+   await wait(`!!document.querySelector('.path-diagnostics button[type="submit"]:enabled')`);
+   await startPath();
+   await wait(`document.querySelector('.path-diagnostics').innerText.includes('10.0 Mbps') && document.querySelector('.path-diagnostics').innerText.includes('speed.cloudflare.com')`);
+   await evaluate(`document.querySelector('.path-diagnostics .el-select__wrapper').click()`);
+   await wait(`[...document.querySelectorAll('.el-select-dropdown__item')].some(e=>e.getClientRects().length&&e.innerText==='映射转发实测')`);
+   await evaluate(`[...document.querySelectorAll('.el-select-dropdown__item')].find(e=>e.getClientRects().length&&e.innerText==='映射转发实测').click()`);
+   await startPath();
+   await wait(`document.querySelector('.path-diagnostics').innerText.includes('映射转发正常')`);
+   await checkLayout(width+' paths');
+   await openTab('客户端验收');
   }
   await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-client-guide-${width}.png`,Buffer.from(r.data,'base64')));
   await evaluate(`document.querySelector('.el-drawer__close-btn').click()`);await pause(350);
+  if (width === 1440) {
+   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='上下行测速').click()`);
+   await wait(`document.querySelector('.path-diagnostics')?.innerText.includes('10.0 Mbps')`);
+   await evaluate(`document.querySelector('.el-drawer__close-btn').click()`);
+   await wait(`!document.querySelector('.el-drawer')?.getClientRects().length`);
+  }
   await evaluate(`window.__batchPosts=0;window.__beforeBatchFetch=window.fetch;window.fetch=(path,options)=>{if(String(path).endsWith('/action')&&options?.method==='POST')window.__batchPosts++;return window.__beforeBatchFetch(path,options)};const button=[...document.querySelectorAll('button')].find(e=>e.innerText==='批量停止当前列表');button.click();button.click()`);
   await wait(`!!document.querySelector('.el-message-box')`);
   await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(e=>e.innerText==='执行').click()`);
@@ -168,10 +198,10 @@ chrome.on('error',error=>{chromeError=error});
 
   let overflow=await evaluate(`document.documentElement.scrollWidth>innerWidth+2`);if(overflow)throw Error('horizontal overflow '+width);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='映射转发实测').click()`);
-  await wait(`document.body.innerText.includes('映射转发正常')`);
+  await wait(`document.querySelector('.path-diagnostics')?.innerText.includes('映射转发正常')`);
   await pause(650);
   await send('Page.captureScreenshot',{format:'png'}).then(r=>writeFile(`${cwd}/tmp/ui-mapping-${width}.png`,Buffer.from(r.data,'base64')));
-  await evaluate(`document.querySelector('.mapping-diagnostic .el-dialog__headerbtn').click()`);await pause(350);
+  await evaluate(`document.querySelector('.el-drawer__close-btn').click()`);await pause(350);
   await evaluate(`document.querySelector('#tab-lines').click()`);
   await wait(`[...document.querySelectorAll('button')].some(b=>b.offsetParent && b.innerText==='网络测试')`);
   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='网络测试').click()`);
@@ -206,8 +236,83 @@ chrome.on('error',error=>{chromeError=error});
    await evaluate(`document.querySelector('.network-test-summary .el-tag__content').textContent=window.__statusText`);
   }
   await evaluate(`document.querySelector('.network-test-dialog .el-dialog__headerbtn').click()`);await pause(350);
+  if (width === 1440) {
+   await evaluate(`(() => {
+    const original = window.fetch;
+    let state = {available:true, enabled:false, active:false, protected:false, psk_configured:false};
+    window.__ipsecPosts = [];
+    window.__restoreIPsecFetch = () => { window.fetch = original; };
+    window.fetch = async (path, options) => {
+     if (path === '/api/settings') {
+      const response = await original(path, options);
+      return Response.json({...await response.json(), account_enabled:true, ipsec:state});
+     }
+     if (path === '/api/settings/ipsec' && options?.method === 'POST') {
+      const body = JSON.parse(options.body);
+      window.__ipsecPosts.push(body);
+      if (body.current_password === 'wrong-password') {
+       return Response.json({error:'当前管理密码不正确'}, {status:403});
+      }
+      state = {...state, enabled:body.enabled, active:body.enabled,
+        protected:body.enabled && body.psk !== 'fixture-unprotected', psk_configured:true};
+      return Response.json({...state, message:'L2TP/IPsec 已启用'});
+     }
+     return original(path, options);
+    };
+   })()`);
+  }
   await evaluate(`[...document.querySelectorAll('[role=tab]')].find(e=>e.innerText==='系统设置').click()`);
   await wait(`!!document.querySelector('details[aria-label="远程管理"] > summary')`);
+  if (width === 1440) {
+   await evaluate(`document.querySelector('details[aria-label="接入与账号"]').open=true`);
+   await wait(`!!document.querySelector('.ipsec-switch')?.closest('.el-card').querySelector('button[type=submit]:enabled')`);
+   await evaluate(`(() => {
+    const input = document.querySelector('input[aria-label="VPN 拨号地址"]');
+    input.value = 'vpn.fixture.test';
+    input.dispatchEvent(new Event('input', {bubbles:true}));
+    input.closest('form').querySelector('button[type="submit"]').click();
+   })()`);
+   await wait(`[...document.querySelectorAll('.el-message')].some(e=>e.innerText.includes('VPN 拨号地址已保存'))`);
+   await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='诊断与验收').click()`);
+   await wait(`document.querySelector('.el-drawer')?.innerText.includes('vpn.fixture.test')`);
+   await evaluate(`document.querySelector('.el-drawer__close-btn').click()`);
+   await wait(`!document.querySelector('.el-drawer')?.getClientRects().length`);
+   const card = 'document.querySelector(".ipsec-switch").closest(".el-card")';
+   const statusText = `${card}.querySelector(".el-tag").innerText`;
+   const ipsecForm = 'document.querySelector(".ipsec-switch").closest("form")';
+   async function saveIPsec(enabled, psk, password, notice) {
+    await wait(`!${ipsecForm}.querySelector('button[type="submit"]').disabled`);
+    await evaluate(`(() => {
+     const card = ${ipsecForm};
+     const toggle = card.querySelector('.el-switch');
+     if (toggle.classList.contains('is-checked') !== ${enabled}) toggle.click();
+     for (const [field, value] of [['new-password', ${JSON.stringify(psk)}], ['current-password', ${JSON.stringify(password)}]]) {
+      const input = card.querySelector('input[autocomplete="' + field + '"]');
+      input.value = value;
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+     }
+     card.querySelector('button[type="submit"]').click();
+    })()`);
+    await wait(`[...document.querySelectorAll('.el-message-box button')].some(b=>b.getClientRects().length&&b.innerText==='应用设置')`);
+    await evaluate(`[...document.querySelectorAll('.el-message-box button')].find(b=>b.getClientRects().length&&b.innerText==='应用设置').click()`);
+    await wait(`[...document.querySelectorAll('.el-message')].some(e=>e.innerText.includes(${JSON.stringify(notice)}))`);
+    await wait(`![...document.querySelectorAll('.el-message-box')].some(e=>e.getClientRects().length)`);
+   }
+   await wait(`${statusText}==='普通 L2TP'`);
+   await saveIPsec(true, 'fixture-protected', 'fixture-password', 'IPsec 已启用');
+   await wait(`${statusText}==='L2TP/IPsec'`);
+   await saveIPsec(false, '', 'wrong-password', '当前管理密码不正确');
+   await wait(`${statusText}==='L2TP/IPsec'`);
+   await saveIPsec(true, 'fixture-unprotected', 'fixture-password', '实际状态未确认');
+   await wait(`${statusText}==='IPsec 状态异常'`);
+   await saveIPsec(false, '', 'fixture-password', '普通 L2TP');
+   await wait(`${statusText}==='普通 L2TP'`);
+   if (await evaluate(`JSON.stringify(window.__ipsecPosts.map(p=>[p.enabled,p.psk,p.current_password]))`) !== JSON.stringify([
+    [true,'fixture-protected','fixture-password'], [false,'','wrong-password'],
+    [true,'fixture-unprotected','fixture-password'], [false,'','fixture-password'],
+   ])) throw Error('IPsec request sequence or credential fields differ');
+   await evaluate(`window.__restoreIPsecFetch()`);
+  }
   await evaluate(`document.querySelector('details[aria-label="远程管理"] > summary').click()`);
   await wait(`!!document.querySelector('.ppp-management') && [...document.querySelectorAll('.ppp-management input')].some(e=>e.value.includes('51234'))`);
   await evaluate(`(()=>{const card=document.querySelector('.ppp-management');card.querySelector('.el-switch').click();const subnet=card.querySelector('textarea');subnet.value='10.0.101.0/24';subnet.dispatchEvent(new Event('input',{bubbles:true}));[...card.querySelectorAll('button')].find(b=>b.innerText==='填入检测到的面板及 SSH 端口').click()})()`);
@@ -284,6 +389,36 @@ chrome.on('error',error=>{chromeError=error});
   }
   results.push({width,overflow:false,sessions:true,history:true,mappingDiagnostic:true,httpsRestriction:true,incidents:true,connections:true,configurationPreview:true,notificationSaveGuard:true,closedConnectionGuard:true,googleComparison:true,googleSnapshot:true,managementException:true});
  }
+ // A new WAN mapping must expose its UDP policy without inheriting SOCKS-only restrictions.
+ await send('Page.addScriptToEvaluateOnNewDocument',{source:`
+  const wanFetch=window.fetch;
+  window.fetch=async(path,options)=>{
+   if(String(path)==='/api/mappings?preview=1')window.__wanPreview=JSON.parse(options.body);
+   const response=await wanFetch(path,options);
+   if(String(path)==='/api/nodes' && (!options?.method || options.method==='GET')) {
+    const nodes=await response.json();return Response.json([{id:'wan-ui',name:'WAN UI',egress:'wan',wan_interface:'eth0',addr:''},...nodes]);
+   }
+   return response;
+  };
+ `});
+ await send('Page.navigate',{url:`http://127.0.0.1:${apiPort}/`});
+ await wait(`!![...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='新建映射')`);
+ await evaluate(`[...document.querySelectorAll('button')].find(b=>b.offsetParent && b.innerText==='新建映射').click()`);
+ await wait(`!!document.querySelector('.edit-dialog input[type=password]')`);
+ await evaluate(`(()=>{const p=document.querySelector('.edit-dialog input[type=password]');p.value='wan-fixture-password';p.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.mapping-advanced').open=true})()`);
+ await wait(`document.querySelector('.edit-dialog').innerText.includes('本机 WAN 默认允许 TCP/UDP')`);
+ await checkLayout('WAN mapping advanced settings');
+ await evaluate(`[...document.querySelectorAll('.edit-dialog button')].find(b=>b.innerText==='保存').click()`);
+ await wait(`!!document.querySelector('.el-message-box')`);
+ if(await evaluate(`window.__wanPreview?.node_id!=='wan-ui'||window.__wanPreview?.udp_policy!==''`))throw Error('new WAN mapping did not submit its default UDP policy');
+ await evaluate(`document.querySelector('.el-message-box__btns button').click()`);
+ console.log('WAN form: selected interface, default UDP policy and mobile layout passed');
  if(errors.length)throw Error(errors.join('\n'));
  console.log(JSON.stringify({results,consoleErrors:errors}));
-}finally{socket?.close();await disposeFixture(cwd,profile,[server,chrome])}
+} catch (error) {
+ console.error(error);
+ throw error;
+} finally {
+ socket?.close();
+ await disposeFixture(cwd,profile,[server,chrome]);
+}

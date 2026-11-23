@@ -17,7 +17,7 @@ import (
 
 // Exercise a deliberately exhausted high-water counter with real SAs, xl2tpd
 // control replies, PPP and conntrack. The production quarantine is not shortened.
-func integrationIPsecRecycling(t *testing.T, root, caPath string, run func(...string) string, assertNoDirectEgress func()) {
+func integrationIPsecRecycling(t *testing.T, root, caPath string, udpPolicies [2]string, run func(...string) string, assertNoDirectEgress func()) {
 	t.Helper()
 	scripts := os.Getenv("S2L_FIXTURE_SCRIPT_DIR")
 	pid := func(name string) string {
@@ -192,11 +192,7 @@ print('real retained UDP socket and unavailable control pipe both prevented reus
 			})
 			healthy(i)
 			integrationClientDNS(t, ns, fmt.Sprintf("recycle-%d-%d.fixture.test", round, i), "1.1.1.1", true)
-			policy := "allow"
-			if i == 1 {
-				policy = "reject-quic"
-			}
-			integrationClientUDP(t, ns, fmt.Sprintf("node%d", i), policy, true)
+			integrationClientUDP(t, ns, fmt.Sprintf("node%d", i), udpPolicies[i], true)
 			integrationAssertIPsecTraffic(t, ns)
 		}
 		healthy(1)
@@ -217,7 +213,7 @@ assert s['next']==n.LAST+1 and max(slots)<n.FIRST+int(sys.argv[2])
 assert len(s['free'])==len(set(s['free'])) and not set(s['free'])&set(slots)
 assert len(s['active'])+len(s['retired'])+len(s['free'])==int(sys.argv[2])
 print('reused active slots:',sorted(slots))`, poolSize)))
-		t.Logf("recycle round %d: %d real redials, distinct reused endpoints, DNS/UDP/fixed SOCKS exits and ESP verified", round+1, len(clients))
+		t.Logf("recycle round %d: %d real redials, distinct reused endpoints, DNS/UDP/selected exits and ESP verified", round+1, len(clients))
 		assertNoDirectEgress()
 	}
 }

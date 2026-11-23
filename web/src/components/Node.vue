@@ -8,8 +8,8 @@ import NodeActions from "./NodeActions.vue";
 import SpeedResult from "./SpeedResult.vue";
 import { api } from "../api/client";
 
-defineProps({ nodes: { type: Array, default: () => [] } });
-const emit = defineEmits(["changed", "toast"]);
+defineProps({ nodes: { type: Array, default: () => [] }, speedResults: { type: Object, required: true } });
+const emit = defineEmits(["changed", "toast", "speed", "forget-speed"]);
 
 const networkNode = ref(null);
 const mode = ref(""); // '' | edit | import
@@ -18,8 +18,6 @@ const editRevision=ref("");
 const busy = ref(false);
 const formRef = ref();
 const required = { required: true, get message() { return tr("请填写此项"); }, trigger: "blur" };
-const testingId = ref("");
-const speedResults = reactive({});
 const form = reactive({ name: "", addr: "", username: "", password: "",group:"",egress:"socks5",wan_interface:"" });
 const importText = ref("");
 const importErrors = ref([]);
@@ -31,16 +29,6 @@ const formats = [
   "socks5://user:pass@host:port",
   "name,host:port,user,pass",
 ];
-
-function formatTransfer(result) {
-  return result.ok
-    ? `${Number(result.speed_mbps || 0).toFixed(1)} Mbps`
-    : tr("失败");
-}
-
-function formatSpeed(result) {
-  return tr("下载 {0} / 上传 {1}", formatTransfer(result.download), formatTransfer(result.upload));
-}
 
 function resetForm() {
   blockedMappings.value = [];
@@ -95,6 +83,7 @@ async function save() {
     const labels={get group() { return tr("分组"); },get name() { return tr("名称"); },get addr() { return tr("节点地址"); },get egress() { return tr("出口类型"); },get wan_interface() { return tr("WAN 网卡"); },get username() { return tr("代理账号"); },get password() { return tr("代理密码"); },get node_id() { return tr("出口节点"); },tun_name:'TUN',get table_id() { return tr("路由表"); },get subnet() { return tr("子网"); },get l2tp_user() { return tr("拨号账号"); },get l2tp_pass() { return tr("拨号密码"); },mtu:'MTU',mss:'MSS',get queue_length() { return tr("队列长度"); },get udp_policy() { return tr("UDP 策略"); },get dns_mode() { return tr("DNS 模式"); },get upload_kbps() { return tr("上传限速"); },get download_kbps() { return tr("下载限速"); }};
     await ElMessageBox.confirm(tr("变更：{0}。影响 {1} 条映射。{2}", preview.fields.map(f=>labels[f]||f).join('、')||tr("无"), preview.affected.length, tr(preview.message)),tr("保存配置"),{get confirmButtonText() { return tr("保存"); },get cancelButtonText() { return tr("返回编辑"); }});
     await api.saveNode(body,editRevision.value);
+    if (editingId.value) emit("forget-speed", editingId.value);
     emit("toast", {
       type: "ok",
       message: editingId.value ? tr("已更新") : tr("已创建"),
@@ -144,7 +133,7 @@ async function remove(id) {
   }
   try {
     await api.deleteNode(id);
-    delete speedResults[id];
+    emit("forget-speed", id);
     emit("toast", { type: "ok", get message() { return tr("已删除"); } });
     emit("changed");
   } catch (e) {
@@ -152,22 +141,6 @@ async function remove(id) {
   }
 }
 
-async function speedTest(n) {
-  testingId.value = n.id;
-  try {
-    const res = await api.speedTestNode(n.id);
-    speedResults[n.id] = res;
-    emit("toast", {
-      type: res.ok ? "ok" : "err",
-      message: `${n.name}: ${formatSpeed(res)}`,
-    });
-  } catch (e) {
-    speedResults[n.id] = { ok: false, error: e.message };
-    emit("toast", { type: "err", message: e.message });
-  } finally {
-    testingId.value = "";
-  }
-}
 </script>
 <template>
   <section>
@@ -202,9 +175,8 @@ async function speedTest(n) {
         ><template #default="{ row }"
           ><NodeActions
             :node="row"
-            :testing-id="testingId"
             @network="networkNode = $event"
-            @speed="speedTest"
+            @speed="node => emit('speed', node.id)"
             @edit="openEdit"
             @remove="remove" /></template></el-table-column
     ></el-table>
@@ -221,9 +193,8 @@ async function speedTest(n) {
         </div>
         <NodeActions
           :node="n"
-          :testing-id="testingId"
           @network="networkNode = $event"
-            @speed="speedTest"
+            @speed="node => emit('speed', node.id)"
           @edit="openEdit"
           @remove="remove"
       /></el-card>

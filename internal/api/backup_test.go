@@ -89,7 +89,7 @@ func TestBackupPreviewRestoreAndStaleRevision(t *testing.T) {
 	if gotMapping.Status != model.StatusStopped {
 		t.Fatal("restored active mapping")
 	}
-	if gotMapping.EffectiveDNSOptions() != m.ManagedLineSettings().EffectiveDNSOptions() {
+	if gotMapping.EffectiveDNSOptions() != m.ManagedLineSettings(model.SocksNode{}).EffectiveDNSOptions() {
 		t.Fatal("backup restore did not apply managed DNS", gotMapping)
 	}
 	r := httptest.NewRequest("GET", "/api/backups", nil)

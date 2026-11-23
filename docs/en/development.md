@@ -6,7 +6,12 @@
 
 ## Data path and responsibilities
 
-An L2TP/PPP client connects to xl2tpd. S2L associates mapping credentials and an IPv4 subnet with a sing-box TUN interface, policy routing table and firewall rules. sing-box forwards mapped traffic to the selected SOCKS5 node. Nginx terminates management HTTPS and proxies to the Go HTTP backend; it is separate from the tunnel path.
+### Connection and management paths
+
+- **Client traffic**. Plain L2TP reaches xl2tpd on UDP 1701. With IPsec enabled, strongSwan handles IKEv1 and NAT-T on UDP 500/4500 before delivering protected L2TP to xl2tpd.
+- **Mapping and egress**. PPP authenticates the mapped account and assigns its peer IPv4 address. Linux admits the session and routes it through the mapping's sing-box TUN. The chosen SOCKS5 node or bound WAN interface carries the traffic. DNS follows the same egress.
+- **Management**. Vue calls the Go API through Nginx HTTPS. Mapping configuration and state are persisted separately from runtime sockets and process files. The optional VPN dial address is published independently of the management URL.
+- **Diagnostics**. The dial timeline reads recognized journal events. A node speed test measures the server-to-target path, a mapping test exercises simulated PPP forwarding, and a real client verifies the complete path. See [diagnostics and client checks](operations.md#diagnostics-and-client-checks).
 
 | Path | Responsibility |
 |---|---|
@@ -24,6 +29,8 @@ An L2TP/PPP client connects to xl2tpd. S2L associates mapping credentials and an
 Keep `web/dist/`, lockfiles, third-party notices and platform-specific Go implementations in the source distribution. `bin/`, `tmp/`, `.test-tmp/`, `web/node_modules/` and Python caches are local artifacts. Stop their test processes before cleaning them; preserve any diagnostic evidence still needed. Browser runners share `script/ui_test_helpers.mjs` to stop their own child processes and remove temporary profiles and backend data after each run, while retaining screenshots in `tmp/`.
 
 ## Configuration
+
+`vpn_address` is optional. It controls the address presented in the client guide. Management HTTPS uses its own URL and port.
 
 Start with `config.example.json`; run `./bin/s2l -config /path/to/config.json` only on a suitable test host. Relative `data_dir` is resolved from the working directory; the installed service works in `/opt/s2l`.
 
@@ -87,6 +94,14 @@ go test -c -o /tmp/s2l-l2tp.test ./internal/service
 sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box
 for transport in ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
   sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --transport "$transport"
+done
+```
+
+Run the same five transport cases with Local WAN to check interface isolation and DNS under plain L2TP, direct IPsec, separate NAT, and shared NAT with different or identical source ports.
+
+```bash
+for transport in plain ipsec ipsec-nat ipsec-shared-nat ipsec-shared-nat-1701; do
+  sudo python3 script/test_l2tp_integration.py --test-binary /tmp/s2l-l2tp.test --singbox /absolute/path/to/sing-box --egress wan --transport "$transport"
 done
 ```
 

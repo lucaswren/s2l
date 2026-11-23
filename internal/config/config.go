@@ -13,6 +13,7 @@ import (
 
 // Config 运行时配置
 type Config struct {
+	VPNAddress    string                 `json:"vpn_address,omitempty"`
 	UILanguage    string                 `json:"ui_language,omitempty"`
 	PPPManagement model.ManagementAccess `json:"ppp_management"`
 	Listen        string                 `json:"listen"`       // 如 :8080
@@ -91,6 +92,9 @@ func (c Config) ShouldAutoRestore() bool {
 // Validate prevents exposing the unauthenticated management API on a network
 // interface. Loopback-only deployments may omit credentials for local use.
 func (c Config) Validate() error {
+	if !ValidVPNAddress(c.VPNAddress) {
+		return fmt.Errorf("invalid vpn_address")
+	}
 	if c.UILanguage != "" && c.UILanguage != "zh-CN" && c.UILanguage != "zh-TW" && c.UILanguage != "en" {
 		return fmt.Errorf("invalid ui_language")
 	}
@@ -126,4 +130,34 @@ func (c Config) Validate() error {
 func isLoopbackIP(host string) bool {
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// ValidVPNAddress accepts an optional IPv4 or DNS host without a port or scheme.
+func ValidVPNAddress(address string) bool {
+	if address == "" {
+		return true
+	}
+	if ip := net.ParseIP(address); ip != nil {
+		return !strings.Contains(address, ":") && ip.To4() != nil
+	}
+	host := strings.TrimSuffix(address, ".")
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	hasLetter := false
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, ch := range label {
+			switch {
+			case ch >= 'a' && ch <= 'z', ch >= 'A' && ch <= 'Z':
+				hasLetter = true
+			case ch >= '0' && ch <= '9', ch == '-':
+			default:
+				return false
+			}
+		}
+	}
+	return hasLetter
 }

@@ -2,7 +2,7 @@
 
 [English](README.md) · [繁體中文](README.zh-Hant.md) · [简体中文](README.zh-Hans.md)
 
-**支持网页管理的 Linux L2TP 网关，提供固定 SOCKS5 出口、按映射限速和故障自动诊断。**
+**支持网页管理的 Linux L2TP 网关，提供 SOCKS5 或本机 WAN 出口、按映射限速和故障自动诊断。**
 
 [![CI](https://github.com/lucaswren/s2l/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lucaswren/s2l/actions/workflows/ci.yml) · [最新版本](https://github.com/lucaswren/s2l/releases/latest) · [使用讨论](https://github.com/lucaswren/s2l/discussions) · [参与贡献](CONTRIBUTING.md) · [Apache-2.0](LICENSE)
 
@@ -10,7 +10,7 @@
 
 截图来自隔离测试中的真实界面，地址与账号均为示例。[映射与带宽设置](docs/assets/zh-Hans/showcase-mapping.png) · [断网自动取证](docs/assets/zh-Hans/showcase-evidence.png) · [运行监控](docs/assets/zh-Hans/showcase-monitoring.png)
 
-- 每台拨号设备使用独立映射及固定 SOCKS5 出口，一个账号对应一条 PPP 会话。
+- 每台拨号设备使用独立映射并选择出口，一个账号对应一条 PPP 会话。
 - 按映射设置上传、下载上限，DNS 备用查询保持同一出口。
 - 出现异常先保留状态、日志和 IPv4 报文头，减少重启映射后丢失现场。
 
@@ -18,21 +18,29 @@ S2L 在专用 Linux 主机上运行，由 Go 后端与内嵌 Vue / Element Plus 
 
 界面分为 **线路管理、运行监控、系统设置** 三个标签页。[运行监控](docs/zh-Hans/operations.md#运行监控) 显示 PPP 上下行速率、新增与累计错误、采样时效及最近事件。
 
+## 部署方案
+
+| 场景 | 选择 | 行为 |
+|---|---|---|
+| 经服务器直接访问互联网 | 本机 WAN | 绑定服务器的出口网卡。新建 WAN 映射默认允许 UDP。 |
+| 使用已有代理出口 | SOCKS5 | 使用授权的 TCP CONNECT 上游。DNS 走相同出口，非 DNS UDP 按策略拒绝。 |
+| 加密客户端到网关的一段 | L2TP/IPsec | 客户端支持时启用 IKEv1 和共享 PSK，可搭配任一出口。 |
+
 ## 环境与限制
 
 | 项目 | 范围 |
 |---|---|
 | 主机 | 专用 Ubuntu/Debian、systemd、root、可达的公网 IPv4，以及内核 TUN/PPP/L2TP 支持 |
-| 验证 | Ubuntu 24.04、Debian 12 amd64 全新安装虚拟机测试；arm64 交叉构建检查 |
-| 上游 | 授权 SOCKS5 服务，TCP CONNECT 正常，可访问应用和 DoH/TCP DNS 目标 |
-| 客户端流量 | IPv4；每账号一条 PPP 会话；拒绝非 DNS UDP；阻断 PPP IPv6 |
+| 验证 | Ubuntu 24.04、Debian 12 amd64 全新安装虚拟机测试；Ubuntu 24.04 GA/HWE 已实拨验证 ARM64 和模拟 x86_64 |
+| 出口 | 指定本机 WAN 网卡，或使用支持 TCP CONNECT 的授权 SOCKS5 服务。所选出口须能访问业务和 DNS 目标。 |
+| 客户端流量 | IPv4；每账号一条 PPP 会话；SOCKS5 拒绝非 DNS UDP，新增本机 WAN 默认允许 UDP；阻断 PPP IPv6 |
 | 语言 | 英语、繁体中文、简体中文 |
 
 **默认普通 L2TP 不加密。** 可选 L2TP/IPsec 使用 IKEv1 与共享 PSK，须验证客户端兼容性；管理 HTTPS 和 SOCKS5 不会加密整条隧道路径。仅用于授权主机和服务，部署前阅读[接入要求](docs/zh-Hans/clients.md)及[法律说明](docs/zh-Hans/legal.md)。客户端路由和其他网络接口不在服务器保护范围内。
 
 ## 安装与安全
 
-**请在干净的专用服务器上全新安装 S2L 1.0.12。**
+**请在干净的专用服务器上全新安装 S2L。**
 
 以 root 执行前先审阅脚本。安装会修改软件包、转发、PPP/L2TP、防火墙和服务，请使用全新专用主机并在维护窗口安装安全更新。新安装默认采用[人工 APT 维护](docs/zh-Hans/operations.md#系统更新策略)。安装程序默认获取最新稳定版。
 
@@ -42,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/lucaswren/s2l/main/script/remote_in
 
 仅允许可信管理 IP 访问输出的 HTTPS TCP 端口。安装会生成自签证书和随机管理密码，信任前须通过可信渠道核对输出的 SHA-256 指纹。后端保持监听 `127.0.0.1:8080`。如需固定管理端口，将 `sudo bash` 改成 `sudo env HTTPS_PORT=8443 bash`；默认从 10000–60000 选择空闲端口。公网 IPv4 检测需覆盖时使用 `PUBLIC_IP`。
 
-打开输出的网址，添加 SOCKS5 节点、创建并启动映射，再按[客户端接入与验收](docs/zh-Hans/clients.md)完成连接。普通 L2TP 使用 UDP 1701；IPsec 强制 NAT-T，使用 UDP 500/4500。安装选项、防火墙范围和恢复流程见[操作指南](docs/zh-Hans/operations.md)。
+打开输出的网址，添加 SOCKS5 或本机 WAN 节点、创建并启动映射，再按[客户端接入与验收](docs/zh-Hans/clients.md)完成连接。普通 L2TP 使用 UDP 1701；IPsec 强制 NAT-T，使用 UDP 500/4500。安装选项、防火墙范围和恢复流程见[操作指南](docs/zh-Hans/operations.md)。
 
 ## 升级
 

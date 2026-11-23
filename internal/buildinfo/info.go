@@ -33,6 +33,12 @@ func Current() Info {
 		}
 	}
 	switch strings.TrimPrefix(result.Version, "v") {
+	case "1.0.13":
+		result.ReleaseNotes = map[string]string{
+			"en":    "1.0.13: Adds Local WAN mapping controls, an independent VPN dial address, and a unified diagnostics panel with a system journal dial timeline. The update restarts mappings.",
+			"zh-TW": "1.0.13：新增本機 WAN 映射設定、獨立 VPN 撥號位址，以及含系統日誌撥號時間線的診斷入口。更新會重新啟動映射。",
+			"zh-CN": "1.0.13：新增本机 WAN 映射配置、独立 VPN 拨号地址，以及包含系统日志拨号时间线的统一诊断入口。更新会重启映射。",
+		}
 	case "1.0.12":
 		result.ReleaseNotes = map[string]string{
 			"en":    "1.0.12: Distinguish SOCKS5 authentication rejection from negotiation failures and timeouts, retain authentication reply codes, and persist credential-free incident cause summaries after mapping deletion or restart.",

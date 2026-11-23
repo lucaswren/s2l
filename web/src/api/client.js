@@ -148,10 +148,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  speedTestNode: async (id, bytes) => {
-    const result = await request(`/api/nodes/${id}/speedtest`, {
+  speedTestNode: async (id, bytes, signal) => {
+    const result = await request(`/api/nodes/${encodeURIComponent(id)}/speedtest`, {
       method: "POST",
       body: JSON.stringify(bytes ? { bytes } : {}),
+      signal,
     });
     if (typeof result.ok !== 'boolean' || ['download','upload'].some(key => !result[key] || typeof result[key].ok !== 'boolean')) {
       throw new Error(tr('服务器返回了无效数据，请刷新后重试'));
@@ -182,6 +183,8 @@ export const api = {
       body: JSON.stringify(body),
     }),
   settings: () => request("/api/settings"),
+  saveVPNAddress: address => request("/api/settings/vpn-address", {method:"POST", body:JSON.stringify({address})}),
+  dialTimeline: signal => request("/api/dial-timeline", {signal}),
   saveAccount: (body) =>
     request("/api/settings/account", {
       method: "POST",

@@ -214,6 +214,11 @@ func (s *MappingService) startLocked(id string) error {
 	}
 
 	previousActive := s.activeAfter(m, false)
+	if node.IsWAN() {
+		if err := s.net.EnableWANResetGuard(); err != nil {
+			return s.failStart(m, previousActive, fmt.Errorf("WAN reset guard: %w", err))
+		}
+	}
 	if err := s.singbox.Start(node, m); err != nil {
 		return s.failStart(m, previousActive, fmt.Errorf("sing-box: %w", err))
 	}
