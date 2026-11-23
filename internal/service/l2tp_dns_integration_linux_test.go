@@ -131,16 +131,24 @@ def receive(s,n):
 for wire in ['udp','tcp']:
  name=wire+'.'+sys.argv[1];healthy=sys.argv[3]=='true'
  q=struct.pack('!HHHHHH',1729,0x100,1,0,0,0)+b''.join(bytes([len(x)])+x.encode() for x in name.split('.'))+b'\x00\x00\x01\x00\x01'
- s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM if wire=='udp' else socket.SOCK_STREAM);s.settimeout(6)
+ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM if wire=='udp' else socket.SOCK_STREAM)
+ s.settimeout(4 if wire=='udp' and healthy else 7)
  try:
   s.connect((sys.argv[2],53))
-  if wire=='udp':s.send(q);r=s.recv(4096)
+  if wire=='udp':
+   for attempt in range(2 if healthy else 1):
+    s.send(q)
+    try:
+     r=s.recv(4096)
+     break
+    except TimeoutError:
+     if not healthy or attempt==1:raise
   else:s.sendall(struct.pack('!H',len(q))+q);r=receive(s,struct.unpack('!H',receive(s,2))[0])
   assert len(r)>=12 and r[:2]==q[:2],r
   if healthy:assert r[3]&15==0 and r[-4:]==bytes([198,18,0,9]),r
   else:assert r[3]&15 in (2,5),'DNS unexpectedly answered during outage: '+repr(r)
- except OSError:
-  if healthy:raise
+ except OSError as err:
+  if healthy:raise RuntimeError(f'{wire} DNS to {sys.argv[2]} timed out or failed') from err
  finally:s.close()
 `, name, address, strconv.FormatBool(healthy))
 	if out, err := cmd.CombinedOutput(); err != nil {

@@ -330,6 +330,11 @@ s=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);s.settimeout(3);s.sendto(q,(sy
 		t.Fatal("auto DNS did not prefer the configured TCP resolver")
 	}
 	dohBeforeFallback := node1.dohQueries.Load()
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("node1 DNS resolver: %+v (TCP requests: %d, DoH requests: %d)", sb.ResolverStatus("tun102"), node1.tcpQueries.Load(), node1.dohQueries.Load())
+		}
+	})
 	node1.tcpOffline.Store(true)
 	t.Cleanup(func() { node1.tcpOffline.Store(false) })
 	// Use uncached names and send requests to both advertised DNS addresses.
